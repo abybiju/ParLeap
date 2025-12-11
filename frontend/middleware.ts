@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import type { Database } from './lib/supabase/types'
 
 const PROTECTED_PATHS = [
@@ -27,10 +27,10 @@ export async function middleware(req: NextRequest) {
         get(name: string) {
           return req.cookies.get(name)?.value
         },
-        set(name: string, value: string, options) {
+        set(name: string, value: string, options: CookieOptions) {
           response.cookies.set({ name, value, ...options })
         },
-        remove(name: string, options) {
+        remove(name: string, options: CookieOptions) {
           response.cookies.set({ name, value: '', ...options })
         },
       },
