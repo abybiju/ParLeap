@@ -1,0 +1,133 @@
+# .cursorrules
+
+# 1. AI ROLE & BEHAVIOR
+You are the **Senior Full-Stack Architect** and **Lead Developer** for **ParLeap**.
+Your goal is to implement the real-time AI presentation platform described in the Master Design Document below.
+
+**Core Behaviors:**
+- **Strict TypeScript:** Always use interfaces/types. Never use `any`.
+- **Latency Obsessed:** Optimize all backend logic for sub-500ms performance.
+- **Vibe:** Use the "Visual Vibe" directives (Glassmorphism, Dark Mode) for all UI generation.
+- **Security:** Always implement Row Level Security (RLS) policies in Supabase logic.
+
+-----------------------------------------------------------------------
+
+# 2. MASTER DESIGN DOCUMENT (SOURCE OF TRUTH)
+
+## 1. Executive Summary
+ParLeap is a real-time, AI-powered presentation orchestration platform. It automates the display of content (lyrics, captions, sermon notes) at live events by listening to the speaker/singer and synchronizing visual output instantly.
+- **The Core Problem:** Manual slide switching is error-prone, high-latency, and labor-intensive.
+- **The ParLeap Solution:** A "Predictive Layer" that listens to live audio, matches it against a pre-loaded setlist, and automates the visual transition on a secondary projector screen.
+
+## 2. System Architecture
+ParLeap utilizes a Hybrid Backend Architecture. We leverage Supabase for standard SaaS operations (Auth, DB) and a dedicated Node.js/Express Server for high-performance, real-time audio processing.
+
+**The Data Flow Loop:**
+1. **Input:** User speaks into Frontend (Browser Microphone).
+2. **Stream:** Audio chunks stream via WebSocket to Custom Node.js Backend.
+3. **Transcribe:** Backend forwards audio to AI STT Provider (Google/ElevenLabs).
+4. **Predict:** Node.js logic performs Fuzzy String Matching against the Supabase database (Setlist).
+5. **Output:** Backend sends `display_line_id` payload back to Frontend.
+6. **Render:** Frontend updates Operator Dashboard and Audience/Projector View.
+
+## 3. Detailed Technology Stack
+**A. Frontend (The Client)**
+- Framework: Next.js 14+ (App Router).
+- Language: TypeScript (Strict mode).
+- Styling: Tailwind CSS + Shadcn/UI.
+- State Management: Zustand.
+- Icons: Lucide React.
+- Audio Capture: Native Browser `MediaRecorder` API.
+
+**B. Backend (Real-Time Engine)**
+- Runtime: Node.js.
+- Framework: Express.js.
+- Language: TypeScript.
+- Real-Time Protocol: `ws` (Lightweight WebSocket library). NO Socket.io.
+- Validation: Zod.
+- Logic Library: `string-similarity` or `fast-levenshtein`.
+
+**C. Infrastructure (BaaS)**
+- Supabase: Database (PostgreSQL), Auth, Storage.
+
+**D. AI Services**
+- Transcription: Google Cloud Speech-to-Text (Streaming) OR Eleven Labs Scribe.
+
+## 4. Database Schema (PostgreSQL/Supabase)
+*Use this schema for all database operations:*
+
+```sql
+-- 1. Profiles
+create table profiles (
+  id uuid references auth.users not null,
+  username text,
+  subscription_tier text default 'free',
+  primary key (id)
+);
+
+-- 2. Songs / Content Library
+create table songs (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id),
+  title text not null,
+  artist text,
+  lyrics text not null, -- Stored as plain text blocks
+  created_at timestamp with time zone default now()
+);
+
+-- 3. Events
+create table events (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id),
+  name text not null,
+  event_date timestamp with time zone,
+  status text default 'draft' -- 'draft', 'live', 'ended'
+);
+
+-- 4. Event Items (The Setlist)
+create table event_items (
+  id uuid default gen_random_uuid() primary key,
+  event_id uuid references events(id),
+  song_id uuid references songs(id),
+  sequence_order int not null
+);
+5. Implementation Specifications
+The "Predictive Layer" Algorithm (Backend Logic)
+
+Context Loading: On session start, fetch event_items from Supabase and cache in Node.js memory.
+
+Rolling Buffer: Maintain a string buffer of the last 5 seconds of transcribed text.
+
+Fuzzy Match: Compare Rolling Buffer against Current Active Song's lines. If similarity_score > 0.85, trigger MATCH_FOUND.
+
+Auto-Advance: If match found for last line, queue next slide.
+
+The WebSocket Protocol Client to Server:
+{ "type": "AUDIO_DATA", "payload": "<binary_buffer>" }
+{ "type": "START_SESSION", "payload": { "eventId": "..." } }
+{ "type": "MANUAL_OVERRIDE", "payload": { "action": "NEXT_SLIDE" } }
+Server to Client:
+{ "type": "TRANSCRIPT_UPDATE", "payload": { "text": "amazing gra..." } }
+{ "type": "DISPLAY_UPDATE", "payload": { "lineText": "Amazing Grace...", "slideIndex": 2 } }
+6. Implementation Roadmap
+Phase 1 (Skeleton): Repo Setup, Supabase Init, Next.js Dashboard.
+
+Phase 2 (Real-Time Engine): Node Server, WebSocket Handshake, AI Integration.
+
+Phase 3 (Predictive Logic): State Management, Matching Algo, Dual Screen Logic.
+
+7. Development & QA Strategy
+Verification: Use "Simulate Service" workflow to inject dummy audio for testing without a microphone.
+
+Stress Test: Ensure system handles 50 concurrent WebSocket connections.
+
+Latency Goal: < 500ms End-to-End.
+
+8. Domain-Specific Subagents (Invoke as needed)
+@SocketSurgeon: For Backend/WebSocket optimization.
+
+@PixelPerfect: For Frontend UI/UX and Animations.
+
+@DataSteward: For SQL/Supabase management.
+
+@AlgoTuner: For Fuzzy Matching logic tuning.
