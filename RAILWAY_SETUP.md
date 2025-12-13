@@ -62,7 +62,10 @@ NODE_ENV=production
 CORS_ORIGIN=https://par-leap.vercel.app
 ```
 
-**Note:** Replace `https://par-leap.vercel.app` with your actual Vercel domain if different.
+**Important:** 
+- `CORS_ORIGIN` must be your **Vercel frontend domain**, NOT the Railway backend URL
+- Your production domain is: `https://par-leap.vercel.app`
+- Do NOT use the Railway backend URL (`parleapbackend-production.up.railway.app`) - that's incorrect!
 
 **Supabase (add these after Supabase project is set up):**
 ```
@@ -83,15 +86,30 @@ After adding variables, Railway will automatically redeploy.
 ### Step 6: Verify Deployment
 
 1. Wait for Railway deployment to complete (check **Deployments** tab)
-2. Test health endpoint in your browser or with curl:
+2. Test root endpoint in your browser:
+   ```
+   https://your-service.railway.app/
+   ```
+   Expected response:
+   ```json
+   {
+     "service": "ParLeap Backend API",
+     "status": "running",
+     "version": "1.0.0",
+     "endpoints": {
+       "health": "/health"
+     }
+   }
+   ```
+3. Test health endpoint:
    ```
    https://your-service.railway.app/health
    ```
-3. Expected response:
+   Expected response:
    ```json
    {"status":"ok","timestamp":"2025-01-XX..."}
    ```
-4. Check Railway logs for any startup errors (should see: `🚀 Backend server running on port 3001`)
+4. Check Railway logs for any startup errors (should see: `🚀 Backend server running on port 8080` or similar)
 
 ---
 
@@ -114,13 +132,15 @@ After adding variables, Railway will automatically redeploy.
 
 ## Verification Checklist
 
-- [ ] Railway service deployed successfully
-- [ ] Health endpoint returns `{"status":"ok"}`
-- [ ] Railway logs show: `🚀 Backend server running on port 3001`
-- [ ] No errors in Railway logs
-- [ ] Public domain generated and accessible
-- [ ] Vercel environment variable `NEXT_PUBLIC_WS_URL` updated
-- [ ] Frontend redeployed with new WebSocket URL
+- [x] Railway service deployed successfully ✅
+- [x] Root endpoint (`/`) returns API info ✅
+- [x] Health endpoint (`/health`) returns `{"status":"ok"}` ✅
+- [x] Railway logs show: `🚀 Backend server running on port 8080` ✅
+- [x] No errors in Railway logs ✅
+- [x] Public domain generated and accessible ✅
+- [x] Environment variables configured (PORT, NODE_ENV, CORS_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) ✅
+- [ ] Vercel environment variable `NEXT_PUBLIC_WS_URL` updated (Next step)
+- [ ] Frontend redeployed with new WebSocket URL (Next step)
 
 ---
 
@@ -162,9 +182,20 @@ After adding variables, Railway will automatically redeploy.
 - ✅ Express server configured
 - ✅ WebSocket server initialized
 - ✅ CORS middleware configured
-- ✅ Health check endpoint (`/health`)
+- ✅ Root endpoint (`/`) - Returns API information
+- ✅ Health check endpoint (`/health`) - Returns status and timestamp
 - ✅ TypeScript compilation working
 - ✅ Build process verified
+- ✅ **Deployed to Railway** - Live at `parleapbackend-production.up.railway.app`
 
-The backend is ready for deployment! Follow the steps above to deploy to Railway.
+## Deployment Complete ✅
+
+The backend has been successfully deployed to Railway! Both endpoints are working:
+- Root: `https://parleapbackend-production.up.railway.app/`
+- Health: `https://parleapbackend-production.up.railway.app/health`
+
+**Next Steps:**
+1. Update Vercel environment variable `NEXT_PUBLIC_WS_URL` to `wss://parleapbackend-production.up.railway.app`
+2. Redeploy Vercel frontend
+3. Test WebSocket connection from frontend
 
