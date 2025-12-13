@@ -11,6 +11,7 @@ import {
   type SessionStartedMessage,
   type TranscriptUpdateMessage,
   type DisplayUpdateMessage,
+  type SongChangedMessage,
   type ErrorMessage,
   type PongMessage,
   isStartSessionMessage,
@@ -249,11 +250,35 @@ function handleManualOverride(
       break;
   }
 
+  // Check if anything actually changed
+  const songChanged = newSongIndex !== session.currentSongIndex;
+  const slideChanged = newSlideIndex !== session.currentSlideIndex || songChanged;
+
+  if (!slideChanged) {
+    // Nothing changed, don't send update
+    console.log(`[WS] Manual override: ${action} -> No change (already at Song ${newSongIndex}, Slide ${newSlideIndex})`);
+    return;
+  }
+
   // Update session state
   session.currentSongIndex = newSongIndex;
   session.currentSlideIndex = newSlideIndex;
 
   const targetSong = session.songs[newSongIndex];
+
+  // Send SONG_CHANGED if song changed
+  if (songChanged) {
+    const songChangedMessage: SongChangedMessage = {
+      type: 'SONG_CHANGED',
+      payload: {
+        songId: targetSong.id,
+        songTitle: targetSong.title,
+        songIndex: newSongIndex,
+        totalSlides: targetSong.lines.length,
+      },
+    };
+    send(ws, songChangedMessage);
+  }
 
   // Send display update
   const displayUpdate: DisplayUpdateMessage = {
@@ -268,7 +293,7 @@ function handleManualOverride(
   };
   send(ws, displayUpdate);
 
-  console.log(`[WS] Manual override: ${action} -> Song ${newSongIndex}, Slide ${newSlideIndex}`);
+  console.log(`[WS] Manual override: ${action} -> Song ${newSongIndex}, Slide ${newSlideIndex}${songChanged ? ' (song changed)' : ''}`);
 }
 
 /**
