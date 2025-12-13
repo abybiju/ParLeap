@@ -90,6 +90,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 ## Documentation
 
 - [SETUP_CHECKLIST.md](./SETUP_CHECKLIST.md) - **Start here!** Step-by-step production setup checklist
+- [TECH_STACK.md](./TECH_STACK.md) - **Technology stack documentation** - Why we chose each technology
 - [RAILWAY_SETUP.md](./RAILWAY_SETUP.md) - **Railway backend deployment guide** (Quick reference)
 - [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete deployment guide
 - [ENV_SETUP.md](./ENV_SETUP.md) - Environment variables setup
@@ -120,5 +121,12 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
   - ✅ WebSocket client utility and React hook implemented
   - ✅ Vercel environment variable `NEXT_PUBLIC_WS_URL` configured
   - ✅ Frontend redeployed and ready for testing
+- ✅ **WebSocket Protocol Implementation** ✅
+  - ✅ Typed message protocol (TypeScript interfaces)
+  - ✅ Zod validation schemas
+  - ✅ Backend handlers (START_SESSION, MANUAL_OVERRIDE, STOP_SESSION, PING)
+  - ✅ Session state management
+  - ✅ Frontend typed client with helper methods
+  - ✅ Protocol tested and verified
 - ⏭️ Supabase Integration
 
