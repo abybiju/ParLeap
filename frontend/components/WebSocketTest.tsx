@@ -26,6 +26,7 @@ export function WebSocketTest() {
 
   const [eventId] = useState('00000000-0000-0000-0000-000000000001'); // Demo event ID
   const [messageHistory, setMessageHistory] = useState<Array<{ message: ServerMessage; timestamp: Date }>>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Track message history
   useEffect(() => {
@@ -162,14 +163,28 @@ export function WebSocketTest() {
             {/* Slide Controls */}
             <div className="flex gap-2 flex-wrap">
               <button
-                onClick={prevSlide}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition"
+                onClick={() => {
+                  if (!isProcessing) {
+                    setIsProcessing(true);
+                    prevSlide();
+                    setTimeout(() => setIsProcessing(false), 300);
+                  }
+                }}
+                disabled={isProcessing}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition"
               >
                 ← PREV_SLIDE
               </button>
               <button
-                onClick={nextSlide}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition"
+                onClick={() => {
+                  if (!isProcessing) {
+                    setIsProcessing(true);
+                    nextSlide();
+                    setTimeout(() => setIsProcessing(false), 300);
+                  }
+                }}
+                disabled={isProcessing}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition"
               >
                 NEXT_SLIDE →
               </button>
