@@ -9,7 +9,22 @@ Follow this checklist to complete your production deployment setup.
 - ✅ **Vercel Frontend Deployment Successful** - Live at [par-leap.vercel.app](https://par-leap.vercel.app)
 - ✅ Environment variables added to Vercel
 - ✅ Framework Preset configured (Next.js)
-- ⏭️ Railway backend setup needed (Next Step)
+- ✅ **Security Updates Applied** (Dec 2025)
+  - ✅ Next.js 14.0.4 → 14.2.35 (patched CVEs)
+  - ✅ React 18.2.0 → 18.3.1
+  - ✅ eslint-config-next version aligned
+- ✅ **Railway Backend Deployment Successful** - Live at [parleapbackend-production.up.railway.app](https://parleapbackend-production.up.railway.app)
+  - ✅ Connected to GitHub (auto-deploy enabled)
+  - ✅ CORS middleware configured
+  - ✅ Health check endpoint (`/health`) verified
+  - ✅ Root endpoint (`/`) added
+  - ✅ Environment variables configured (PORT, NODE_ENV, CORS_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+- ✅ **WebSocket Connection Setup**
+  - ✅ WebSocket client utility created (`frontend/lib/websocket/client.ts`)
+  - ✅ React hook created (`frontend/lib/hooks/useWebSocket.ts`)
+  - ✅ Test component created (`frontend/components/WebSocketTest.tsx`)
+  - ✅ Vercel environment variable `NEXT_PUBLIC_WS_URL` updated
+  - ✅ Frontend redeployed with WebSocket URL
 - ⏭️ Supabase database setup needed
 
 ---

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { WebSocketTest } from '@/components/WebSocketTest'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -17,6 +18,11 @@ export default async function DashboardPage() {
             <p className="text-slate-300">
               Start by building your content library, creating an event, then launching a live session.
             </p>
+          </div>
+
+          {/* WebSocket Connection Test - Temporary for testing */}
+          <div className="mt-8">
+            <WebSocketTest />
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">

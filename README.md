@@ -50,7 +50,8 @@ npm run build
 ## Technology Stack
 
 ### Frontend
-- Next.js 14+ (App Router)
+- Next.js 14.2.35 (App Router) - Patched for CVE-2025-55184, CVE-2025-55183
+- React 18.3.1
 - TypeScript (Strict mode)
 - Tailwind CSS + Shadcn/UI
 - Zustand (State Management)
@@ -60,6 +61,7 @@ npm run build
 - Node.js + Express.js
 - TypeScript
 - WebSocket (ws library)
+- CORS middleware configured
 - Zod (Validation)
 - string-similarity (Fuzzy Matching)
 
@@ -74,7 +76,13 @@ For complete deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
    - Root directory: `frontend`
    - Framework: Next.js (auto-detected)
    - Environment variables configured
-3. ⏭️ **Railway (Backend)**: Connect GitHub repo, set root directory to `backend`, add environment variables
+   - Security patches applied (Next.js 14.2.35, React 18.3.1)
+3. ✅ **Railway (Backend)**: Successfully deployed at [parleapbackend-production.up.railway.app](https://parleapbackend-production.up.railway.app)
+   - Root directory: `backend`
+   - CORS middleware configured
+   - Health check endpoint (`/health`)
+   - Root endpoint (`/`) returns API info
+   - Environment variables configured
 4. ⏭️ **Supabase**: Create project and run migration from `supabase/migrations/001_initial_schema.sql`
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
@@ -82,6 +90,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 ## Documentation
 
 - [SETUP_CHECKLIST.md](./SETUP_CHECKLIST.md) - **Start here!** Step-by-step production setup checklist
+- [RAILWAY_SETUP.md](./RAILWAY_SETUP.md) - **Railway backend deployment guide** (Quick reference)
 - [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete deployment guide
 - [ENV_SETUP.md](./ENV_SETUP.md) - Environment variables setup
 - [QUICK_START.md](./QUICK_START.md) - Quick start guide
@@ -93,10 +102,23 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 ### Phase 1: Foundation & Infrastructure ✅ (In Progress)
 
 - ✅ Monorepo Setup
-- ✅ Frontend Foundation (Next.js 14)
+- ✅ Frontend Foundation (Next.js 14.2.35)
 - ✅ Backend Foundation (Express/TypeScript)
+- ✅ **Security Updates** (Dec 2025)
+  - ✅ Next.js updated to 14.2.35 (patched CVE-2025-55184, CVE-2025-55183)
+  - ✅ React updated to 18.3.1
+  - ✅ eslint-config-next aligned with Next.js version
 - ✅ GitHub Repository Setup
 - ✅ **Vercel Frontend Deployment** ✅ (Live at [par-leap.vercel.app](https://par-leap.vercel.app))
-- ⏭️ Railway Backend Deployment (Next Step)
+- ✅ **Railway Backend Deployment** ✅ (Live at [parleapbackend-production.up.railway.app](https://parleapbackend-production.up.railway.app))
+  - ✅ Connected to GitHub (auto-deploy enabled)
+  - ✅ CORS middleware configured
+  - ✅ Health check endpoint (`/health`)
+  - ✅ Root endpoint (`/`) for API info
+  - ✅ Environment variables configured
+- ✅ **WebSocket Connection Setup** ✅
+  - ✅ WebSocket client utility and React hook implemented
+  - ✅ Vercel environment variable `NEXT_PUBLIC_WS_URL` configured
+  - ✅ Frontend redeployed and ready for testing
 - ⏭️ Supabase Integration
 

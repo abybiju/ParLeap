@@ -8,6 +8,22 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ---
 
+## 📅 Recent Updates (December 2025)
+
+### Security & Infrastructure Updates
+- ✅ **Security Patches Applied**: Updated Next.js to 14.2.35 and React to 18.3.1 to patch CVE-2025-55184 (DoS) and CVE-2025-55183 (Source Code Exposure)
+- ✅ **Backend CORS Configuration**: Added CORS middleware to backend for Vercel frontend integration
+- ✅ **Railway Backend Deployment**: Successfully deployed to Railway (parleapbackend-production.up.railway.app)
+  - Connected to GitHub with auto-deploy
+  - Environment variables configured
+  - Health check and root endpoints verified
+- ✅ **Version Alignment**: Fixed eslint-config-next version mismatch (now aligned with Next.js 14.2.34+)
+- ✅ **WebSocket Connection Setup**: Frontend WebSocket client, React hook, and test component implemented
+  - Vercel environment variable `NEXT_PUBLIC_WS_URL` configured
+  - Frontend redeployed and ready for Phase 2 implementation
+
+---
+
 ## 📋 Implementation Phases
 
 ### **Phase 1: Foundation & Infrastructure** ✅ (Current)
@@ -44,12 +60,13 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
   - [ ] `/operator/[eventId]` - Operator dashboard
 
 #### 1.4 Backend Foundation
-- [ ] Express server setup with TypeScript
-- [ ] WebSocket server initialization (`ws` library)
-- [ ] Environment variable configuration
+- [x] Express server setup with TypeScript
+- [x] WebSocket server initialization (`ws` library)
+- [x] Environment variable configuration
+- [x] CORS middleware configuration
 - [ ] Error handling middleware
 - [ ] Logging setup
-- [ ] Health check endpoints
+- [x] Health check endpoints
 
 ---
 
