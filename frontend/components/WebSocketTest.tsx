@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
+import type { ServerMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
 
 /**
@@ -24,6 +25,24 @@ export function WebSocketTest() {
   } = useWebSocket(false);
 
   const [eventId] = useState('00000000-0000-0000-0000-000000000001'); // Demo event ID
+  const [messageHistory, setMessageHistory] = useState<Array<{ message: ServerMessage; timestamp: Date }>>([]);
+
+  // Track message history
+  useEffect(() => {
+    if (lastMessage) {
+      setMessageHistory((prev) => [
+        { message: lastMessage, timestamp: new Date() },
+        ...prev.slice(0, 9), // Keep last 10 messages
+      ]);
+    }
+  }, [lastMessage]);
+
+  // Clear history on disconnect
+  useEffect(() => {
+    if (state === 'disconnected') {
+      setMessageHistory([]);
+    }
+  }, [state]);
 
   const getStateColor = () => {
     switch (state) {
@@ -158,19 +177,34 @@ export function WebSocketTest() {
           </div>
         )}
 
-        {/* Last Received Message */}
-        {lastMessage && (
+        {/* Message History */}
+        {messageHistory.length > 0 && (
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-sm text-slate-300">Last Received:</p>
-              <span className={cn('px-2 py-0.5 rounded text-xs font-mono', getMessageBadge(lastMessage.type))}>
-                {lastMessage.type}
-              </span>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-slate-300">Message History ({messageHistory.length}):</p>
+              <button
+                onClick={() => setMessageHistory([])}
+                className="text-xs text-slate-400 hover:text-slate-300 transition"
+              >
+                Clear
+              </button>
             </div>
-            <div className="p-3 rounded-lg bg-white/5 border border-white/10 max-h-48 overflow-auto">
-              <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap">
-                {JSON.stringify(lastMessage, null, 2)}
-              </pre>
+            <div className="space-y-2 max-h-64 overflow-auto">
+              {messageHistory.map((item, index) => (
+                <div key={index} className="p-2 rounded-lg bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={cn('px-2 py-0.5 rounded text-xs font-mono', getMessageBadge(item.message.type))}>
+                      {item.message.type}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {item.timestamp.toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap overflow-x-auto">
+                    {JSON.stringify(item.message, null, 2)}
+                  </pre>
+                </div>
+              ))}
             </div>
           </div>
         )}
