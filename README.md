@@ -96,6 +96,8 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 - [ENV_SETUP.md](./ENV_SETUP.md) - Environment variables setup
 - [QUICK_START.md](./QUICK_START.md) - Quick start guide
 - [PROJECT_PLAN.md](./PROJECT_PLAN.md) - Detailed project roadmap
+- [NEXT_PHASE_PLAN.md](./NEXT_PHASE_PLAN.md) - **Next phase implementation plan** (Current focus)
+- [PRODUCTION_TESTING.md](./PRODUCTION_TESTING.md) - Production testing guide
 - [supabase/README.md](./supabase/README.md) - Supabase setup guide
 
 ## Project Status
@@ -135,5 +137,10 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
   - ✅ **Slide Caching**: Local browser caching and preloading of next 3 slides
   - ✅ **Timing Metadata**: All server responses include timing data for latency measurement
   - ✅ **Weak Signal Badge**: Visual indicator when network RTT exceeds 500ms threshold
-- ⏭️ Supabase Integration
+- ✅ **Production Deployment** ✅ (Dec 2025)
+  - ✅ All features deployed to Vercel and Railway
+  - ✅ Production testing completed successfully
+  - ✅ TypeScript build errors resolved
+  - ✅ WebSocket connection verified in production
+- ⏭️ **Next Phase**: Supabase Integration → Audio Capture → STT Integration
 
