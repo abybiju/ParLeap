@@ -126,7 +126,8 @@ export const useSlideCache = create<SlideCacheState>((set, get) => ({
     };
   },
 
-  getNextSlides: (currentSongIndex, currentSlideIndex, count = 3) => {
+  getNextSlides: (_currentSongIndex, _currentSlideIndex, count = 3) => {
+    // Parameters are kept for API consistency but not used since we return from preloadedSlides
     return get().preloadedSlides.slice(0, count);
   },
 

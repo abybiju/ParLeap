@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  * Displays connection status and "Weak Signal" badge when RTT > 500ms
  */
 export function ConnectionStatus() {
-  const [rtt, setRTT] = useState<number>(0);
+  const [currentRTT, setCurrentRTT] = useState<number>(0);
   const [averageRTT, setAverageRTT] = useState<number>(0);
   const [isDegraded, setIsDegraded] = useState<boolean>(false);
 
@@ -19,7 +19,7 @@ export function ConnectionStatus() {
 
     // Update RTT values
     const updateRTT = () => {
-      setRTT(client.getRTT());
+      setCurrentRTT(client.getRTT());
       setAverageRTT(client.getAverageRTT());
       setIsDegraded(client.isDegraded());
     };
@@ -28,8 +28,8 @@ export function ConnectionStatus() {
     updateRTT();
 
     // Subscribe to RTT changes
-    const unsubscribe = client.onRTTChange((currentRTT, avgRTT) => {
-      setRTT(currentRTT);
+    const unsubscribe = client.onRTTChange((rtt, avgRTT) => {
+      setCurrentRTT(rtt);
       setAverageRTT(avgRTT);
       setIsDegraded(avgRTT > 500);
     });
@@ -58,7 +58,7 @@ export function ConnectionStatus() {
           )}
         />
         <span className="text-xs text-slate-400">
-          {averageRTT}ms avg
+          {currentRTT}ms / {averageRTT}ms avg
         </span>
       </div>
 
