@@ -128,5 +128,12 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
   - ✅ Session state management
   - ✅ Frontend typed client with helper methods
   - ✅ Protocol tested and verified
+- ✅ **Latency Attack Features** ✅ (Dec 2025)
+  - ✅ **Latenc-o-meter**: Dev tool for measuring pipeline latency at every stage
+  - ✅ **Ghost Text**: Real-time transcription display for operator trust building
+  - ✅ **RTT Monitoring**: Continuous connection quality monitoring with degraded mode detection
+  - ✅ **Slide Caching**: Local browser caching and preloading of next 3 slides
+  - ✅ **Timing Metadata**: All server responses include timing data for latency measurement
+  - ✅ **Weak Signal Badge**: Visual indicator when network RTT exceeds 500ms threshold
 - ⏭️ Supabase Integration
 

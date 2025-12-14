@@ -1,4 +1,5 @@
 import { WebSocketTest } from '@/components/WebSocketTest';
+import { LatencyMonitor } from '@/components/dev/LatencyMonitor';
 
 /**
  * Public WebSocket Test Page
@@ -17,6 +18,7 @@ export default function WebSocketTestPage() {
         </div>
         <WebSocketTest />
       </div>
+      <LatencyMonitor />
     </main>
   );
 }

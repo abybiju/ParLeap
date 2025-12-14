@@ -55,6 +55,15 @@ export type ClientMessage =
 // Server-to-Client Message Types
 // ============================================
 
+/**
+ * Timing metadata included in server responses for latency measurement
+ */
+export interface TimingMetadata {
+  serverReceivedAt: number;  // When server received the client message
+  serverSentAt: number;      // When server sent this response
+  processingTimeMs: number;  // Time spent processing (AI, matching, etc.)
+}
+
 export interface SessionStartedMessage {
   type: 'SESSION_STARTED';
   payload: {
@@ -64,7 +73,14 @@ export interface SessionStartedMessage {
     totalSongs: number;
     currentSongIndex: number;
     currentSlideIndex: number;
+    setlist?: Array<{
+      id: string;
+      title: string;
+      artist?: string;
+      lines: string[];
+    }>;
   };
+  timing?: TimingMetadata;
 }
 
 export interface TranscriptUpdateMessage {
@@ -74,6 +90,7 @@ export interface TranscriptUpdateMessage {
     isFinal: boolean;
     confidence?: number;
   };
+  timing?: TimingMetadata;
 }
 
 export interface DisplayUpdateMessage {
@@ -86,6 +103,7 @@ export interface DisplayUpdateMessage {
     matchConfidence?: number;
     isAutoAdvance: boolean;
   };
+  timing?: TimingMetadata;
 }
 
 export interface SongChangedMessage {
@@ -96,6 +114,7 @@ export interface SongChangedMessage {
     songIndex: number;
     totalSlides: number;
   };
+  timing?: TimingMetadata;
 }
 
 export interface SessionEndedMessage {
@@ -104,6 +123,7 @@ export interface SessionEndedMessage {
     sessionId: string;
     reason: 'user_stopped' | 'error' | 'timeout';
   };
+  timing?: TimingMetadata;
 }
 
 export interface ErrorMessage {
@@ -113,6 +133,7 @@ export interface ErrorMessage {
     message: string;
     details?: unknown;
   };
+  timing?: TimingMetadata;
 }
 
 export interface PongMessage {
@@ -120,6 +141,7 @@ export interface PongMessage {
   payload: {
     timestamp: string;
   };
+  timing?: TimingMetadata;
 }
 
 export type ServerMessage =

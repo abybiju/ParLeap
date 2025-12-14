@@ -216,6 +216,25 @@ This document explains every technology, tool, and library used in ParLeap and t
 
 ---
 
+### Latency Tracking & Monitoring (Custom Implementation)
+
+**What it is:** Custom latency measurement system for tracking performance at each pipeline stage.
+
+**Why we built it:**
+- **Performance Monitoring**: Measure latency at every stage (Mic→Network, Network→Server, AI Processing, Server→Client)
+- **Dev Tool**: Latenc-o-meter overlay for developers to see real-time latency metrics
+- **Optimization**: Identify bottlenecks in the pipeline
+- **Goal**: Ensure <500ms end-to-end latency requirement
+
+**Components:**
+- `LatencyTracker`: Utility class for tracking message send/receive times
+- `LatencyMonitor`: Dev-only overlay component showing pipeline latency breakdown
+- `TimingMetadata`: Backend timing data included in all WebSocket responses
+
+**Decision factor:** "You cannot improve what you do not measure." Custom implementation gives us full control over latency measurement and display.
+
+---
+
 ### CORS (cors middleware)
 
 **What it is:** Express middleware for enabling Cross-Origin Resource Sharing.
@@ -227,6 +246,63 @@ This document explains every technology, tool, and library used in ParLeap and t
 - **Standard**: Implements CORS specification correctly
 
 **Why we need it:** Our frontend is deployed on Vercel (`par-leap.vercel.app`) and backend on Railway (`parleapbackend-production.up.railway.app`). CORS is required for cross-origin requests.
+
+---
+
+## Latency & Resilience Features
+
+### Ghost Text (Confidence Monitor)
+
+**What it is:** Real-time transcription display on operator screen showing what the AI hears before committing to slide changes.
+
+**Why we built it:**
+- **Trust Building**: Operators can see the AI is working correctly
+- **Proactive Intervention**: Operators can act if transcription is wrong before wrong slide displays
+- **Transparency**: Users trust systems they can observe
+- **Confidence Display**: Shows confidence percentage for each transcription
+
+**Implementation:** Component displays `TRANSCRIPT_UPDATE` messages in real-time with confidence indicators and highlight animations for high-confidence matches.
+
+**Decision factor:** Critical UX feature that builds operator trust and enables proactive error prevention.
+
+---
+
+### RTT Monitoring (Panic Protocol)
+
+**What it is:** Continuous round-trip time (RTT) monitoring via PING/PONG messages to detect network degradation.
+
+**Why we built it:**
+- **Network Quality**: Monitor connection quality in real-time
+- **Degraded Mode Detection**: Automatically detect when RTT exceeds 500ms threshold
+- **Weak Signal Warning**: Visual indicator for operators when network is poor
+- **Resilience**: Enables graceful degradation strategies
+
+**Implementation:**
+- Automatic PING every 5 seconds when connected
+- Rolling average of last 5 RTT values
+- `ConnectionStatus` component displays RTT and "Weak Signal" badge when degraded
+
+**Decision factor:** Live events have unpredictable networks. We need to detect and handle poor connectivity gracefully.
+
+---
+
+### Slide Caching & Preloading
+
+**What it is:** Local browser caching of song lyrics and automatic preloading of next slides.
+
+**Why we built it:**
+- **Offline Resilience**: Can display slides even if server disconnects briefly
+- **Performance**: Preloaded slides display instantly
+- **Network Independence**: Reduces dependency on server for slide display
+- **Panic Protocol**: Part of graceful degradation when network is poor
+
+**Implementation:**
+- Zustand store (`slideCache`) caches full setlist on session start
+- Automatically preloads next 3 slides
+- Updates preloaded slides when display changes
+- Backend sends full setlist in `SESSION_STARTED` message
+
+**Decision factor:** Critical for production reliability. Operators must be able to continue even during brief network interruptions.
 
 ---
 
@@ -423,6 +499,20 @@ This document explains every technology, tool, and library used in ParLeap and t
 - **In-Memory Caching**: Cache setlist in Node.js memory (no DB queries during session)
 - **Optimized Matching**: Fast fuzzy matching algorithm
 - **Edge Deployment**: Vercel edge network for fast frontend delivery
+- **Timing Metadata**: Every server response includes timing data for measurement
+- **Latency Monitoring**: Real-time latency tracking at every pipeline stage
+- **Slide Preloading**: Next 3 slides cached locally for instant display
+
+**Latency Measurement:**
+- **Mic → Network**: Time from audio capture to message send
+- **Network → Server**: Time from send to server receive (includes network latency)
+- **AI Processing**: Time spent on server (transcription, matching)
+- **Server → Client**: Time from server send to client receive
+- **Total**: End-to-end latency from audio capture to display update
+
+**Dev Tools:**
+- Latenc-o-meter overlay shows real-time latency breakdown (dev mode only)
+- Helps identify bottlenecks during development
 
 ### Bundle Size Optimization
 
@@ -467,6 +557,13 @@ ParLeap uses a modern, type-safe, and performant tech stack:
 - **Deployment**: Vercel (frontend) + Railway (backend) for zero-config deployments
 - **State**: Zustand for simple, performant state management
 - **Styling**: Tailwind CSS + Shadcn/UI for rapid, consistent UI development
+- **Latency Tools**: Custom latency tracking, RTT monitoring, and slide caching for <500ms performance
 
-Every technology was chosen for a specific reason: performance, developer experience, type safety, or production readiness. The stack is optimized for our <500ms latency requirement and real-time audio processing needs.
+**Latency-First Features:**
+- **Latenc-o-meter**: Dev tool for measuring pipeline latency
+- **Ghost Text**: Real-time transcription display for operator trust
+- **RTT Monitoring**: Continuous connection quality monitoring
+- **Slide Caching**: Local preloading for resilience and performance
+
+Every technology was chosen for a specific reason: performance, developer experience, type safety, or production readiness. The stack is optimized for our <500ms latency requirement and real-time audio processing needs. Latency is our #1 risk, so we've built comprehensive monitoring and resilience features to ensure production reliability.
 

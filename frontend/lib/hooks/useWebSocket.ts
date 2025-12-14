@@ -7,6 +7,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { getWebSocketClient, type WebSocketState, type ClientMessage, type ServerMessage } from '../websocket/client';
+import { useSlideCache } from '../stores/slideCache';
+import { isSessionStartedMessage, isDisplayUpdateMessage } from '../websocket/types';
 
 export interface UseWebSocketReturn {
   state: WebSocketState;
@@ -34,6 +36,7 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
   const [state, setState] = useState<WebSocketState>(client.getState());
   const [lastMessage, setLastMessage] = useState<ServerMessage | null>(null);
   const messageHandlerRef = useRef<((message: ServerMessage) => void) | null>(null);
+  const slideCache = useSlideCache();
 
   // Update state when WebSocket state changes
   useEffect(() => {
@@ -48,12 +51,40 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
   useEffect(() => {
     messageHandlerRef.current = (message: ServerMessage) => {
       setLastMessage(message);
+
+      // Cache setlist when session starts
+      if (isSessionStartedMessage(message) && message.payload.setlist) {
+        slideCache.cacheSetlist(
+          message.payload.eventId,
+          message.payload.eventName,
+          message.payload.setlist.map((song) => ({
+            id: song.id,
+            title: song.title,
+            artist: song.artist,
+            lines: song.lines,
+          }))
+        );
+        // Preload initial slides
+        slideCache.preloadNextSlides(message.payload.currentSongIndex, message.payload.currentSlideIndex);
+      }
+
+      // Preload next slides when display updates
+      if (isDisplayUpdateMessage(message)) {
+        // Find current song index from cached setlist
+        const setlist = slideCache.setlist;
+        if (setlist) {
+          const songIndex = setlist.songs.findIndex((s) => s.id === message.payload.songId);
+          if (songIndex !== -1) {
+            slideCache.preloadNextSlides(songIndex, message.payload.slideIndex);
+          }
+        }
+      }
     };
 
     const unsubscribe = client.onMessage(messageHandlerRef.current);
 
     return unsubscribe;
-  }, [client]);
+  }, [client, slideCache]);
 
   // Auto-connect on mount if enabled
   useEffect(() => {
