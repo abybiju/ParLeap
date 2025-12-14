@@ -39,10 +39,8 @@ export class LatencyTracker {
     const sendTime = Date.now();
     this.sendTimestamps.set(messageId, sendTime);
     
-    // If mic capture time is provided, calculate mic → network latency
+    // If mic capture time is provided, store it for later use when we receive the response
     if (micCaptureTime !== undefined) {
-      const micToNetwork = sendTime - micCaptureTime;
-      // Store this for later use when we receive the response
       this.sendTimestamps.set(`${messageId}_mic`, micCaptureTime);
     }
   }
