@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import type { ServerMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
+import { GhostText } from './operator/GhostText';
+import { ConnectionStatus } from './operator/ConnectionStatus';
 
 /**
  * WebSocket Protocol Test Component
@@ -92,17 +94,20 @@ export function WebSocketTest() {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-indigo-500/10">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-white">WebSocket Protocol Test</h2>
-        <span
-          className={cn(
-            'px-3 py-1 rounded-full text-xs font-medium border',
-            getStateBadge()
-          )}
-        >
-          {state.toUpperCase()}
-        </span>
-      </div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-white">WebSocket Protocol Test</h2>
+            <div className="flex items-center gap-3">
+              <ConnectionStatus />
+              <span
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium border',
+                  getStateBadge()
+                )}
+              >
+                {state.toUpperCase()}
+              </span>
+            </div>
+          </div>
 
       <div className="space-y-4">
         {/* Connection Status */}
@@ -221,6 +226,13 @@ export function WebSocketTest() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Ghost Text */}
+        {isConnected && (
+          <div className="mt-4">
+            <GhostText />
           </div>
         )}
 

@@ -160,8 +160,54 @@
 
 ---
 
+---
+
+### 7. Latency Attack Features ✅ COMPLETE
+- **Latenc-o-meter (Dev Tool)**:
+  - Backend timing metadata (`TimingMetadata`) added to all WebSocket responses
+  - Frontend `LatencyTracker` utility for measuring pipeline stages
+  - `LatencyMonitor` dev overlay component showing real-time latency breakdown
+  - Tracks: Mic→Network, Network→Server, AI Processing, Server→Client, Total
+- **Ghost Text (Confidence Monitor)**:
+  - `GhostText` component displaying real-time transcription
+  - Confidence percentage display
+  - Highlight animations for high-confidence matches
+  - Rolling buffer management
+- **RTT Monitoring (Panic Protocol)**:
+  - Automatic PING/PONG every 5 seconds when connected
+  - Rolling average of last 5 RTT values
+  - Degraded mode detection (RTT > 500ms)
+  - `ConnectionStatus` component with Weak Signal badge
+- **Slide Caching & Preloading**:
+  - Zustand store (`slideCache`) for local browser caching
+  - Full setlist cached on session start
+  - Automatic preloading of next 3 slides
+  - Preload updates on display changes
+  - Backend sends full setlist in `SESSION_STARTED` message
+
+**Files Created:**
+- `frontend/lib/latency/tracker.ts` - Latency tracking utility
+- `frontend/components/dev/LatencyMonitor.tsx` - Dev overlay component
+- `frontend/components/operator/GhostText.tsx` - Ghost text display
+- `frontend/components/operator/ConnectionStatus.tsx` - Connection status with RTT
+- `frontend/lib/stores/slideCache.ts` - Slide caching store
+
+**Files Modified:**
+- `backend/src/types/websocket.ts` - Added TimingMetadata and setlist to SESSION_STARTED
+- `backend/src/websocket/handler.ts` - Added timing tracking to all handlers
+- `frontend/lib/websocket/types.ts` - Added TimingMetadata and setlist
+- `frontend/lib/websocket/client.ts` - Added RTT monitoring and latency tracking
+- `frontend/lib/hooks/useWebSocket.ts` - Integrated slide caching
+- `frontend/components/WebSocketTest.tsx` - Added GhostText and ConnectionStatus
+- `frontend/app/test-websocket/page.tsx` - Added LatencyMonitor
+
+**Status:** ✅ All latency attack features implemented and ready for testing
+
+---
+
 **Last Updated:** December 13, 2025
-**Session Focus:** WebSocket protocol implementation completed ✅
+**Session Focus:** Latency Attack Features Implementation ✅
 **Backend Status:** Live and verified at `parleapbackend-production.up.railway.app`
 **Protocol Status:** Fully implemented and tested ✅
+**Latency Features:** Complete - Latenc-o-meter, Ghost Text, RTT Monitoring, Slide Caching ✅
 

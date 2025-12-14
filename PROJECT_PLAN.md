@@ -29,6 +29,13 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
   - Frontend typed client with helper methods
   - Message history tracking in test component
   - Protocol tested and verified
+- ✅ **Latency Attack Features**: Comprehensive latency monitoring and resilience features implemented
+  - **Latenc-o-meter**: Dev tool for measuring pipeline latency at every stage
+  - **Ghost Text**: Real-time transcription display for operator trust building
+  - **RTT Monitoring**: Continuous connection quality monitoring with degraded mode detection
+  - **Slide Caching**: Local browser caching and preloading of next 3 slides
+  - **Timing Metadata**: All server responses include timing data for latency measurement
+  - **Weak Signal Badge**: Visual indicator when network RTT exceeds 500ms threshold
 
 ---
 
@@ -103,7 +110,7 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - [x] React hook for WebSocket integration
 - [x] Test component for protocol verification
 
-#### 2.2 Audio Capture (Frontend)
+#### 2.3 Audio Capture (Frontend)
 - [ ] Browser microphone access (`MediaRecorder` API)
 - [ ] Audio chunk streaming to WebSocket
 - [ ] Audio format configuration (sample rate, channels)
@@ -111,7 +118,7 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - [ ] Visual feedback for audio capture status
 - [ ] Audio level visualization
 
-#### 2.3 AI Transcription Integration
+#### 2.4 AI Transcription Integration
 - [ ] Choose STT provider (Google Cloud Speech-to-Text OR ElevenLabs Scribe)
 - [ ] Set up API credentials and configuration
 - [ ] Streaming transcription implementation
@@ -119,7 +126,7 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - [ ] Error handling and retry logic
 - [ ] Transcription buffer management
 
-#### 2.4 Backend Audio Processing Pipeline
+#### 2.5 Backend Audio Processing Pipeline
 - [ ] WebSocket audio chunk receiver
 - [ ] Audio buffer management
 - [ ] Forward audio to STT provider
@@ -187,11 +194,12 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - [ ] Duplicate event functionality
 
 #### 4.4 Live Presentation Views
-- [ ] Operator Dashboard:
-  - [ ] Real-time transcription display
+- [x] Operator Dashboard (Partial):
+  - [x] Real-time transcription display (Ghost Text component) ✅
+  - [x] Connection status with RTT monitoring ✅
+  - [x] Weak Signal badge for degraded connections ✅
   - [ ] Current slide preview
-  - [ ] Manual controls (next/previous)
-  - [ ] Connection status
+  - [x] Manual controls (next/previous) ✅
   - [ ] Audio level meter
 - [ ] Audience View:
   - [ ] Full-screen slide display
@@ -200,11 +208,12 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
   - [ ] Responsive design
 
 #### 4.5 State Management (Zustand)
-- [ ] Auth store
+- [x] Auth store ✅
 - [ ] Songs store
 - [ ] Events store
 - [ ] Live session store
-- [ ] WebSocket connection store
+- [x] WebSocket connection store ✅ (via useWebSocket hook)
+- [x] Slide cache store ✅ (`slideCache` for local caching and preloading)
 
 ---
 
@@ -225,8 +234,10 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - [ ] Caching strategies
 
 #### 5.3 Error Handling & Resilience
-- [ ] Graceful degradation
-- [ ] Connection retry logic
+- [x] Graceful degradation ✅ (RTT monitoring, degraded mode detection, slide caching)
+- [x] Connection retry logic ✅ (Exponential backoff in WebSocket client)
+- [x] Weak Signal detection ✅ (RTT > 500ms triggers visual warning)
+- [x] Slide preloading for offline resilience ✅
 - [ ] Error boundaries (React)
 - [ ] User-friendly error messages
 - [ ] Logging and monitoring
@@ -323,6 +334,26 @@ Browser Mic → Frontend (MediaRecorder)
 
 ---
 
-**Last Updated:** Initial Plan
-**Status:** Phase 1 in progress
+**Last Updated:** December 13, 2025
+**Status:** Phase 2.1 & 2.2 Complete - Latency Attack Features Implemented ✅
+
+## 🎯 Latency Attack Summary
+
+**Completed Features:**
+1. **Latenc-o-meter**: Dev tool measuring latency at every pipeline stage
+2. **Ghost Text**: Real-time transcription display for operator trust
+3. **RTT Monitoring**: Continuous connection quality monitoring with degraded mode detection
+4. **Slide Caching**: Local browser caching and preloading for resilience
+
+**Key Metrics:**
+- All server responses include timing metadata
+- RTT monitored continuously (5-second intervals)
+- Next 3 slides always preloaded locally
+- Weak Signal badge appears at RTT > 500ms
+
+**Next Steps:**
+- Integrate real STT provider (Google/ElevenLabs)
+- Replace mock data with Supabase queries
+- Implement audio capture in frontend
+- Build fuzzy matching algorithm
 

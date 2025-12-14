@@ -14,6 +14,7 @@ import {
   type SongChangedMessage,
   type ErrorMessage,
   type PongMessage,
+  type TimingMetadata,
   isStartSessionMessage,
   isAudioDataMessage,
   isManualOverrideMessage,
@@ -21,6 +22,22 @@ import {
   isPingMessage,
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
+
+// ============================================
+// Timing Utilities
+// ============================================
+
+/**
+ * Create timing metadata for a response
+ */
+function createTiming(receivedAt: number, processingStartAt: number): TimingMetadata {
+  const now = Date.now();
+  return {
+    serverReceivedAt: receivedAt,
+    serverSentAt: now,
+    processingTimeMs: now - processingStartAt,
+  };
+}
 
 // ============================================
 // Session State
@@ -74,8 +91,10 @@ function sendError(ws: WebSocket, code: string, message: string, details?: unkno
  */
 async function handleStartSession(
   ws: WebSocket,
-  eventId: string
+  eventId: string,
+  receivedAt: number
 ): Promise<void> {
+  const processingStart = Date.now();
   console.log(`[WS] Starting session for event: ${eventId}`);
 
   // Check if session already exists
@@ -125,7 +144,7 @@ async function handleStartSession(
 
   sessions.set(ws, session);
 
-  // Send session started confirmation
+  // Send session started confirmation with full setlist for caching
   const response: SessionStartedMessage = {
     type: 'SESSION_STARTED',
     payload: {
@@ -135,7 +154,13 @@ async function handleStartSession(
       totalSongs: session.songs.length,
       currentSongIndex: 0,
       currentSlideIndex: 0,
+      setlist: session.songs.map((song) => ({
+        id: song.id,
+        title: song.title,
+        lines: song.lines,
+      })),
     },
+    timing: createTiming(receivedAt, processingStart),
   };
 
   send(ws, response);
@@ -151,6 +176,7 @@ async function handleStartSession(
         songTitle: session.songs[0].title,
         isAutoAdvance: false,
       },
+      timing: createTiming(receivedAt, processingStart),
     };
     send(ws, displayUpdate);
   }
@@ -164,8 +190,10 @@ async function handleStartSession(
  */
 async function handleAudioData(
   ws: WebSocket,
-  data: string
+  data: string,
+  receivedAt: number
 ): Promise<void> {
+  const processingStart = Date.now();
   const session = sessions.get(ws);
   if (!session || !session.isActive) {
     sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
@@ -184,6 +212,7 @@ async function handleAudioData(
       text: '[Audio received - transcription pending]',
       isFinal: false,
     },
+    timing: createTiming(receivedAt, processingStart),
   };
   send(ws, mockTranscript);
 }
@@ -195,9 +224,11 @@ async function handleAudioData(
 function handleManualOverride(
   ws: WebSocket,
   action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE',
+  receivedAt: number,
   slideIndex?: number,
   songId?: string
 ): void {
+  const processingStart = Date.now();
   const session = sessions.get(ws);
   if (!session || !session.isActive) {
     sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
@@ -266,6 +297,8 @@ function handleManualOverride(
 
   const targetSong = session.songs[newSongIndex];
 
+  const timing = createTiming(receivedAt, processingStart);
+
   // Send SONG_CHANGED if song changed
   if (songChanged) {
     const songChangedMessage: SongChangedMessage = {
@@ -276,6 +309,7 @@ function handleManualOverride(
         songIndex: newSongIndex,
         totalSlides: targetSong.lines.length,
       },
+      timing,
     };
     send(ws, songChangedMessage);
   }
@@ -290,6 +324,7 @@ function handleManualOverride(
       songTitle: targetSong.title,
       isAutoAdvance: false,
     },
+    timing,
   };
   send(ws, displayUpdate);
 
@@ -300,7 +335,8 @@ function handleManualOverride(
  * Handle STOP_SESSION message
  * Ends the current session
  */
-function handleStopSession(ws: WebSocket): void {
+function handleStopSession(ws: WebSocket, receivedAt: number): void {
+  const processingStart = Date.now();
   const session = sessions.get(ws);
   if (!session) {
     sendError(ws, 'NO_SESSION', 'No active session to stop.');
@@ -316,6 +352,7 @@ function handleStopSession(ws: WebSocket): void {
       sessionId,
       reason: 'user_stopped',
     },
+    timing: createTiming(receivedAt, processingStart),
   });
 
   console.log(`[WS] Session ended: ${sessionId}`);
@@ -323,14 +360,16 @@ function handleStopSession(ws: WebSocket): void {
 
 /**
  * Handle PING message
- * Responds with PONG for keep-alive
+ * Responds with PONG for keep-alive and latency measurement
  */
-function handlePing(ws: WebSocket): void {
+function handlePing(ws: WebSocket, receivedAt: number): void {
+  const processingStart = Date.now();
   const pong: PongMessage = {
     type: 'PONG',
     payload: {
       timestamp: new Date().toISOString(),
     },
+    timing: createTiming(receivedAt, processingStart),
   };
   send(ws, pong);
 }
@@ -343,6 +382,9 @@ function handlePing(ws: WebSocket): void {
  * Process an incoming WebSocket message
  */
 export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<void> {
+  // Track when the message was received for latency measurement
+  const receivedAt = Date.now();
+  
   let parsed: unknown;
 
   // Parse JSON
@@ -365,20 +407,21 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
   // Route message to appropriate handler
   try {
     if (isStartSessionMessage(message)) {
-      await handleStartSession(ws, message.payload.eventId);
+      await handleStartSession(ws, message.payload.eventId, receivedAt);
     } else if (isAudioDataMessage(message)) {
-      await handleAudioData(ws, message.payload.data);
+      await handleAudioData(ws, message.payload.data, receivedAt);
     } else if (isManualOverrideMessage(message)) {
       handleManualOverride(
         ws,
         message.payload.action,
+        receivedAt,
         message.payload.slideIndex,
         message.payload.songId
       );
     } else if (isStopSessionMessage(message)) {
-      handleStopSession(ws);
+      handleStopSession(ws, receivedAt);
     } else if (isPingMessage(message)) {
-      handlePing(ws);
+      handlePing(ws, receivedAt);
     } else {
       sendError(ws, 'UNKNOWN_TYPE', `Unknown message type`);
     }

@@ -25,6 +25,12 @@ Follow this checklist to complete your production deployment setup.
   - ✅ Test component created (`frontend/components/WebSocketTest.tsx`)
   - ✅ Vercel environment variable `NEXT_PUBLIC_WS_URL` updated
   - ✅ Frontend redeployed with WebSocket URL
+- ✅ **Latency Attack Features** (Dec 2025)
+  - ✅ Latenc-o-meter dev tool implemented
+  - ✅ Ghost Text component for operator trust
+  - ✅ RTT monitoring with Weak Signal badge
+  - ✅ Slide caching and preloading system
+  - ✅ Timing metadata in all server responses
 - ⏭️ Supabase database setup needed
 
 ---

@@ -7,9 +7,11 @@
  * - Message sending and receiving
  * - Event-based message handling
  * - Type-safe message protocol
+ * - Latency tracking for performance monitoring
  */
 
 import type { ClientMessage, ServerMessage } from './types';
+import { getLatencyTracker } from '../latency/tracker';
 
 export type WebSocketState = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -18,6 +20,7 @@ export type { ClientMessage, ServerMessage } from './types';
 
 type MessageHandler = (message: ServerMessage) => void;
 type StateChangeHandler = (state: WebSocketState) => void;
+type RTTChangeHandler = (rtt: number, averageRTT: number) => void;
 
 class WebSocketClient {
   private ws: WebSocket | null = null;
@@ -30,7 +33,19 @@ class WebSocketClient {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private messageHandlers: Set<MessageHandler> = new Set();
   private stateChangeHandlers: Set<StateChangeHandler> = new Set();
+  private rttChangeHandlers: Set<RTTChangeHandler> = new Set();
   private shouldReconnect = true;
+  private latencyTracker = getLatencyTracker();
+  private messageIdCounter = 0;
+  
+  // RTT Monitoring
+  private pingInterval: NodeJS.Timeout | null = null;
+  private pingIntervalMs = 5000; // Ping every 5 seconds
+  private rttHistory: number[] = [];
+  private maxRttHistorySize = 5; // Keep last 5 RTT values
+  private currentRTT: number = 0;
+  private averageRTT: number = 0;
+  private pendingPingTimestamp: number | null = null;
 
   constructor() {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
@@ -82,11 +97,27 @@ class WebSocketClient {
         this.setState('connected');
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000; // Reset delay on successful connection
+        this.startPingInterval();
       };
 
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as ServerMessage;
+          
+          // Handle PONG for RTT measurement
+          if (message.type === 'PONG' && this.pendingPingTimestamp !== null) {
+            const rtt = Date.now() - this.pendingPingTimestamp;
+            this.updateRTT(rtt);
+            this.pendingPingTimestamp = null;
+          }
+          
+          // Track latency for messages with timing metadata
+          if ('timing' in message && message.timing) {
+            // Use message type as identifier (simplified - in production might use correlation IDs)
+            const messageId = `${message.type}_${Date.now()}`;
+            this.latencyTracker.recordReceive(messageId, message.type, message.timing);
+          }
+          
           this.handleMessage(message);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
@@ -102,6 +133,7 @@ class WebSocketClient {
         console.log('WebSocket disconnected');
         this.setState('disconnected');
         this.ws = null;
+        this.stopPingInterval();
 
         if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
           this.scheduleReconnect();
@@ -121,6 +153,7 @@ class WebSocketClient {
    */
   disconnect(): void {
     this.shouldReconnect = false;
+    this.stopPingInterval();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -135,13 +168,19 @@ class WebSocketClient {
   /**
    * Send a typed message to the server
    */
-  send(message: ClientMessage): void {
+  send(message: ClientMessage, micCaptureTime?: number): void {
     if (!this.isConnected() || !this.ws) {
       console.error('Cannot send message: WebSocket not connected');
       return;
     }
 
     try {
+      // Generate message ID for latency tracking
+      const messageId = `${message.type}_${++this.messageIdCounter}_${Date.now()}`;
+      
+      // Record send time for latency tracking
+      this.latencyTracker.recordSend(messageId, micCaptureTime);
+      
       this.ws.send(JSON.stringify(message));
     } catch (error) {
       console.error('Failed to send WebSocket message:', error);
@@ -173,7 +212,39 @@ class WebSocketClient {
    * Send PING message
    */
   ping(): void {
+    this.pendingPingTimestamp = Date.now();
     this.send({ type: 'PING' });
+  }
+
+  /**
+   * Get current RTT
+   */
+  getRTT(): number {
+    return this.currentRTT;
+  }
+
+  /**
+   * Get average RTT
+   */
+  getAverageRTT(): number {
+    return this.averageRTT;
+  }
+
+  /**
+   * Check if connection is degraded (average RTT > 500ms)
+   */
+  isDegraded(): boolean {
+    return this.averageRTT > 500;
+  }
+
+  /**
+   * Register an RTT change handler
+   */
+  onRTTChange(handler: RTTChangeHandler): () => void {
+    this.rttChangeHandlers.add(handler);
+    return () => {
+      this.rttChangeHandlers.delete(handler);
+    };
   }
 
   /**
@@ -211,6 +282,56 @@ class WebSocketClient {
    */
   private handleMessage(message: ServerMessage): void {
     this.messageHandlers.forEach((handler) => handler(message));
+  }
+
+  /**
+   * Start automatic PING interval for RTT monitoring
+   */
+  private startPingInterval(): void {
+    if (this.pingInterval) {
+      return; // Already started
+    }
+
+    // Send initial ping
+    this.ping();
+
+    // Set up interval
+    this.pingInterval = setInterval(() => {
+      if (this.isConnected()) {
+        this.ping();
+      }
+    }, this.pingIntervalMs);
+  }
+
+  /**
+   * Stop automatic PING interval
+   */
+  private stopPingInterval(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    this.pendingPingTimestamp = null;
+  }
+
+  /**
+   * Update RTT values and notify handlers
+   */
+  private updateRTT(rtt: number): void {
+    this.currentRTT = rtt;
+
+    // Add to history
+    this.rttHistory.push(rtt);
+    if (this.rttHistory.length > this.maxRttHistorySize) {
+      this.rttHistory.shift();
+    }
+
+    // Calculate average
+    const sum = this.rttHistory.reduce((acc, val) => acc + val, 0);
+    this.averageRTT = Math.round(sum / this.rttHistory.length);
+
+    // Notify handlers
+    this.rttChangeHandlers.forEach((handler) => handler(this.currentRTT, this.averageRTT));
   }
 
   /**
