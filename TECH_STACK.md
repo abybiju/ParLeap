@@ -453,12 +453,48 @@ This document explains every technology, tool, and library used in ParLeap and t
 - **Real-time Streaming**: Both support streaming audio for low latency
 - **Accuracy**: High accuracy for speech recognition
 - **API Integration**: Easy to integrate via REST/WebSocket APIs
+- **Critical Path**: Required for Phase 2.4 (STT Integration)
 
 **Decision pending:** Will evaluate both based on:
-- Latency (<500ms requirement)
-- Accuracy for music/lyrics
-- Cost
-- Ease of integration
+- Latency (<500ms requirement) - **CRITICAL**
+- Accuracy for music/lyrics (specialized use case)
+- Cost (per-minute pricing)
+- Ease of integration (SDK availability)
+- Streaming API support (real-time vs batch)
+
+**Timeline:** Phase 2.4 - Next sprint after Supabase and Audio Capture
+
+**Integration Plan:**
+- Backend service: `backend/src/services/stt.ts`
+- WebSocket handler: Update `handleAudioData` to forward to STT
+- Audio format: 16kHz mono PCM (optimal for STT)
+- Streaming: Process chunks as they arrive (not batch)
+
+---
+
+### MediaRecorder API (Browser)
+
+**What it is:** Native browser API for recording audio/video.
+
+**Why we'll use it:**
+- **Native Support**: Built into modern browsers, no dependencies
+- **Real-time Streaming**: Can capture and stream audio chunks
+- **Low Latency**: Direct access to microphone, minimal overhead
+- **Format Control**: Can configure sample rate, channels, encoding
+
+**Implementation:** Phase 2.3 (Audio Capture)
+- React hook: `frontend/lib/hooks/useAudioCapture.ts`
+- Component: `frontend/components/operator/AudioLevelMeter.tsx`
+- Integration: Stream to WebSocket via `AUDIO_DATA` messages
+
+**Configuration:**
+- Sample rate: 16000 Hz (optimal for STT)
+- Channels: 1 (mono)
+- Encoding: WebM Opus or PCM
+- Chunk size: 1000ms intervals
+
+**Alternatives considered:** Web Audio API, getUserMedia with manual processing
+**Decision factor:** MediaRecorder is simpler and provides exactly what we need for streaming audio.
 
 ---
 
@@ -547,6 +583,22 @@ This document explains every technology, tool, and library used in ParLeap and t
 
 ---
 
+## Current Status & Next Phase
+
+### Production Deployment ✅
+- **Frontend**: Deployed to Vercel (par-leap.vercel.app)
+- **Backend**: Deployed to Railway (parleapbackend-production.up.railway.app)
+- **Status**: All latency features tested and working in production
+- **Build**: TypeScript strict mode, zero errors
+
+### Next Phase Technologies
+- **Supabase**: Database integration (Phase 1.2) - Foundation for real data
+- **MediaRecorder API**: Browser audio capture (Phase 2.3) - Audio input
+- **STT Provider**: Google/ElevenLabs (Phase 2.4) - AI transcription
+- **string-similarity**: Already installed, ready for Phase 3 - Fuzzy matching
+
+---
+
 ## Summary
 
 ParLeap uses a modern, type-safe, and performant tech stack:
@@ -559,11 +611,18 @@ ParLeap uses a modern, type-safe, and performant tech stack:
 - **Styling**: Tailwind CSS + Shadcn/UI for rapid, consistent UI development
 - **Latency Tools**: Custom latency tracking, RTT monitoring, and slide caching for <500ms performance
 
-**Latency-First Features:**
-- **Latenc-o-meter**: Dev tool for measuring pipeline latency
-- **Ghost Text**: Real-time transcription display for operator trust
-- **RTT Monitoring**: Continuous connection quality monitoring
-- **Slide Caching**: Local preloading for resilience and performance
+**Latency-First Features (Implemented):**
+- **Latenc-o-meter**: Dev tool for measuring pipeline latency ✅
+- **Ghost Text**: Real-time transcription display for operator trust ✅
+- **RTT Monitoring**: Continuous connection quality monitoring ✅
+- **Slide Caching**: Local preloading for resilience and performance ✅
+
+**Upcoming Features:**
+- **MediaRecorder**: Browser audio capture (Phase 2.3)
+- **STT Integration**: Real-time speech-to-text (Phase 2.4)
+- **Fuzzy Matching**: AI-powered slide matching (Phase 3)
 
 Every technology was chosen for a specific reason: performance, developer experience, type safety, or production readiness. The stack is optimized for our <500ms latency requirement and real-time audio processing needs. Latency is our #1 risk, so we've built comprehensive monitoring and resilience features to ensure production reliability.
+
+**Production Status:** All foundation and latency features deployed and tested. Ready for Supabase integration and audio capture implementation.
 
