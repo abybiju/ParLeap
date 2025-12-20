@@ -42,6 +42,18 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
   - ✅ Railway backend deployment successful
   - ✅ WebSocket connection verified in production
   - ✅ All latency features tested and working
+- ✅ **Phase 1.2: Supabase Integration** (Dec 14, 2025)
+  - ✅ Event service for Supabase queries
+  - ✅ Real data fetching in WebSocket handler
+  - ✅ Database seed script for test data
+  - ✅ Comprehensive documentation (7 guides)
+- ✅ **Phase 2.3: Audio Capture** (Dec 14, 2025)
+  - ✅ useAudioCapture hook with MediaRecorder API
+  - ✅ Audio streaming to WebSocket (AUDIO_DATA messages)
+  - ✅ AudioLevelMeter and MicrophoneStatus components
+  - ✅ Auto-start/stop with session lifecycle
+  - ✅ Permission handling and error recovery
+  - ✅ Real-time audio level visualization
 
 ---
 
@@ -116,13 +128,13 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - [x] React hook for WebSocket integration
 - [x] Test component for protocol verification
 
-#### 2.3 Audio Capture (Frontend)
-- [ ] Browser microphone access (`MediaRecorder` API)
-- [ ] Audio chunk streaming to WebSocket
-- [ ] Audio format configuration (sample rate, channels)
-- [ ] Error handling for microphone permissions
-- [ ] Visual feedback for audio capture status
-- [ ] Audio level visualization
+#### 2.3 Audio Capture (Frontend) ✅
+- [x] Browser microphone access (`MediaRecorder` API) ✅
+- [x] Audio chunk streaming to WebSocket ✅
+- [x] Audio format configuration (16kHz, mono, WebM Opus) ✅
+- [x] Error handling for microphone permissions ✅
+- [x] Visual feedback for audio capture status ✅
+- [x] Audio level visualization ✅
 
 #### 2.4 AI Transcription Integration
 - [ ] Choose STT provider (Google Cloud Speech-to-Text OR ElevenLabs Scribe)
