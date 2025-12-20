@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
+import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
 import type { ServerMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
 import { GhostText } from './operator/GhostText';
 import { ConnectionStatus } from './operator/ConnectionStatus';
+import { MicrophoneStatus } from './operator/MicrophoneStatus';
+import { AudioLevelMeter } from './operator/AudioLevelMeter';
+import { isSessionStartedMessage, isSessionEndedMessage } from '@/lib/websocket/types';
 
 /**
  * WebSocket Protocol Test Component
@@ -30,6 +34,9 @@ export function WebSocketTest() {
   const [messageHistory, setMessageHistory] = useState<Array<{ message: ServerMessage; timestamp: Date }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Audio capture
+  const audioCapture = useAudioCapture();
+
   // Track message history
   useEffect(() => {
     if (lastMessage) {
@@ -46,6 +53,28 @@ export function WebSocketTest() {
       setMessageHistory([]);
     }
   }, [state]);
+
+  // Auto-start audio capture when session starts
+  useEffect(() => {
+    if (lastMessage && isSessionStartedMessage(lastMessage)) {
+      // Session started - start audio capture if not already recording
+      if (!audioCapture.state.isRecording && audioCapture.state.permissionState === 'granted') {
+        audioCapture.start().catch((error) => {
+          console.error('Failed to start audio capture:', error);
+        });
+      }
+    }
+  }, [lastMessage, audioCapture]);
+
+  // Auto-stop audio capture when session ends
+  useEffect(() => {
+    if (lastMessage && isSessionEndedMessage(lastMessage)) {
+      // Session ended - stop audio capture
+      if (audioCapture.state.isRecording) {
+        audioCapture.stop();
+      }
+    }
+  }, [lastMessage, audioCapture]);
 
   const getStateColor = () => {
     switch (state) {
@@ -226,6 +255,59 @@ export function WebSocketTest() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Audio Capture Section */}
+        {isConnected && (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-200">Audio Capture</h3>
+            </div>
+            
+            {/* Microphone Status */}
+            <MicrophoneStatus />
+            
+            {/* Audio Level Meter */}
+            <AudioLevelMeter />
+            
+            {/* Audio Controls */}
+            {audioCapture.state.permissionState === 'granted' && (
+              <div className="flex gap-2 flex-wrap">
+                {!audioCapture.state.isRecording ? (
+                  <button
+                    onClick={() => audioCapture.start()}
+                    className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition"
+                  >
+                    Start Recording
+                  </button>
+                ) : (
+                  <>
+                    {audioCapture.state.isPaused ? (
+                      <button
+                        onClick={() => audioCapture.resume()}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition"
+                      >
+                        Resume
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => audioCapture.pause()}
+                        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition"
+                      >
+                        Pause
+                      </button>
+                    )}
+                    <button
+                      onClick={() => audioCapture.stop()}
+                      className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition"
+                    >
+                      Stop
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -22,6 +22,7 @@ import {
   isPingMessage,
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
+import { fetchEventData, type SongData } from '../services/eventService';
 
 // ============================================
 // Timing Utilities
@@ -54,11 +55,6 @@ interface SessionState {
   isActive: boolean;
 }
 
-interface SongData {
-  id: string;
-  title: string;
-  lines: string[];
-}
 
 // Map of WebSocket connections to their session state
 const sessions = new Map<WebSocket, SessionState>();
@@ -87,7 +83,7 @@ function sendError(ws: WebSocket, code: string, message: string, details?: unkno
 
 /**
  * Handle START_SESSION message
- * Initializes session state and loads event data
+ * Initializes session state and loads event data from Supabase
  */
 async function handleStartSession(
   ws: WebSocket,
@@ -103,39 +99,26 @@ async function handleStartSession(
     return;
   }
 
-  // TODO: Fetch event data from Supabase
-  // For now, create a mock session
+  // Fetch real event data from Supabase
+  const eventData = await fetchEventData(eventId);
+  
+  if (!eventData) {
+    sendError(ws, 'EVENT_NOT_FOUND', `Event ${eventId} not found or no setlist configured`, { eventId });
+    return;
+  }
+
+  if (eventData.songs.length === 0) {
+    sendError(ws, 'EMPTY_SETLIST', 'Event has no songs in setlist', { eventId });
+    return;
+  }
+
   const sessionId = `session_${Date.now()}`;
   
-  // Mock event data - will be replaced with Supabase fetch
-  const mockSongs: SongData[] = [
-    {
-      id: 'song_1',
-      title: 'Amazing Grace',
-      lines: [
-        'Amazing grace how sweet the sound',
-        'That saved a wretch like me',
-        'I once was lost but now am found',
-        'Was blind but now I see',
-      ],
-    },
-    {
-      id: 'song_2',
-      title: 'How Great Thou Art',
-      lines: [
-        'O Lord my God when I in awesome wonder',
-        'Consider all the worlds thy hands have made',
-        'I see the stars I hear the rolling thunder',
-        'Thy power throughout the universe displayed',
-      ],
-    },
-  ];
-
   const session: SessionState = {
     sessionId,
     eventId,
-    eventName: 'Demo Event', // Will be fetched from Supabase
-    songs: mockSongs,
+    eventName: eventData.name,
+    songs: eventData.songs,
     currentSongIndex: 0,
     currentSlideIndex: 0,
     rollingBuffer: '',
@@ -181,7 +164,7 @@ async function handleStartSession(
     send(ws, displayUpdate);
   }
 
-  console.log(`[WS] Session started: ${sessionId}`);
+  console.log(`[WS] Session started: ${sessionId} with ${session.songs.length} songs`);
 }
 
 /**

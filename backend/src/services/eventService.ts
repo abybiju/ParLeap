@@ -1,0 +1,225 @@
+/**
+ * Event Service
+ * 
+ * Fetches event data from Supabase including songs and setlist
+ */
+
+import { supabase } from '../config/supabase';
+
+export interface SongData {
+  id: string;
+  title: string;
+  lines: string[];
+}
+
+export interface EventData {
+  id: string;
+  name: string;
+  songs: SongData[];
+}
+
+/**
+ * Fetch event data from Supabase
+ * This includes the event name and all songs in the setlist
+ */
+export async function fetchEventData(eventId: string): Promise<EventData | null> {
+  try {
+    // 1. Fetch event details
+    const { data: eventData, error: eventError } = await supabase
+      .from('events')
+      .select('id, name')
+      .eq('id', eventId)
+      .single();
+
+    if (eventError || !eventData) {
+      console.error(`[EventService] Failed to fetch event ${eventId}:`, eventError);
+      return null;
+    }
+
+    // 2. Fetch event items (setlist) with song details
+    const { data: eventItems, error: itemsError } = await supabase
+      .from('event_items')
+      .select('sequence_order, songs(id, title, lyrics)')
+      .eq('event_id', eventId)
+      .order('sequence_order', { ascending: true });
+
+    if (itemsError) {
+      console.error(`[EventService] Failed to fetch event items for ${eventId}:`, itemsError);
+      return null;
+    }
+
+    if (!eventItems || eventItems.length === 0) {
+      console.warn(`[EventService] No songs found in setlist for event ${eventId}`);
+      return {
+        id: eventData.id,
+        name: eventData.name,
+        songs: [],
+      };
+    }
+
+    // 3. Parse lyrics into lines for each song
+    const songs: SongData[] = eventItems
+      .map((item) => {
+        const songInfo = item.songs as any;
+        if (!songInfo) {
+          console.warn(`[EventService] Song data is null for event item`);
+          return null;
+        }
+
+        return {
+          id: songInfo.id,
+          title: songInfo.title,
+          lines: parseLyrics(songInfo.lyrics),
+        };
+      })
+      .filter((song): song is SongData => song !== null);
+
+    return {
+      id: eventData.id,
+      name: eventData.name,
+      songs,
+    };
+  } catch (error) {
+    console.error('[EventService] Error fetching event data:', error);
+    return null;
+  }
+}
+
+/**
+ * Parse lyrics into lines
+ * Splits by newline and filters empty lines
+ */
+function parseLyrics(lyrics: string): string[] {
+  return lyrics
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/**
+ * Fetch a single song by ID
+ */
+export async function fetchSongById(songId: string): Promise<SongData | null> {
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('id, title, lyrics')
+      .eq('id', songId)
+      .single();
+
+    if (error || !data) {
+      console.error(`[EventService] Failed to fetch song ${songId}:`, error);
+      return null;
+    }
+
+    return {
+      id: data.id,
+      title: data.title,
+      lines: parseLyrics(data.lyrics),
+    };
+  } catch (error) {
+    console.error('[EventService] Error fetching song:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new song
+ */
+export async function createSong(
+  userId: string,
+  title: string,
+  artist: string | null,
+  lyrics: string
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .insert([
+        {
+          user_id: userId,
+          title,
+          artist,
+          lyrics,
+        },
+      ])
+      .select('id')
+      .single();
+
+    if (error || !data) {
+      console.error('[EventService] Failed to create song:', error);
+      return null;
+    }
+
+    return data.id;
+  } catch (error) {
+    console.error('[EventService] Error creating song:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new event
+ */
+export async function createEvent(
+  userId: string,
+  name: string,
+  eventDate?: Date
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('events')
+      .insert([
+        {
+          user_id: userId,
+          name,
+          event_date: eventDate?.toISOString() || null,
+          status: 'draft',
+        },
+      ])
+      .select('id')
+      .single();
+
+    if (error || !data) {
+      console.error('[EventService] Failed to create event:', error);
+      return null;
+    }
+
+    return data.id;
+  } catch (error) {
+    console.error('[EventService] Error creating event:', error);
+    return null;
+  }
+}
+
+/**
+ * Add a song to an event's setlist
+ */
+export async function addSongToEvent(
+  eventId: string,
+  songId: string,
+  sequenceOrder: number
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('event_items')
+      .insert([
+        {
+          event_id: eventId,
+          song_id: songId,
+          sequence_order: sequenceOrder,
+        },
+      ]);
+
+    if (error) {
+      console.error('[EventService] Failed to add song to event:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[EventService] Error adding song to event:', error);
+    return false;
+  }
+}
+

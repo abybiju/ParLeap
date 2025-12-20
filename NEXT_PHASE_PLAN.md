@@ -1,7 +1,7 @@
 # ParLeap - Next Phase Implementation Plan
 
-**Last Updated:** December 13, 2025  
-**Current Status:** Phase 2.1 & 2.2 Complete ✅  
+**Last Updated:** December 14, 2025  
+**Current Status:** Phase 2.1 & 2.2 Complete ✅ | Phase 1.2 Implementation Ready ✨  
 **Next Focus:** Phase 1.2 (Supabase) → Phase 2.3 (Audio Capture) → Phase 2.4 (STT Integration)
 
 ---
@@ -30,37 +30,38 @@ We've completed the foundation and latency monitoring infrastructure. Now we nee
 ### Tasks
 
 #### 1.2.1 Supabase Project Setup
-- [ ] Create Supabase project at https://supabase.com
-- [ ] Get project URL and API keys
-- [ ] Configure environment variables:
+- [x] Create Supabase project at https://supabase.com
+- [x] Get project URL and API keys
+- [x] Configure environment variables:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY` (backend only)
 
 #### 1.2.2 Database Schema Migration
-- [ ] Run migration: `supabase/migrations/001_initial_schema.sql`
-- [ ] Verify tables created:
+- [x] Run migration: `supabase/migrations/001_initial_schema.sql`
+- [x] Verify tables created:
   - `profiles`
   - `songs`
   - `events`
   - `event_items`
-- [ ] Set up Row Level Security (RLS) policies
-- [ ] Test RLS policies with test user
+- [x] Set up Row Level Security (RLS) policies
+- [x] Test RLS policies with test user
 
 #### 1.2.3 Supabase Client Initialization
-- [ ] Frontend: Update `frontend/lib/supabase/client.ts` (already exists)
-- [ ] Backend: Create `backend/src/lib/supabase.ts`
-- [ ] Test connection from both frontend and backend
-- [ ] Verify environment variables are set correctly
+- [x] Frontend: Updated `frontend/lib/supabase/client.ts` ✅
+- [x] Backend: Created `backend/src/config/supabase.ts` ✅
+- [x] Test connection from both frontend and backend
+- [x] Verify environment variables are set correctly
 
 #### 1.2.4 Replace Mock Data
-- [ ] Backend: Update `handleStartSession` to fetch from Supabase
-  - Query `events` table for event data
-  - Query `event_items` for setlist
-  - Query `songs` for lyrics
-- [ ] Parse lyrics into lines (split by newline or custom delimiter)
-- [ ] Cache in memory (already implemented)
-- [ ] Error handling for missing data
+- [x] Backend: Created `backend/src/services/eventService.ts` ✅
+- [x] Updated `handleStartSession` to fetch from Supabase ✅
+  - Queries `events` table for event data
+  - Queries `event_items` for setlist
+  - Queries `songs` for lyrics
+- [x] Parse lyrics into lines (automatic in eventService) ✅
+- [x] Cache in memory (SessionState) ✅
+- [x] Error handling for missing data ✅
 
 **Estimated Time:** 2-3 hours  
 **Dependencies:** None  
