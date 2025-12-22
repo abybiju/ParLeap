@@ -2,9 +2,10 @@
  * Event Service
  * 
  * Fetches event data from Supabase including songs and setlist
+ * Falls back to mock data when Supabase isn't configured
  */
 
-import { supabase } from '../config/supabase';
+import { supabase, isSupabaseConfigured } from '../config/supabase';
 
 export interface SongData {
   id: string;
@@ -18,11 +19,46 @@ export interface EventData {
   songs: SongData[];
 }
 
+// Mock data for development without Supabase
+const mockEventData: EventData = {
+  id: 'demo-event',
+  name: 'Demo Event',
+  songs: [
+    {
+      id: 'song_1',
+      title: 'Amazing Grace',
+      lines: [
+        'Amazing grace how sweet the sound',
+        'That saved a wretch like me',
+        'I once was lost but now am found',
+        'Was blind but now I see',
+      ],
+    },
+    {
+      id: 'song_2',
+      title: 'How Great Thou Art',
+      lines: [
+        'O Lord my God when I in awesome wonder',
+        'Consider all the worlds thy hands have made',
+        'I see the stars I hear the rolling thunder',
+        'Thy power throughout the universe displayed',
+      ],
+    },
+  ],
+};
+
 /**
  * Fetch event data from Supabase
  * This includes the event name and all songs in the setlist
+ * Falls back to mock data when Supabase isn't configured
  */
 export async function fetchEventData(eventId: string): Promise<EventData | null> {
+  // Use mock data if Supabase isn't configured
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('[EventService] Using mock data (Supabase not configured)');
+    return { ...mockEventData, id: eventId };
+  }
+
   try {
     // 1. Fetch event details
     const { data: eventData, error: eventError } = await supabase
@@ -100,6 +136,11 @@ function parseLyrics(lyrics: string): string[] {
  * Fetch a single song by ID
  */
 export async function fetchSongById(songId: string): Promise<SongData | null> {
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('[EventService] Cannot fetch song - Supabase not configured');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('songs')
@@ -132,6 +173,11 @@ export async function createSong(
   artist: string | null,
   lyrics: string
 ): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('[EventService] Cannot create song - Supabase not configured');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('songs')
@@ -166,6 +212,11 @@ export async function createEvent(
   name: string,
   eventDate?: Date
 ): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('[EventService] Cannot create event - Supabase not configured');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('events')
@@ -200,6 +251,11 @@ export async function addSongToEvent(
   songId: string,
   sequenceOrder: number
 ): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) {
+    console.log('[EventService] Cannot add song to event - Supabase not configured');
+    return false;
+  }
+
   try {
     const { error } = await supabase
       .from('event_items')

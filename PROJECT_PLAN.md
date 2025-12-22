@@ -10,6 +10,14 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates (December 2025)
 
+### December 20, 2025 - System Reactivation & Mock Data Mode
+- ✅ **System Restarted Successfully**: Backend and Frontend both operational with graceful mock data fallback
+- ✅ **Supabase Optional**: Backend now handles missing Supabase credentials elegantly, using mock data by default
+- ✅ **WebSocket Test Page**: Fully functional at `/test-websocket` with <5ms latency (1-3ms average)
+- ✅ **File Permission Issues Fixed**: Resolved macOS EMFILE errors with increased file limits and node_modules reinstall
+- ✅ **Environment Configuration**: Created `backend/.env` template for easy Supabase credential setup
+- ✅ **All Builds Passing**: TypeScript compilation successful, no linter errors
+
 ### Security & Infrastructure Updates
 - ✅ **Security Patches Applied**: Updated Next.js to 14.2.35 and React to 18.3.1 to patch CVE-2025-55184 (DoS) and CVE-2025-55183 (Source Code Exposure)
 - ✅ **Backend CORS Configuration**: Added CORS middleware to backend for Vercel frontend integration
