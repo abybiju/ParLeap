@@ -96,7 +96,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     // 3. Parse lyrics into lines for each song
     const songs: SongData[] = eventItems
       .map((item) => {
-        const songInfo = item.songs as any;
+        const songInfo = item.songs as unknown as (SongData & { lyrics: string }) | null;
         if (!songInfo) {
           console.warn(`[EventService] Song data is null for event item`);
           return null;

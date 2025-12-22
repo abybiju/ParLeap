@@ -155,30 +155,33 @@ export async function transcribeAudioChunk(
  * Note: This requires more complex state management
  * For now, we'll use the simpler single-request mode above
  */
+type StreamCallback = (result: TranscriptionResult) => void;
+type StreamEndCallback = () => void;
+
 export function createStreamingRecognition(): {
   write: (audioData: Buffer) => void;
   end: () => void;
-  on: (event: string, callback: (result: TranscriptionResult) => void) => void;
+  on: (event: string, callback: StreamCallback | StreamEndCallback) => void;
 } {
   if (!speechClient || !isGoogleCloudConfigured) {
     console.warn('[STT] Streaming not available - Google Cloud not configured');
     
     // Return mock streaming interface
-    const mockCallbacks: { [key: string]: Function[] } = {};
+    const mockCallbacks: { [key: string]: Array<StreamCallback | StreamEndCallback> } = {};
     
     return {
       write: (audioData: Buffer) => {
         const result = generateMockTranscription(audioData);
         if (mockCallbacks['data']) {
-          mockCallbacks['data'].forEach(cb => cb(result));
+          (mockCallbacks['data'] as StreamCallback[]).forEach(cb => (cb as StreamCallback)(result));
         }
       },
       end: () => {
         if (mockCallbacks['end']) {
-          mockCallbacks['end'].forEach(cb => cb());
+          (mockCallbacks['end'] as StreamEndCallback[]).forEach(cb => (cb as StreamEndCallback)());
         }
       },
-      on: (event: string, callback: Function) => {
+      on: (event: string, callback: StreamCallback | StreamEndCallback) => {
         if (!mockCallbacks[event]) {
           mockCallbacks[event] = [];
         }
@@ -190,7 +193,7 @@ export function createStreamingRecognition(): {
   // Create real Google Cloud streaming recognition
   const stream = speechClient.streamingRecognize(streamingConfig);
   
-  const callbacks: { [key: string]: Function[] } = {};
+  const callbacks: { [key: string]: Array<StreamCallback | StreamEndCallback> } = {};
   
   stream.on('data', (data: speechTypes.google.cloud.speech.v1.StreamingRecognizeResponse) => {
     if (data.results && data.results.length > 0) {
@@ -207,7 +210,7 @@ export function createStreamingRecognition(): {
         };
         
         if (callbacks['data']) {
-          callbacks['data'].forEach(cb => cb(transcriptionResult));
+          (callbacks['data'] as StreamCallback[]).forEach(cb => (cb as StreamCallback)(transcriptionResult));
         }
       }
     }
@@ -216,14 +219,14 @@ export function createStreamingRecognition(): {
   stream.on('error', (error: Error) => {
     console.error('[STT] Stream error:', error);
     if (callbacks['error']) {
-      callbacks['error'].forEach(cb => cb(error));
+      (callbacks['error'] as Array<(err: Error) => void>).forEach(cb => cb(error));
     }
   });
   
   stream.on('end', () => {
     console.log('[STT] Stream ended');
     if (callbacks['end']) {
-      callbacks['end'].forEach(cb => cb());
+      (callbacks['end'] as StreamEndCallback[]).forEach(cb => cb());
     }
   });
   
@@ -234,7 +237,7 @@ export function createStreamingRecognition(): {
     end: () => {
       stream.end();
     },
-    on: (event: string, callback: Function) => {
+    on: (event: string, callback: StreamCallback | StreamEndCallback) => {
       if (!callbacks[event]) {
         callbacks[event] = [];
       }
