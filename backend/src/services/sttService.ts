@@ -37,7 +37,7 @@ export interface TranscriptionResult {
  * Configuration for audio streaming
  */
 const audioConfig: speechTypes.google.cloud.speech.v1.IRecognitionConfig = {
-  encoding: 'LINEAR16' as any,
+  encoding: 1, // LINEAR16 = 1 in protobuf enum
   sampleRateHertz: 16000,
   languageCode: 'en-US',
   enableAutomaticPunctuation: true,
@@ -192,7 +192,7 @@ export function createStreamingRecognition(): {
   
   const callbacks: { [key: string]: Function[] } = {};
   
-  stream.on('data', (data: any) => {
+  stream.on('data', (data: speechTypes.google.cloud.speech.v1.StreamingRecognizeResponse) => {
     if (data.results && data.results.length > 0) {
       const result = data.results[0];
       const alternative = result.alternatives?.[0];
@@ -200,8 +200,8 @@ export function createStreamingRecognition(): {
       if (alternative && alternative.transcript) {
         const transcriptionResult: TranscriptionResult = {
           text: alternative.transcript,
-          // Google Cloud streaming API provides isFinal on the result or on data itself
-          isFinal: !!(result.isFinal || data.isFinal),
+          // Google Cloud streaming API - isFinal is on the result
+          isFinal: !!result.isFinal,
           confidence: alternative.confidence || 0.0,
           timestamp: new Date(),
         };
