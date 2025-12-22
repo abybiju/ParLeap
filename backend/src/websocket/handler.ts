@@ -23,6 +23,7 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
+import { transcribeAudioChunk } from '../services/sttService';
 
 // ============================================
 // Timing Utilities
@@ -183,21 +184,48 @@ async function handleAudioData(
     return;
   }
 
-  // TODO: Forward audio to STT provider (Google Cloud Speech-to-Text or ElevenLabs)
-  // For now, log that we received audio data
-  console.log(`[WS] Received audio chunk: ${data.length} bytes`);
+  console.log(`[WS] Received audio chunk: ${data.length} bytes (base64)`);
 
-  // Mock transcription response
-  // In real implementation, this would come from the STT provider
-  const mockTranscript: TranscriptUpdateMessage = {
-    type: 'TRANSCRIPT_UPDATE',
-    payload: {
-      text: '[Audio received - transcription pending]',
-      isFinal: false,
-    },
-    timing: createTiming(receivedAt, processingStart),
-  };
-  send(ws, mockTranscript);
+  // Send audio to STT service (Google Cloud or mock)
+  try {
+    const transcriptionResult = await transcribeAudioChunk(data);
+    
+    if (transcriptionResult) {
+      // Send transcription update to client
+      const transcriptMessage: TranscriptUpdateMessage = {
+        type: 'TRANSCRIPT_UPDATE',
+        payload: {
+          text: transcriptionResult.text,
+          isFinal: transcriptionResult.isFinal,
+          confidence: transcriptionResult.confidence,
+        },
+        timing: createTiming(receivedAt, processingStart),
+      };
+      
+      send(ws, transcriptMessage);
+      
+      // Update rolling buffer with transcription
+      // This will be used for matching against setlist
+      if (transcriptionResult.isFinal) {
+        session.rollingBuffer += ' ' + transcriptionResult.text;
+        // Keep only last 100 words for matching
+        const words = session.rollingBuffer.split(' ');
+        if (words.length > 100) {
+          session.rollingBuffer = words.slice(-100).join(' ');
+        }
+        
+        console.log(`[WS] Rolling buffer updated: "${session.rollingBuffer.slice(-50)}..."`);
+        
+        // TODO: Phase 3 - Perform fuzzy matching against current song lines
+        // For now, just log that we have text to match
+      }
+    } else {
+      console.log('[WS] No transcription result (silence or error)');
+    }
+  } catch (error) {
+    console.error('[WS] Error processing audio:', error);
+    sendError(ws, 'STT_ERROR', 'Failed to transcribe audio', { error: String(error) });
+  }
 }
 
 /**

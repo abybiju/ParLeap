@@ -1,27 +1,37 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-if (!process.env.SUPABASE_URL) {
-  throw new Error('Missing SUPABASE_URL environment variable');
+// Check if Supabase is configured
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseServiceKey);
+
+if (!isSupabaseConfigured) {
+  console.warn('⚠️  Supabase not configured - using mock data mode');
+  console.warn('   Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env for real data');
 }
 
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
-}
-
-// Create Supabase client with service role key (bypasses RLS)
-export const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
+// Create Supabase client (or null if not configured)
+export const supabase: SupabaseClient | null = isSupabaseConfigured
+  ? createClient(
+      supabaseUrl!,
+      supabaseServiceKey!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
+  : null;
 
 // Helper function to verify user authentication
 export async function verifyUserToken(token: string): Promise<string | null> {
+  if (!supabase) {
+    console.warn('[Auth] Cannot verify token - Supabase not configured');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) {

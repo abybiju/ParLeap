@@ -1,0 +1,8 @@
+# Railway ignore file
+# Backend should be deployed separately
+
+backend/
+backend/**
+!backend/package.json
+railway.json
+

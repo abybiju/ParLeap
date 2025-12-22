@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ["nodejs-18_x"]
+
+[phases.install]
+cmds = ["cd /app && npm install --workspace=frontend"]
+
+[phases.build]
+cmds = ["cd /app && npm run build --workspace=frontend"]
+
+[start]
+cmd = "cd /app/frontend && npm start"
+
