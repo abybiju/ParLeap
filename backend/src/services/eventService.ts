@@ -10,7 +10,9 @@ import { supabase, isSupabaseConfigured } from '../config/supabase';
 export interface SongData {
   id: string;
   title: string;
-  lines: string[];
+  artist?: string;
+  lyrics?: string; // Full lyrics (for display)
+  lines: string[]; // Pre-split lines for matching
 }
 
 export interface EventData {
@@ -27,6 +29,8 @@ const mockEventData: EventData = {
     {
       id: 'song_1',
       title: 'Amazing Grace',
+      artist: 'John Newton',
+      lyrics: 'Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see',
       lines: [
         'Amazing grace how sweet the sound',
         'That saved a wretch like me',
@@ -37,6 +41,8 @@ const mockEventData: EventData = {
     {
       id: 'song_2',
       title: 'How Great Thou Art',
+      artist: 'Carl Boberg',
+      lyrics: 'O Lord my God, when I in awesome wonder\nConsider all the worlds Thy hands have made\nI see the stars, I hear the rolling thunder\nThy power throughout the universe displayed',
       lines: [
         'O Lord my God when I in awesome wonder',
         'Consider all the worlds thy hands have made',

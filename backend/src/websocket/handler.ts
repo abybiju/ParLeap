@@ -24,6 +24,13 @@ import {
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
 import { transcribeAudioChunk } from '../services/sttService';
+import {
+  findBestMatch,
+  createSongContext,
+  validateConfig,
+  type MatcherConfig,
+  type SongContext,
+} from '../services/matcherService';
 
 // ============================================
 // Timing Utilities
@@ -54,6 +61,10 @@ interface SessionState {
   currentSlideIndex: number;
   rollingBuffer: string;
   isActive: boolean;
+  // Matcher state
+  songContext?: SongContext;
+  matcherConfig: MatcherConfig;
+  lastMatchConfidence?: number;
 }
 
 
@@ -115,6 +126,22 @@ async function handleStartSession(
 
   const sessionId = `session_${Date.now()}`;
   
+  // Initialize matcher configuration
+  const matcherConfig: MatcherConfig = validateConfig({
+    similarityThreshold: 0.85,
+    minBufferLength: 3,
+    bufferWindow: 100,
+    debug: process.env.DEBUG_MATCHER === 'true',
+  });
+
+  // Create song context for first song
+  const firstSong = eventData.songs[0];
+  const songContext = createSongContext(
+    { id: firstSong.id, sequence_order: 1 }, // Mock EventItemData
+    firstSong,
+    0
+  );
+  
   const session: SessionState = {
     sessionId,
     eventId,
@@ -124,6 +151,9 @@ async function handleStartSession(
     currentSlideIndex: 0,
     rollingBuffer: '',
     isActive: true,
+    songContext,
+    matcherConfig,
+    lastMatchConfidence: 0,
   };
 
   sessions.set(ws, session);
@@ -216,8 +246,46 @@ async function handleAudioData(
         
         console.log(`[WS] Rolling buffer updated: "${session.rollingBuffer.slice(-50)}..."`);
         
-        // TODO: Phase 3 - Perform fuzzy matching against current song lines
-        // For now, just log that we have text to match
+        // ===== Phase 3: Perform fuzzy matching against current song lines =====
+        if (session.songContext) {
+          const matchResult = findBestMatch(
+            session.rollingBuffer,
+            session.songContext,
+            session.matcherConfig
+          );
+
+          // Store last match confidence for debugging
+          session.lastMatchConfidence = matchResult.confidence;
+
+          if (matchResult.matchFound && matchResult.confidence > session.matcherConfig.similarityThreshold) {
+            console.log(
+              `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
+            );
+
+            // Update slide index if we found a new line
+            if (matchResult.nextLineIndex !== undefined && matchResult.isLineEnd) {
+              session.currentSlideIndex = matchResult.nextLineIndex;
+              session.songContext.currentLineIndex = matchResult.nextLineIndex;
+
+              // Send DISPLAY_UPDATE to auto-advance slide
+              const displayMessage: DisplayUpdateMessage = {
+                type: 'DISPLAY_UPDATE',
+                payload: {
+                  lineText: matchResult.matchedText,
+                  slideIndex: matchResult.nextLineIndex,
+                  songId: session.songContext.id,
+                  songTitle: session.songContext.title,
+                  matchConfidence: matchResult.confidence,
+                  isAutoAdvance: true,
+                },
+                timing: createTiming(receivedAt, processingStart),
+              };
+
+              send(ws, displayMessage);
+              console.log(`[WS] Auto-advanced to slide ${matchResult.nextLineIndex}`);
+            }
+          }
+        }
       }
     } else {
       console.log('[WS] No transcription result (silence or error)');
@@ -307,6 +375,19 @@ function handleManualOverride(
   session.currentSlideIndex = newSlideIndex;
 
   const targetSong = session.songs[newSongIndex];
+
+  // Update song context for matching (Phase 3)
+  if (songChanged) {
+    session.songContext = createSongContext(
+      { id: targetSong.id, sequence_order: newSongIndex + 1 },
+      targetSong,
+      newSlideIndex
+    );
+    session.rollingBuffer = ''; // Clear buffer on song change
+  } else if (session.songContext) {
+    // Update line index within same song
+    session.songContext.currentLineIndex = newSlideIndex;
+  }
 
   const timing = createTiming(receivedAt, processingStart);
 
