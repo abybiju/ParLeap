@@ -6,6 +6,7 @@ import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
 import type { ServerMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
 import { GhostText } from './operator/GhostText';
+import { MatchStatus } from './operator/MatchStatus';
 import { ConnectionStatus } from './operator/ConnectionStatus';
 import { MicrophoneStatus } from './operator/MicrophoneStatus';
 import { AudioLevelMeter } from './operator/AudioLevelMeter';
@@ -313,8 +314,9 @@ export function WebSocketTest() {
 
         {/* Ghost Text */}
         {isConnected && (
-          <div className="mt-4">
+          <div className="mt-4 space-y-3">
             <GhostText />
+            <MatchStatus />
           </div>
         )}
 
