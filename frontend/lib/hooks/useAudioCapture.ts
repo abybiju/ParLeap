@@ -53,6 +53,8 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const chunkQueueRef = useRef<string[]>([]);
+  const recordingRef = useRef(false);
+  const pausedRef = useRef(false);
   const wsClient = getWebSocketClient();
 
   // Check if MediaRecorder is supported
@@ -84,6 +86,11 @@ export function useAudioCapture(): UseAudioCaptureReturn {
         // Permission API not supported, will check on getUserMedia call
       });
   }, []);
+
+  useEffect(() => {
+    recordingRef.current = state.isRecording;
+    pausedRef.current = state.isPaused;
+  }, [state.isRecording, state.isPaused]);
 
   /**
    * Request microphone permission
@@ -154,10 +161,24 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     audioContextRef.current = audioContext;
     analyserRef.current = analyser;
 
+    audioContext.resume().catch((error) => {
+      console.warn('AudioContext resume failed:', error);
+    });
+
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
     const updateLevel = () => {
       if (!analyserRef.current) {
+        return;
+      }
+
+      if (!recordingRef.current) {
+        return;
+      }
+
+      if (pausedRef.current) {
+        setState((prev) => ({ ...prev, audioLevel: 0 }));
+        animationFrameRef.current = requestAnimationFrame(updateLevel);
         return;
       }
 
@@ -171,13 +192,11 @@ export function useAudioCapture(): UseAudioCaptureReturn {
 
       setState((prev) => ({ ...prev, audioLevel: level }));
 
-      if (state.isRecording && !state.isPaused) {
-        animationFrameRef.current = requestAnimationFrame(updateLevel);
-      }
+      animationFrameRef.current = requestAnimationFrame(updateLevel);
     };
 
     updateLevel();
-  }, [state.isRecording, state.isPaused]);
+  }, []);
 
   /**
    * Stop audio level monitoring
@@ -238,8 +257,10 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   /**
    * Process queued chunks when WebSocket reconnects
    */
+  const isConnected = wsClient.isConnected();
+
   useEffect(() => {
-    if (wsClient.isConnected() && chunkQueueRef.current.length > 0) {
+    if (isConnected && chunkQueueRef.current.length > 0) {
       console.log(`Sending ${chunkQueueRef.current.length} queued audio chunks`);
       const queuedChunks = [...chunkQueueRef.current];
       chunkQueueRef.current = [];
@@ -259,7 +280,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
         wsClient.send(message);
       });
     }
-  }, [wsClient.isConnected(), wsClient]);
+  }, [isConnected, wsClient]);
 
   /**
    * Start recording
@@ -289,6 +310,9 @@ export function useAudioCapture(): UseAudioCaptureReturn {
 
       mediaStreamRef.current = stream;
 
+      recordingRef.current = true;
+      pausedRef.current = false;
+
       // Start audio level monitoring
       startAudioLevelMonitoring(stream);
 
@@ -310,7 +334,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
 
       // Handle data available events (chunks)
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && !state.isPaused) {
+        if (event.data.size > 0 && !pausedRef.current) {
           const captureTime = Date.now();
           sendAudioChunk(event.data, captureTime);
         }
@@ -352,7 +376,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
         isRecording: false,
       }));
     }
-  }, [state.permissionState, state.isPaused, requestPermission, startAudioLevelMonitoring, stopAudioLevelMonitoring, sendAudioChunk]);
+  }, [state.permissionState, requestPermission, startAudioLevelMonitoring, stopAudioLevelMonitoring, sendAudioChunk]);
 
   /**
    * Stop recording
@@ -361,6 +385,9 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
+
+    recordingRef.current = false;
+    pausedRef.current = false;
 
     stopAudioLevelMonitoring();
 
@@ -385,6 +412,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const pause = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
+      pausedRef.current = true;
       setState((prev) => ({ ...prev, isPaused: true }));
     }
   }, []);
@@ -395,6 +423,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const resume = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
+      pausedRef.current = false;
       setState((prev) => ({ ...prev, isPaused: false }));
 
       // Restart audio level monitoring
