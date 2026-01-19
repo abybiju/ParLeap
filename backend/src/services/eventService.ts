@@ -53,6 +53,12 @@ const mockEventData: EventData = {
   ],
 };
 
+const fallbackToMockData = process.env.SUPABASE_FALLBACK_TO_MOCK === 'true';
+
+function getMockEventData(eventId: string): EventData {
+  return { ...mockEventData, id: eventId };
+}
+
 /**
  * Fetch event data from Supabase
  * This includes the event name and all songs in the setlist
@@ -62,7 +68,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
   // Use mock data if Supabase isn't configured
   if (!isSupabaseConfigured || !supabase) {
     console.log('[EventService] Using mock data (Supabase not configured)');
-    return { ...mockEventData, id: eventId };
+    return getMockEventData(eventId);
   }
 
   try {
@@ -75,6 +81,10 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
 
     if (eventError || !eventData) {
       console.error(`[EventService] Failed to fetch event ${eventId}:`, eventError);
+      if (fallbackToMockData) {
+        console.warn('[EventService] Falling back to mock data (SUPABASE_FALLBACK_TO_MOCK=true)');
+        return getMockEventData(eventId);
+      }
       return null;
     }
 
@@ -87,11 +97,19 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
 
     if (itemsError) {
       console.error(`[EventService] Failed to fetch event items for ${eventId}:`, itemsError);
+      if (fallbackToMockData) {
+        console.warn('[EventService] Falling back to mock data (SUPABASE_FALLBACK_TO_MOCK=true)');
+        return getMockEventData(eventId);
+      }
       return null;
     }
 
     if (!eventItems || eventItems.length === 0) {
       console.warn(`[EventService] No songs found in setlist for event ${eventId}`);
+      if (fallbackToMockData) {
+        console.warn('[EventService] Falling back to mock data (SUPABASE_FALLBACK_TO_MOCK=true)');
+        return getMockEventData(eventId);
+      }
       return {
         id: eventData.id,
         name: eventData.name,
@@ -123,6 +141,10 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     };
   } catch (error) {
     console.error('[EventService] Error fetching event data:', error);
+    if (fallbackToMockData) {
+      console.warn('[EventService] Falling back to mock data (SUPABASE_FALLBACK_TO_MOCK=true)');
+      return getMockEventData(eventId);
+    }
     return null;
   }
 }

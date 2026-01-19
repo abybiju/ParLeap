@@ -28,6 +28,8 @@ NODE_ENV=development
 # Supabase Configuration
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+# Optional: fall back to mock data if Supabase is unhealthy
+SUPABASE_FALLBACK_TO_MOCK=false
 
 # ElevenLabs Configuration
 ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
