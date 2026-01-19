@@ -35,8 +35,9 @@ export function WebSocketTest() {
   const [messageHistory, setMessageHistory] = useState<Array<{ message: ServerMessage; timestamp: Date }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
   // Audio capture
-  const audioCapture = useAudioCapture();
+  const audioCapture = useAudioCapture({ usePcm: sttProvider === 'elevenlabs' });
 
   // Track message history
   useEffect(() => {
@@ -125,7 +126,15 @@ export function WebSocketTest() {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-indigo-500/10">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white">WebSocket Protocol Test</h2>
+            <div>
+              <h2 className="text-xl font-semibold text-white">WebSocket Protocol Test</h2>
+              <p className="text-xs text-slate-400 mt-1">
+                STT Provider: <span className="text-slate-200">{sttProvider}</span>
+                {sttProvider === 'elevenlabs' && (
+                  <span className="ml-2 text-slate-500">(PCM mode)</span>
+                )}
+              </p>
+            </div>
             <div className="flex items-center gap-3">
               <ConnectionStatus />
               <span

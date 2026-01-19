@@ -6,10 +6,24 @@
  */
 
 import { SpeechClient } from '@google-cloud/speech';
+import WebSocket from 'ws';
 import type * as speechTypes from '@google-cloud/speech/build/protos/protos';
 
 // Check if Google Cloud is configured
 const isGoogleCloudConfigured = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY || '';
+
+type SttProvider = 'google' | 'elevenlabs' | 'mock';
+const sttProviderEnv = (process.env.STT_PROVIDER || '').toLowerCase();
+const sttProvider: SttProvider =
+  sttProviderEnv === 'elevenlabs'
+    ? 'elevenlabs'
+    : sttProviderEnv === 'google'
+    ? 'google'
+    : isGoogleCloudConfigured
+    ? 'google'
+    : 'mock';
+const isElevenLabsConfigured = sttProvider === 'elevenlabs' && elevenLabsApiKey.length > 0;
 
 let speechClient: SpeechClient | null = null;
 
@@ -24,6 +38,15 @@ if (isGoogleCloudConfigured) {
 } else {
   console.warn('⚠️  Google Cloud not configured - using mock transcription mode');
   console.warn('   Set GOOGLE_APPLICATION_CREDENTIALS in backend/.env for real STT');
+}
+
+if (sttProvider === 'elevenlabs') {
+  if (!isElevenLabsConfigured) {
+    console.warn('⚠️  ElevenLabs STT selected but ELEVENLABS_API_KEY missing');
+    console.warn('   Falling back to mock transcription mode');
+  } else {
+    console.log('✅ ElevenLabs Speech-to-Text enabled');
+  }
 }
 
 export interface TranscriptionResult {
@@ -105,6 +128,11 @@ export async function transcribeAudioChunk(
     // Convert base64 to Buffer
     const audioBuffer = Buffer.from(audioBase64, 'base64');
     
+    if (sttProvider === 'elevenlabs') {
+      console.warn('[STT] ElevenLabs uses streaming mode. Ignoring chunk in transcribeAudioChunk.');
+      return null;
+    }
+
     // Use mock transcription if Google Cloud not configured
     if (!speechClient || !isGoogleCloudConfigured) {
       console.log('[STT] Using mock transcription');
@@ -158,17 +186,125 @@ export async function transcribeAudioChunk(
  */
 type StreamCallback = (result: TranscriptionResult) => void;
 type StreamEndCallback = () => void;
+type StreamErrorCallback = (error: Error) => void;
 
 export function createStreamingRecognition(): {
   write: (audioData: Buffer) => void;
   end: () => void;
-  on: (event: string, callback: StreamCallback | StreamEndCallback) => void;
+  on: (event: 'data' | 'end' | 'error', callback: StreamCallback | StreamEndCallback | StreamErrorCallback) => void;
 } {
+  if (sttProvider === 'elevenlabs' && isElevenLabsConfigured) {
+    const callbacks: {
+      data?: StreamCallback[];
+      end?: StreamEndCallback[];
+      error?: StreamErrorCallback[];
+    } = {};
+    const pendingChunks: Buffer[] = [];
+    const modelId = process.env.ELEVENLABS_MODEL_ID || 'scribe_v2_realtime';
+    const languageCode = process.env.ELEVENLABS_LANGUAGE_CODE || 'en';
+    const commitStrategy = process.env.ELEVENLABS_COMMIT_STRATEGY || 'vad';
+
+    const url = new URL('wss://api.elevenlabs.io/v1/speech-to-text/realtime');
+    url.searchParams.set('model_id', modelId);
+    url.searchParams.set('audio_format', 'pcm_16000');
+    url.searchParams.set('language_code', languageCode);
+    url.searchParams.set('commit_strategy', commitStrategy);
+
+    const socket = new WebSocket(url.toString(), {
+      headers: {
+        'xi-api-key': elevenLabsApiKey,
+      },
+    });
+
+    const flushPending = () => {
+      while (pendingChunks.length > 0 && socket.readyState === WebSocket.OPEN) {
+        const chunk = pendingChunks.shift();
+        if (!chunk) {
+          return;
+        }
+        socket.send(
+          JSON.stringify({
+            message_type: 'input_audio_chunk',
+            audio_base_64: chunk.toString('base64'),
+            sample_rate: 16000,
+          })
+        );
+      }
+    };
+
+    socket.on('open', () => {
+      flushPending();
+    });
+
+    socket.on('message', (data) => {
+      try {
+        const payload = JSON.parse(data.toString()) as {
+          message_type?: string;
+          text?: string;
+          confidence?: number;
+        };
+
+        if (payload.message_type === 'partial_transcript' || payload.message_type === 'committed_transcript' || payload.message_type === 'committed_transcript_with_timestamps') {
+          const result: TranscriptionResult = {
+            text: payload.text || '',
+            isFinal: payload.message_type !== 'partial_transcript',
+            confidence: payload.confidence ?? 0.0,
+            timestamp: new Date(),
+          };
+          callbacks.data?.forEach((cb) => cb(result));
+        }
+      } catch (error) {
+        callbacks.error?.forEach((cb) => cb(error as Error));
+      }
+    });
+
+    socket.on('error', (error) => {
+      callbacks.error?.forEach((cb) => cb(error as Error));
+    });
+
+    socket.on('close', () => {
+      callbacks.end?.forEach((cb) => cb());
+    });
+
+    return {
+      write: (audioData: Buffer) => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              message_type: 'input_audio_chunk',
+              audio_base_64: audioData.toString('base64'),
+              sample_rate: 16000,
+            })
+          );
+        } else {
+          pendingChunks.push(audioData);
+        }
+      },
+      end: () => {
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
+        }
+      },
+      on: (event, callback) => {
+        if (event === 'data') {
+          callbacks.data = callbacks.data || [];
+          callbacks.data.push(callback as StreamCallback);
+        } else if (event === 'end') {
+          callbacks.end = callbacks.end || [];
+          callbacks.end.push(callback as StreamEndCallback);
+        } else if (event === 'error') {
+          callbacks.error = callbacks.error || [];
+          callbacks.error.push(callback as StreamErrorCallback);
+        }
+      },
+    };
+  }
+
   if (!speechClient || !isGoogleCloudConfigured) {
     console.warn('[STT] Streaming not available - Google Cloud not configured');
     
     // Return mock streaming interface
-    const mockCallbacks: { [key: string]: Array<StreamCallback | StreamEndCallback> } = {};
+    const mockCallbacks: { [key: string]: Array<StreamCallback | StreamEndCallback | StreamErrorCallback> } = {};
     
     return {
       write: (audioData: Buffer) => {
@@ -182,7 +318,7 @@ export function createStreamingRecognition(): {
           (mockCallbacks['end'] as StreamEndCallback[]).forEach(cb => (cb as StreamEndCallback)());
         }
       },
-      on: (event: string, callback: StreamCallback | StreamEndCallback) => {
+      on: (event: string, callback: StreamCallback | StreamEndCallback | StreamErrorCallback) => {
         if (!mockCallbacks[event]) {
           mockCallbacks[event] = [];
         }
@@ -194,7 +330,7 @@ export function createStreamingRecognition(): {
   // Create real Google Cloud streaming recognition
   const stream = speechClient.streamingRecognize(streamingConfig);
   
-  const callbacks: { [key: string]: Array<StreamCallback | StreamEndCallback> } = {};
+  const callbacks: { [key: string]: Array<StreamCallback | StreamEndCallback | StreamErrorCallback> } = {};
   
   stream.on('data', (data: speechTypes.google.cloud.speech.v1.StreamingRecognizeResponse) => {
     if (data.results && data.results.length > 0) {
@@ -238,7 +374,7 @@ export function createStreamingRecognition(): {
     end: () => {
       stream.end();
     },
-    on: (event: string, callback: StreamCallback | StreamEndCallback) => {
+    on: (event: string, callback: StreamCallback | StreamEndCallback | StreamErrorCallback) => {
       if (!callbacks[event]) {
         callbacks[event] = [];
       }
@@ -274,4 +410,5 @@ export async function testSTTService(): Promise<boolean> {
 }
 
 export { isGoogleCloudConfigured };
+export { isElevenLabsConfigured, sttProvider };
 

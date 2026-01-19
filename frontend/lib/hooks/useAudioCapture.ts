@@ -28,6 +28,10 @@ export interface UseAudioCaptureReturn {
   requestPermission: () => Promise<boolean>;
 }
 
+export interface AudioCaptureOptions {
+  usePcm?: boolean;
+}
+
 /**
  * Audio capture hook with MediaRecorder API
  * 
@@ -38,7 +42,7 @@ export interface UseAudioCaptureReturn {
  * - Audio level monitoring
  * - Error handling and recovery
  */
-export function useAudioCapture(): UseAudioCaptureReturn {
+export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCaptureReturn {
   const [state, setState] = useState<AudioCaptureState>({
     isRecording: false,
     isPaused: false,
@@ -51,11 +55,16 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const pcmProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmGainRef = useRef<GainNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const chunkQueueRef = useRef<string[]>([]);
+  const chunkQueueRef = useRef<
+    Array<{ data: string; format: { sampleRate: number; channels: number; encoding: string } }>
+  >([]);
   const recordingRef = useRef(false);
   const pausedRef = useRef(false);
   const wsClient = getWebSocketClient();
+  const usePcm = options.usePcm === true;
 
   // Check if MediaRecorder is supported
   useEffect(() => {
@@ -142,15 +151,20 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     }
   }, []);
 
+  const ensureAudioContext = useCallback((sampleRate: number) => {
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      return audioContextRef.current;
+    }
+    const audioContext = new AudioContext({ sampleRate });
+    audioContextRef.current = audioContext;
+    return audioContext;
+  }, []);
+
   /**
    * Start audio level monitoring
    */
   const startAudioLevelMonitoring = useCallback((stream: MediaStream) => {
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-    }
-
-    const audioContext = new AudioContext({ sampleRate: 16000 });
+    const audioContext = ensureAudioContext(16000);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.8;
@@ -158,7 +172,6 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(analyser);
 
-    audioContextRef.current = audioContext;
     analyserRef.current = analyser;
 
     audioContext.resume().catch((error) => {
@@ -196,7 +209,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     };
 
     updateLevel();
-  }, []);
+  }, [ensureAudioContext]);
 
   /**
    * Stop audio level monitoring
@@ -207,6 +220,16 @@ export function useAudioCapture(): UseAudioCaptureReturn {
       animationFrameRef.current = null;
     }
 
+    if (pcmProcessorRef.current) {
+      pcmProcessorRef.current.disconnect();
+      pcmProcessorRef.current = null;
+    }
+
+    if (pcmGainRef.current) {
+      pcmGainRef.current.disconnect();
+      pcmGainRef.current = null;
+    }
+
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
@@ -215,6 +238,75 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     analyserRef.current = null;
     setState((prev) => ({ ...prev, audioLevel: 0 }));
   }, []);
+
+  const encodePcmToBase64 = useCallback((pcm: Int16Array) => {
+    const bytes = new Uint8Array(pcm.buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }, []);
+
+  const sendPcmChunk = useCallback(
+    (pcmData: Int16Array, captureTime: number) => {
+      const base64Audio = encodePcmToBase64(pcmData);
+      const format = {
+        sampleRate: 16000,
+        channels: 1,
+        encoding: 'pcm_s16le',
+      };
+      const message: AudioDataMessage = {
+        type: 'AUDIO_DATA',
+        payload: {
+          data: base64Audio,
+          format,
+        },
+      };
+
+      if (wsClient.isConnected()) {
+        wsClient.send(message, captureTime);
+      } else {
+        chunkQueueRef.current.push({ data: base64Audio, format });
+        console.warn('WebSocket not connected, queuing audio chunk');
+      }
+    },
+    [encodePcmToBase64, wsClient]
+  );
+
+  const startPcmProcessing = useCallback((stream: MediaStream) => {
+    const audioContext = ensureAudioContext(16000);
+    const source = audioContext.createMediaStreamSource(stream);
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    const gain = audioContext.createGain();
+    gain.gain.value = 0;
+
+    processor.onaudioprocess = (event) => {
+      if (!recordingRef.current || pausedRef.current) {
+        return;
+      }
+      const input = event.inputBuffer.getChannelData(0);
+      const pcm = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const sample = Math.max(-1, Math.min(1, input[i]));
+        pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      }
+      sendPcmChunk(pcm, Date.now());
+    };
+
+    source.connect(processor);
+    processor.connect(gain);
+    gain.connect(audioContext.destination);
+
+    pcmProcessorRef.current = processor;
+    pcmGainRef.current = gain;
+
+    audioContext.resume().catch((error) => {
+      console.warn('AudioContext resume failed:', error);
+    });
+  }, [ensureAudioContext, sendPcmChunk]);
 
   /**
    * Send audio chunk to WebSocket
@@ -228,15 +320,16 @@ export function useAudioCapture(): UseAudioCaptureReturn {
         // Remove data URL prefix (data:audio/webm;base64,)
         const base64Audio = base64Data.split(',')[1] || base64Data;
 
+        const format = {
+          sampleRate: 16000,
+          channels: 1,
+          encoding: 'webm-opus',
+        };
         const message: AudioDataMessage = {
           type: 'AUDIO_DATA',
           payload: {
             data: base64Audio,
-            format: {
-              sampleRate: 16000,
-              channels: 1,
-              encoding: 'webm-opus',
-            },
+            format,
           },
         };
 
@@ -245,7 +338,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
           wsClient.send(message, captureTime);
         } else {
           // Queue chunk for later (will be sent when reconnected)
-          chunkQueueRef.current.push(base64Audio);
+          chunkQueueRef.current.push({ data: base64Audio, format });
           console.warn('WebSocket not connected, queuing audio chunk');
         }
       };
@@ -260,7 +353,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const isConnected = wsClient.isConnected();
 
   useEffect(() => {
-    if (isConnected && chunkQueueRef.current.length > 0) {
+      if (isConnected && chunkQueueRef.current.length > 0) {
       console.log(`Sending ${chunkQueueRef.current.length} queued audio chunks`);
       const queuedChunks = [...chunkQueueRef.current];
       chunkQueueRef.current = [];
@@ -269,12 +362,8 @@ export function useAudioCapture(): UseAudioCaptureReturn {
         const message: AudioDataMessage = {
           type: 'AUDIO_DATA',
           payload: {
-            data: chunk,
-            format: {
-              sampleRate: 16000,
-              channels: 1,
-              encoding: 'webm-opus',
-            },
+            data: chunk.data,
+            format: chunk.format,
           },
         };
         wsClient.send(message);
@@ -316,50 +405,54 @@ export function useAudioCapture(): UseAudioCaptureReturn {
       // Start audio level monitoring
       startAudioLevelMonitoring(stream);
 
-      // Create MediaRecorder with optimal settings for STT
-      const options: MediaRecorderOptions = {
-        mimeType: 'audio/webm;codecs=opus',
-        audioBitsPerSecond: 16000, // Low bitrate for speech
-      };
-
-      // Fallback to default if codec not supported
-      let recorder: MediaRecorder;
-      if (MediaRecorder.isTypeSupported(options.mimeType!)) {
-        recorder = new MediaRecorder(stream, options);
+      if (usePcm) {
+        startPcmProcessing(stream);
       } else {
-        // Fallback to default
-        recorder = new MediaRecorder(stream);
-        console.warn('WebM Opus not supported, using default codec');
+        // Create MediaRecorder with optimal settings for STT
+        const options: MediaRecorderOptions = {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 16000, // Low bitrate for speech
+        };
+
+        // Fallback to default if codec not supported
+        let recorder: MediaRecorder;
+        if (MediaRecorder.isTypeSupported(options.mimeType!)) {
+          recorder = new MediaRecorder(stream, options);
+        } else {
+          // Fallback to default
+          recorder = new MediaRecorder(stream);
+          console.warn('WebM Opus not supported, using default codec');
+        }
+
+        // Handle data available events (chunks)
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && !pausedRef.current) {
+            const captureTime = Date.now();
+            sendAudioChunk(event.data, captureTime);
+          }
+        };
+
+        recorder.onerror = (event) => {
+          console.error('MediaRecorder error:', event);
+          setState((prev) => ({
+            ...prev,
+            error: 'Recording error occurred',
+          }));
+        };
+
+        recorder.onstop = () => {
+          // Cleanup
+          stopAudioLevelMonitoring();
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+            mediaStreamRef.current = null;
+          }
+        };
+
+        // Start recording with 1000ms chunks
+        recorder.start(1000);
+        mediaRecorderRef.current = recorder;
       }
-
-      // Handle data available events (chunks)
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && !pausedRef.current) {
-          const captureTime = Date.now();
-          sendAudioChunk(event.data, captureTime);
-        }
-      };
-
-      recorder.onerror = (event) => {
-        console.error('MediaRecorder error:', event);
-        setState((prev) => ({
-          ...prev,
-          error: 'Recording error occurred',
-        }));
-      };
-
-      recorder.onstop = () => {
-        // Cleanup
-        stopAudioLevelMonitoring();
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-          mediaStreamRef.current = null;
-        }
-      };
-
-      // Start recording with 1000ms chunks
-      recorder.start(1000);
-      mediaRecorderRef.current = recorder;
 
       setState((prev) => ({
         ...prev,
@@ -376,7 +469,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
         isRecording: false,
       }));
     }
-  }, [state.permissionState, requestPermission, startAudioLevelMonitoring, stopAudioLevelMonitoring, sendAudioChunk]);
+  }, [state.permissionState, requestPermission, startAudioLevelMonitoring, stopAudioLevelMonitoring, sendAudioChunk, usePcm, startPcmProcessing]);
 
   /**
    * Stop recording
@@ -412,9 +505,9 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const pause = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
-      pausedRef.current = true;
-      setState((prev) => ({ ...prev, isPaused: true }));
     }
+    pausedRef.current = true;
+    setState((prev) => ({ ...prev, isPaused: true }));
   }, []);
 
   /**
@@ -423,13 +516,13 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const resume = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
-      pausedRef.current = false;
-      setState((prev) => ({ ...prev, isPaused: false }));
+    }
+    pausedRef.current = false;
+    setState((prev) => ({ ...prev, isPaused: false }));
 
-      // Restart audio level monitoring
-      if (mediaStreamRef.current) {
-        startAudioLevelMonitoring(mediaStreamRef.current);
-      }
+    // Restart audio level monitoring
+    if (mediaStreamRef.current) {
+      startAudioLevelMonitoring(mediaStreamRef.current);
     }
   }, [startAudioLevelMonitoring]);
 

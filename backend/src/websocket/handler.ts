@@ -23,7 +23,7 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
-import { transcribeAudioChunk } from '../services/sttService';
+import { transcribeAudioChunk, createStreamingRecognition, sttProvider } from '../services/sttService';
 import {
   findBestMatch,
   createSongContext,
@@ -65,6 +65,7 @@ interface SessionState {
   songContext?: SongContext;
   matcherConfig: MatcherConfig;
   lastMatchConfidence?: number;
+  sttStream?: ReturnType<typeof createStreamingRecognition>;
 }
 
 
@@ -156,6 +157,20 @@ async function handleStartSession(
     lastMatchConfidence: 0,
   };
 
+  if (sttProvider === 'elevenlabs') {
+    const stream = createStreamingRecognition();
+    stream.on('data', (result) => {
+      const processingStart = Date.now();
+      const receivedAtNow = Date.now();
+      handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
+    });
+    stream.on('error', (error) => {
+      console.error('[STT] ElevenLabs stream error:', error);
+      sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
+    });
+    session.sttStream = stream;
+  }
+
   sessions.set(ws, session);
 
   // Send session started confirmation with full setlist for caching
@@ -198,6 +213,73 @@ async function handleStartSession(
   console.log(`[WS] Session started: ${sessionId} with ${session.songs.length} songs`);
 }
 
+function handleTranscriptionResult(
+  ws: WebSocket,
+  session: SessionState,
+  transcriptionResult: { text: string; isFinal: boolean; confidence: number },
+  receivedAt: number,
+  processingStart: number
+): void {
+  const transcriptMessage: TranscriptUpdateMessage = {
+    type: 'TRANSCRIPT_UPDATE',
+    payload: {
+      text: transcriptionResult.text,
+      isFinal: transcriptionResult.isFinal,
+      confidence: transcriptionResult.confidence,
+    },
+    timing: createTiming(receivedAt, processingStart),
+  };
+
+  send(ws, transcriptMessage);
+
+  if (transcriptionResult.isFinal) {
+    session.rollingBuffer += ' ' + transcriptionResult.text;
+    const words = session.rollingBuffer.split(' ');
+    if (words.length > 100) {
+      session.rollingBuffer = words.slice(-100).join(' ');
+    }
+
+    console.log(`[WS] Rolling buffer updated: "${session.rollingBuffer.slice(-50)}..."`);
+
+    if (session.songContext) {
+      const matchResult = findBestMatch(
+        session.rollingBuffer,
+        session.songContext,
+        session.matcherConfig
+      );
+
+      session.lastMatchConfidence = matchResult.confidence;
+
+      if (matchResult.matchFound && matchResult.confidence > session.matcherConfig.similarityThreshold) {
+        console.log(
+          `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
+        );
+
+        if (matchResult.nextLineIndex !== undefined && matchResult.isLineEnd) {
+          session.currentSlideIndex = matchResult.nextLineIndex;
+          session.songContext.currentLineIndex = matchResult.nextLineIndex;
+
+          const displayMessage: DisplayUpdateMessage = {
+            type: 'DISPLAY_UPDATE',
+            payload: {
+              lineText: matchResult.matchedText,
+              slideIndex: matchResult.nextLineIndex,
+              songId: session.songContext.id,
+              songTitle: session.songContext.title,
+              matchConfidence: matchResult.confidence,
+              isAutoAdvance: true,
+            },
+            timing: createTiming(receivedAt, processingStart),
+          };
+
+          send(ws, displayMessage);
+          console.log(`[WS] Auto-advanced to slide ${matchResult.nextLineIndex}`);
+        }
+      }
+    }
+  }
+}
+
 /**
  * Handle AUDIO_DATA message
  * Processes audio chunks for transcription
@@ -205,6 +287,7 @@ async function handleStartSession(
 async function handleAudioData(
   ws: WebSocket,
   data: string,
+  format: { sampleRate?: number; channels?: number; encoding?: string } | undefined,
   receivedAt: number
 ): Promise<void> {
   const processingStart = Date.now();
@@ -216,77 +299,32 @@ async function handleAudioData(
 
   console.log(`[WS] Received audio chunk: ${data.length} bytes (base64)`);
 
+  if (sttProvider === 'elevenlabs') {
+    if (!session.sttStream) {
+      sendError(ws, 'STT_ERROR', 'ElevenLabs stream not initialized');
+      return;
+    }
+    if (format?.encoding !== 'pcm_s16le') {
+      sendError(ws, 'AUDIO_FORMAT_UNSUPPORTED', 'ElevenLabs requires PCM 16-bit audio', {
+        encoding: format?.encoding,
+      });
+      return;
+    }
+    try {
+      const audioBuffer = Buffer.from(data, 'base64');
+      session.sttStream.write(audioBuffer);
+    } catch (error) {
+      console.error('[WS] Error sending audio to ElevenLabs:', error);
+      sendError(ws, 'STT_ERROR', 'Error sending audio to ElevenLabs');
+    }
+    return;
+  }
+
   // Send audio to STT service (Google Cloud or mock)
   try {
     const transcriptionResult = await transcribeAudioChunk(data);
-    
     if (transcriptionResult) {
-      // Send transcription update to client
-      const transcriptMessage: TranscriptUpdateMessage = {
-        type: 'TRANSCRIPT_UPDATE',
-        payload: {
-          text: transcriptionResult.text,
-          isFinal: transcriptionResult.isFinal,
-          confidence: transcriptionResult.confidence,
-        },
-        timing: createTiming(receivedAt, processingStart),
-      };
-      
-      send(ws, transcriptMessage);
-      
-      // Update rolling buffer with transcription
-      // This will be used for matching against setlist
-      if (transcriptionResult.isFinal) {
-        session.rollingBuffer += ' ' + transcriptionResult.text;
-        // Keep only last 100 words for matching
-        const words = session.rollingBuffer.split(' ');
-        if (words.length > 100) {
-          session.rollingBuffer = words.slice(-100).join(' ');
-        }
-        
-        console.log(`[WS] Rolling buffer updated: "${session.rollingBuffer.slice(-50)}..."`);
-        
-        // ===== Phase 3: Perform fuzzy matching against current song lines =====
-        if (session.songContext) {
-          const matchResult = findBestMatch(
-            session.rollingBuffer,
-            session.songContext,
-            session.matcherConfig
-          );
-
-          // Store last match confidence for debugging
-          session.lastMatchConfidence = matchResult.confidence;
-
-          if (matchResult.matchFound && matchResult.confidence > session.matcherConfig.similarityThreshold) {
-            console.log(
-              `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
-            );
-
-            // Update slide index if we found a new line
-            if (matchResult.nextLineIndex !== undefined && matchResult.isLineEnd) {
-              session.currentSlideIndex = matchResult.nextLineIndex;
-              session.songContext.currentLineIndex = matchResult.nextLineIndex;
-
-              // Send DISPLAY_UPDATE to auto-advance slide
-              const displayMessage: DisplayUpdateMessage = {
-                type: 'DISPLAY_UPDATE',
-                payload: {
-                  lineText: matchResult.matchedText,
-                  slideIndex: matchResult.nextLineIndex,
-                  songId: session.songContext.id,
-                  songTitle: session.songContext.title,
-                  matchConfidence: matchResult.confidence,
-                  isAutoAdvance: true,
-                },
-                timing: createTiming(receivedAt, processingStart),
-              };
-
-              send(ws, displayMessage);
-              console.log(`[WS] Auto-advanced to slide ${matchResult.nextLineIndex}`);
-            }
-          }
-        }
-      }
+      handleTranscriptionResult(ws, session, transcriptionResult, receivedAt, processingStart);
     } else {
       console.log('[WS] No transcription result (silence or error)');
     }
@@ -435,6 +473,10 @@ function handleStopSession(ws: WebSocket, receivedAt: number): void {
     return;
   }
 
+  if (session.sttStream) {
+    session.sttStream.end();
+  }
+
   const sessionId = session.sessionId;
   sessions.delete(ws);
 
@@ -501,7 +543,7 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
     if (isStartSessionMessage(message)) {
       await handleStartSession(ws, message.payload.eventId, receivedAt);
     } else if (isAudioDataMessage(message)) {
-      await handleAudioData(ws, message.payload.data, receivedAt);
+      await handleAudioData(ws, message.payload.data, message.payload.format, receivedAt);
     } else if (isManualOverrideMessage(message)) {
       handleManualOverride(
         ws,
@@ -531,6 +573,9 @@ export function handleClose(ws: WebSocket): void {
   const session = sessions.get(ws);
   if (session) {
     console.log(`[WS] Connection closed, cleaning up session: ${session.sessionId}`);
+    if (session.sttStream) {
+      session.sttStream.end();
+    }
     sessions.delete(ws);
   }
 }
