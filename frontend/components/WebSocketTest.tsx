@@ -267,10 +267,13 @@ export function WebSocketTest() {
             </div>
             
             {/* Microphone Status */}
-            <MicrophoneStatus />
+            <MicrophoneStatus
+              state={audioCapture.state}
+              requestPermission={audioCapture.requestPermission}
+            />
             
             {/* Audio Level Meter */}
-            <AudioLevelMeter />
+            <AudioLevelMeter state={audioCapture.state} />
             
             {/* Audio Controls */}
             {audioCapture.state.permissionState === 'granted' && (

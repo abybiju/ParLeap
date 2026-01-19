@@ -1,6 +1,6 @@
 'use client';
 
-import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
+import { useAudioCapture, type AudioCaptureState } from '@/lib/hooks/useAudioCapture';
 import { cn } from '@/lib/utils';
 
 /**
@@ -9,8 +9,13 @@ import { cn } from '@/lib/utils';
  * Displays real-time audio level visualization with animated bars
  * Shows operator that microphone is working and capturing audio
  */
-export function AudioLevelMeter() {
-  const { state } = useAudioCapture();
+interface AudioLevelMeterProps {
+  state?: AudioCaptureState;
+}
+
+export function AudioLevelMeter({ state: providedState }: AudioLevelMeterProps) {
+  const fallback = useAudioCapture();
+  const state = providedState ?? fallback.state;
 
   // Don't render if not recording
   if (!state.isRecording) {
