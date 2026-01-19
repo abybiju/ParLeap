@@ -159,12 +159,12 @@ async function handleStartSession(
 
   if (sttProvider === 'elevenlabs') {
     const stream = createStreamingRecognition();
-    stream.on('data', (result) => {
+    stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
       const processingStart = Date.now();
       const receivedAtNow = Date.now();
       handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
     });
-    stream.on('error', (error) => {
+    stream.on('error', (error: Error) => {
       console.error('[STT] ElevenLabs stream error:', error);
       sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
     });
