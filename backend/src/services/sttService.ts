@@ -66,7 +66,8 @@ const mockTranscriptionPhrases = [
 let mockPhraseIndex = 0;
 let mockPartialText = '';
 
-function generateMockTranscription(_audioData: Buffer): TranscriptionResult {
+function generateMockTranscription(audioData: Buffer): TranscriptionResult {
+  void audioData;
   // Simulate progressive transcription
   const phrase = mockTranscriptionPhrases[mockPhraseIndex % mockTranscriptionPhrases.length];
   const words = phrase.split(' ');

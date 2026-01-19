@@ -100,7 +100,7 @@ test('splitLyricsIntoLines: should split lyrics by newline', () => {
 
 // Test 2: Song context creation
 test('createSongContext: should create valid context', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   assertEquals(context.id, testSong.id, 'IDs should match');
   assertEquals(context.title, testSong.title, 'Titles should match');
   assertEquals(context.lines.length, 4, 'Should have 4 lines');
@@ -109,7 +109,7 @@ test('createSongContext: should create valid context', () => {
 
 // Test 3: Exact match
 test('findBestMatch: should find exact match', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({
     similarityThreshold: 0.85,
     minBufferLength: 1,
@@ -129,7 +129,7 @@ test('findBestMatch: should find exact match', () => {
 
 // Test 4: Partial match with high confidence
 test('findBestMatch: should find partial matches', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({
     similarityThreshold: 0.75,
     minBufferLength: 2,
@@ -148,7 +148,7 @@ test('findBestMatch: should find partial matches', () => {
 
 // Test 5: Multi-word buffer
 test('findBestMatch: should handle rolling buffer', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({
     similarityThreshold: 0.80,
     minBufferLength: 2,
@@ -169,7 +169,7 @@ test('findBestMatch: should handle rolling buffer', () => {
 
 // Test 6: Line progression
 test('findBestMatch: should advance to next line', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   context.currentLineIndex = 0; // Start at first line
 
   const config = validateConfig({
@@ -187,7 +187,7 @@ test('findBestMatch: should advance to next line', () => {
 
 // Test 7: No match below threshold
 test('findBestMatch: should not match below threshold', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({
     similarityThreshold: 0.95,
     minBufferLength: 1,
@@ -202,7 +202,7 @@ test('findBestMatch: should not match below threshold', () => {
 
 // Test 8: Buffer too short
 test('findBestMatch: should require minimum buffer length', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({
     similarityThreshold: 0.85,
     minBufferLength: 5,
@@ -216,7 +216,7 @@ test('findBestMatch: should require minimum buffer length', () => {
 
 // Test 9: Punctuation normalization
 test('findBestMatch: should handle punctuation', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({
     similarityThreshold: 0.80,
     minBufferLength: 2,
@@ -235,7 +235,7 @@ test('findBestMatch: should handle punctuation', () => {
 
 // Test 10: Case insensitivity
 test('findBestMatch: should be case insensitive', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({
     similarityThreshold: 0.85,
     minBufferLength: 2,
@@ -282,7 +282,7 @@ test('findBestMatch: should track progress through song', () => {
 
   for (let i = 0; i < testCases.length; i++) {
     const { buffer, expectedIndex } = testCases[i];
-    const testContext = createSongContext({} as any, testSong, i);
+    const testContext = createSongContext(null, testSong, i);
     const result = findBestMatch(buffer, testContext, config);
 
     if (result.matchFound) {
@@ -297,7 +297,7 @@ test('findBestMatch: should track progress through song', () => {
 
 // Test 13: Empty input handling
 test('findBestMatch: should handle empty inputs', () => {
-  const context = createSongContext({} as any, testSong, 0);
+  const context = createSongContext(null, testSong, 0);
   const config = validateConfig({});
 
   const result1 = findBestMatch('', context, config);
