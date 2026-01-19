@@ -1,6 +1,6 @@
 'use client';
 
-import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
+import { useAudioCapture, type AudioCaptureState } from '@/lib/hooks/useAudioCapture';
 import { cn } from '@/lib/utils';
 import { Mic, MicOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 
@@ -10,8 +10,15 @@ import { Mic, MicOff, AlertCircle, CheckCircle2 } from 'lucide-react';
  * Displays microphone permission status, recording state, and errors
  * Provides clear feedback to operator about microphone access
  */
-export function MicrophoneStatus() {
-  const { state, requestPermission } = useAudioCapture();
+interface MicrophoneStatusProps {
+  state?: AudioCaptureState;
+  requestPermission?: () => Promise<boolean>;
+}
+
+export function MicrophoneStatus({ state: providedState, requestPermission: providedRequest }: MicrophoneStatusProps) {
+  const fallback = useAudioCapture();
+  const state = providedState ?? fallback.state;
+  const requestPermission = providedRequest ?? fallback.requestPermission;
 
   const getStatusConfig = () => {
     if (state.error) {
