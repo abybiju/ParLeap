@@ -31,7 +31,7 @@ export function WebSocketTest() {
     lastMessage,
   } = useWebSocket(false);
 
-  const [eventId] = useState('00000000-0000-0000-0000-000000000001'); // Demo event ID
+  const [eventId, setEventId] = useState('4177e6e1-59d1-4378-8e42-25e4b1ee57c8'); // Real Event ID from seed script
   const [messageHistory, setMessageHistory] = useState<Array<{ message: ServerMessage; timestamp: Date }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -181,6 +181,21 @@ export function WebSocketTest() {
         {isConnected && (
           <div className="space-y-3">
             <p className="text-sm text-slate-300">Protocol Actions:</p>
+            
+            {/* Event ID Input */}
+            <div className="space-y-1">
+              <label className="text-xs text-slate-400">Event ID:</label>
+              <input
+                type="text"
+                value={eventId}
+                onChange={(e) => setEventId(e.target.value)}
+                placeholder="Enter Event ID"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              <p className="text-xs text-slate-500">
+                Real Event ID: <code className="text-slate-400">4177e6e1-59d1-4378-8e42-25e4b1ee57c8</code>
+              </p>
+            </div>
             
             {/* Session Controls */}
             <div className="flex gap-2 flex-wrap">
