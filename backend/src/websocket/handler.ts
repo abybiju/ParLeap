@@ -257,6 +257,10 @@ function handleTranscriptionResult(
   const shouldAttemptMatch = transcriptionResult.isFinal || allowPartialMatching;
   const trimmedText = transcriptionResult.text.trim();
 
+  if (session.matcherConfig.debug) {
+    console.log(`[WS] 📝 Transcript received: isFinal=${transcriptionResult.isFinal}, allowPartial=${allowPartialMatching}, shouldAttemptMatch=${shouldAttemptMatch}, text="${trimmedText}"`);
+  }
+
   if (trimmedText.length > 0) {
     session.lastTranscriptText = trimmedText;
   }
@@ -276,21 +280,41 @@ function handleTranscriptionResult(
   if (shouldAttemptMatch) {
     const matchText = trimmedText.length > 0 ? trimmedText : session.lastTranscriptText;
     if (!matchText) {
+      if (session.matcherConfig.debug) {
+        console.log(`[WS] ⚠️  Skipping match: no text (trimmedText="${trimmedText}", lastTranscript="${session.lastTranscriptText}")`);
+      }
       return;
     }
 
-    session.rollingBuffer += ' ' + matchText;
-    const words = session.rollingBuffer.split(' ');
-    if (words.length > 100) {
-      session.rollingBuffer = words.slice(-100).join(' ');
+    // For ElevenLabs (and similar streaming STT), transcripts are cumulative
+    // So we REPLACE the buffer instead of appending to avoid duplication
+    // For chunk-based STT (Google), we append
+    if (sttProvider === 'elevenlabs') {
+      // ElevenLabs sends cumulative transcripts - use directly
+      session.rollingBuffer = matchText;
+    } else {
+      // Other providers send deltas - append
+      session.rollingBuffer += ' ' + matchText;
+      const words = session.rollingBuffer.split(' ');
+      if (words.length > 100) {
+        session.rollingBuffer = words.slice(-100).join(' ');
+      }
     }
 
-    const cleanedBuffer = preprocessBufferText(session.rollingBuffer, 12);
+    const cleanedBuffer = preprocessBufferText(session.rollingBuffer, 15); // Increased from 12 to 15 words
     
     if (session.matcherConfig.debug) {
       console.log(`[WS] Rolling buffer updated: "${cleanedBuffer.slice(-50)}..."`);
       console.log(`[WS] Cleaned buffer for matching: "${cleanedBuffer}"`);
     }
+
+    if (!session.songContext) {
+      console.log(`[WS] ⚠️  Skipping match: no songContext for session`);
+      return;
+    }
+
+    // Always log matcher attempt for debugging production issues
+    console.log(`[WS] 🔍 Attempting match with buffer: "${cleanedBuffer.slice(0, 50)}..."`);
 
     if (session.songContext) {
       const matchResult = findBestMatch(
@@ -301,7 +325,10 @@ function handleTranscriptionResult(
 
       session.lastMatchConfidence = matchResult.confidence;
 
-      if (matchResult.matchFound && matchResult.confidence > session.matcherConfig.similarityThreshold) {
+      // Always log match result for debugging
+      console.log(`[WS] 📊 Match result: found=${matchResult.matchFound}, confidence=${(matchResult.confidence * 100).toFixed(1)}%, threshold=${(session.matcherConfig.similarityThreshold * 100).toFixed(1)}%`);
+
+      if (matchResult.matchFound && matchResult.confidence >= session.matcherConfig.similarityThreshold) {
         if (session.matcherConfig.debug) {
           console.log(
             `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
