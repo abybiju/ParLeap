@@ -282,7 +282,11 @@ function handleTranscriptionResult(
     }
 
     const cleanedBuffer = preprocessBufferText(session.rollingBuffer, 12);
-    console.log(`[WS] Rolling buffer updated: "${cleanedBuffer.slice(-50)}..."`);
+    
+    if (session.matcherConfig.debug) {
+      console.log(`[WS] Rolling buffer updated: "${cleanedBuffer.slice(-50)}..."`);
+      console.log(`[WS] Cleaned buffer for matching: "${cleanedBuffer}"`);
+    }
 
     if (session.songContext) {
       const matchResult = findBestMatch(
@@ -294,10 +298,13 @@ function handleTranscriptionResult(
       session.lastMatchConfidence = matchResult.confidence;
 
       if (matchResult.matchFound && matchResult.confidence > session.matcherConfig.similarityThreshold) {
-        console.log(
-          `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
-        );
-        console.log(`[WS] isLineEnd: ${matchResult.isLineEnd}, nextLineIndex: ${matchResult.nextLineIndex}`);
+        if (session.matcherConfig.debug) {
+          console.log(
+            `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
+          );
+          console.log(`[WS] isLineEnd: ${matchResult.isLineEnd}, nextLineIndex: ${matchResult.nextLineIndex}`);
+          console.log(`[WS] Match reason: ${matchResult.isLineEnd ? `Advancing from line ${session.songContext.currentLineIndex} to line ${matchResult.nextLineIndex}` : `Matched current line ${matchResult.currentLineIndex} (no advance)`}`);
+        }
 
         // Always send DISPLAY_UPDATE with confidence when match found (even if not advancing)
         const displayMessage: DisplayUpdateMessage = {
@@ -324,9 +331,13 @@ function handleTranscriptionResult(
         if (matchResult.isLineEnd && matchResult.nextLineIndex !== undefined) {
           session.currentSlideIndex = matchResult.nextLineIndex;
           session.songContext.currentLineIndex = matchResult.nextLineIndex;
-          console.log(`[WS] Auto-advanced to slide ${matchResult.nextLineIndex}`);
+          if (session.matcherConfig.debug) {
+            console.log(`[WS] Auto-advanced to slide ${matchResult.nextLineIndex}`);
+          }
         } else {
-          console.log(`[WS] Matched current line ${matchResult.currentLineIndex} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
+          if (session.matcherConfig.debug) {
+            console.log(`[WS] Matched current line ${matchResult.currentLineIndex} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
+          }
         }
       }
     }

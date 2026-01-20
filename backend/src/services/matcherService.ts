@@ -110,7 +110,15 @@ export function findBestMatch(
 
   // Validate inputs
   if (!buffer || !songContext.lines || songContext.lines.length === 0) {
+    if (config.debug) {
+      console.log(`[MATCHER] Invalid input: buffer="${buffer}", lines.length=${songContext.lines?.length ?? 0}`);
+    }
     return result;
+  }
+
+  if (config.debug) {
+    console.log(`[MATCHER] Starting match with cleaned buffer: "${buffer}"`);
+    console.log(`[MATCHER] Current line index: ${songContext.currentLineIndex}, Total lines: ${songContext.lines.length}`);
   }
 
   // Get recent words from buffer
@@ -198,6 +206,9 @@ export function findBestMatch(
         console.log(
           `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (current line, no advance)`
         );
+        console.log(
+          `[MATCHER] isLineEnd=false because bestLineIndex (${bestLineIndex}) equals currentLineIndex (${songContext.currentLineIndex})`
+        );
       }
     } else {
       // Moved to next line(s)
@@ -206,6 +217,9 @@ export function findBestMatch(
       if (config.debug) {
         console.log(
           `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (advancing from ${songContext.currentLineIndex})`
+        );
+        console.log(
+          `[MATCHER] isLineEnd=true because bestLineIndex (${bestLineIndex}) > currentLineIndex (${songContext.currentLineIndex}) - transition detected`
         );
       }
     }
