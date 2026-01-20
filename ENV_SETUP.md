@@ -31,6 +31,11 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 # Optional: fall back to mock data if Supabase is unhealthy
 SUPABASE_FALLBACK_TO_MOCK=false
 
+# Matcher Tuning (Optional)
+MATCHER_SIMILARITY_THRESHOLD=0.85
+MATCHER_MIN_BUFFER_LENGTH=3
+MATCHER_BUFFER_WINDOW=100
+
 # ElevenLabs Configuration
 ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 
