@@ -48,6 +48,14 @@ function createTiming(receivedAt: number, processingStartAt: number): TimingMeta
   };
 }
 
+function parseNumberEnv(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 // ============================================
 // Session State
 // ============================================
@@ -129,9 +137,9 @@ async function handleStartSession(
   
   // Initialize matcher configuration
   const matcherConfig: MatcherConfig = validateConfig({
-    similarityThreshold: 0.85,
-    minBufferLength: 3,
-    bufferWindow: 100,
+    similarityThreshold: parseNumberEnv(process.env.MATCHER_SIMILARITY_THRESHOLD, 0.85),
+    minBufferLength: parseNumberEnv(process.env.MATCHER_MIN_BUFFER_LENGTH, 3),
+    bufferWindow: parseNumberEnv(process.env.MATCHER_BUFFER_WINDOW, 100),
     debug: process.env.DEBUG_MATCHER === 'true',
   });
 
