@@ -141,6 +141,14 @@ export function findBestMatch(
   let bestLineIndex = songContext.currentLineIndex;
   let matchedLineText = '';
 
+  // For better line transition detection, also check if the END of buffer matches next line
+  // This helps with noisy transcripts where buffer contains multiple lines
+  const endWindowWords = 6; // Check last 6 words for line transition
+  const endBuffer = bufferWords.length >= endWindowWords
+    ? bufferWords.slice(-endWindowWords).join(' ')
+    : normalizedBuffer;
+  const normalizedEndBuffer = normalizeText(endBuffer);
+
   for (
     let i = songContext.currentLineIndex;
     i < Math.min(songContext.currentLineIndex + lookAheadWindow, songContext.lines.length);
@@ -149,12 +157,22 @@ export function findBestMatch(
     const line = songContext.lines[i];
     const normalizedLine = normalizeText(line);
 
-    // Calculate similarity
-    const similarity = compareTwoStrings(normalizedBuffer, normalizedLine);
+    // Calculate similarity with full buffer
+    const fullSimilarity = compareTwoStrings(normalizedBuffer, normalizedLine);
+    
+    // Also check if end of buffer matches this line (helps detect transitions)
+    const endSimilarity = i > songContext.currentLineIndex 
+      ? compareTwoStrings(normalizedEndBuffer, normalizedLine)
+      : 0;
+    
+    // Use the higher of the two similarities, but weight end similarity more for next lines
+    const similarity = i > songContext.currentLineIndex
+      ? Math.max(fullSimilarity, endSimilarity * 1.2) // Boost end match for next lines
+      : fullSimilarity;
 
     if (config.debug) {
       console.log(
-        `[MATCHER] Line ${i}: "${normalizedLine.slice(0, 40)}..." → ${(similarity * 100).toFixed(1)}%`
+        `[MATCHER] Line ${i}: "${normalizedLine.slice(0, 40)}..." → ${(similarity * 100).toFixed(1)}% (full: ${(fullSimilarity * 100).toFixed(1)}%, end: ${(endSimilarity * 100).toFixed(1)}%)`
       );
     }
 
@@ -176,16 +194,20 @@ export function findBestMatch(
     if (bestLineIndex === songContext.currentLineIndex) {
       // Still on current line
       result.isLineEnd = false;
+      if (config.debug) {
+        console.log(
+          `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (current line, no advance)`
+        );
+      }
     } else {
       // Moved to next line(s)
       result.isLineEnd = true;
       result.nextLineIndex = bestLineIndex;
-    }
-
-    if (config.debug) {
-      console.log(
-        `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}%`
-      );
+      if (config.debug) {
+        console.log(
+          `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (advancing from ${songContext.currentLineIndex})`
+        );
+      }
     }
   } else {
     if (config.debug) {
