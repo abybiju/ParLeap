@@ -9,6 +9,9 @@ export const isSupabaseConfigured = !!(supabaseUrl && supabaseServiceKey);
 if (!isSupabaseConfigured) {
   console.warn('⚠️  Supabase not configured - using mock data mode');
   console.warn('   Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env for real data');
+} else {
+  console.log('✅ Supabase configured and connected');
+  console.log(`   URL: ${supabaseUrl?.substring(0, 30)}...`);
 }
 
 // Create Supabase client (or null if not configured)
