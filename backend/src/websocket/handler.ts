@@ -297,29 +297,36 @@ function handleTranscriptionResult(
         console.log(
           `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
         );
+        console.log(`[WS] isLineEnd: ${matchResult.isLineEnd}, nextLineIndex: ${matchResult.nextLineIndex}`);
+
+        // Always send DISPLAY_UPDATE with confidence when match found (even if not advancing)
+        const displayMessage: DisplayUpdateMessage = {
+          type: 'DISPLAY_UPDATE',
+          payload: {
+            lineText: matchResult.matchedText,
+            slideIndex: matchResult.isLineEnd && matchResult.nextLineIndex !== undefined 
+              ? matchResult.nextLineIndex 
+              : matchResult.currentLineIndex,
+            songId: session.songContext.id,
+            songTitle: session.songContext.title,
+            matchConfidence: matchResult.confidence,
+            isAutoAdvance: matchResult.isLineEnd || false,
+          },
+          timing: createTiming(receivedAt, processingStart),
+        };
+
+        send(ws, displayMessage);
 
         // Trim buffer after strong match to reduce noise for next lines
         session.rollingBuffer = matchResult.matchedText;
 
-        if (matchResult.nextLineIndex !== undefined && matchResult.isLineEnd) {
+        // Only update slide index if actually advancing
+        if (matchResult.isLineEnd && matchResult.nextLineIndex !== undefined) {
           session.currentSlideIndex = matchResult.nextLineIndex;
           session.songContext.currentLineIndex = matchResult.nextLineIndex;
-
-          const displayMessage: DisplayUpdateMessage = {
-            type: 'DISPLAY_UPDATE',
-            payload: {
-              lineText: matchResult.matchedText,
-              slideIndex: matchResult.nextLineIndex,
-              songId: session.songContext.id,
-              songTitle: session.songContext.title,
-              matchConfidence: matchResult.confidence,
-              isAutoAdvance: true,
-            },
-            timing: createTiming(receivedAt, processingStart),
-          };
-
-          send(ws, displayMessage);
           console.log(`[WS] Auto-advanced to slide ${matchResult.nextLineIndex}`);
+        } else {
+          console.log(`[WS] Matched current line ${matchResult.currentLineIndex} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
         }
       }
     }
