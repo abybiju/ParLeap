@@ -94,45 +94,86 @@ async function seedDatabase() {
     // Get a test user - for this demo, we'll use the service role to create test data
     // In production, you'd use actual authenticated users
     
-    // First, let's create a test user via auth
-    console.log('📝 Creating test user...');
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: 'test@parleap.local',
-      password: 'Test123456!',
-      email_confirm: true,
-    });
+    const testEmail = 'test@parleap.local';
+    const testPassword = 'Test123456!';
+    
+    // First, try to get existing user or create new one
+    console.log('📝 Checking for test user...');
+    let userId: string | undefined;
+    
+    // Try to list users and find existing one
+    const { data: usersData } = await supabase.auth.admin.listUsers();
+    const existingUser = usersData?.users.find(u => u.email === testEmail);
+    
+    if (existingUser) {
+      userId = existingUser.id;
+      console.log(`✅ Found existing user: ${userId}\n`);
+    } else {
+      // Create new user
+      console.log('📝 Creating new test user...');
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: testEmail,
+        password: testPassword,
+        email_confirm: true,
+      });
 
-    if (authError) {
-      console.error('❌ Error creating user:', authError);
-      return;
+      if (authError) {
+        // If error is "email exists", try to get the user
+        if (authError.message?.includes('already been registered') || authError.code === 'email_exists') {
+          console.log('⚠️  User already exists, fetching user ID...');
+          const { data: usersData2 } = await supabase.auth.admin.listUsers();
+          const existingUser2 = usersData2?.users.find(u => u.email === testEmail);
+          if (existingUser2) {
+            userId = existingUser2.id;
+            console.log(`✅ Using existing user: ${userId}\n`);
+          } else {
+            console.error('❌ User exists but could not be found');
+            return;
+          }
+        } else {
+          console.error('❌ Error creating user:', authError);
+          return;
+        }
+      } else {
+        userId = authData.user?.id;
+        if (!userId) {
+          console.error('❌ No user ID returned');
+          return;
+        }
+        console.log(`✅ User created: ${userId}\n`);
+      }
     }
 
-    const userId = authData.user?.id;
     if (!userId) {
-      console.error('❌ No user ID returned');
+      console.error('❌ No user ID available');
       return;
     }
 
-    console.log(`✅ User created: ${userId}\n`);
-
-    // Create profile for the user
-    console.log('📝 Creating user profile...');
+    // Create or update profile for the user
+    console.log('📝 Creating/updating user profile...');
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert([
+      .upsert([
         {
           id: userId,
           username: 'test_user',
           subscription_tier: 'pro',
         },
-      ]);
+      ], {
+        onConflict: 'id'
+      });
 
     if (profileError) {
-      console.error('❌ Error creating profile:', profileError);
-      return;
+      // If profile already exists, that's fine
+      if (profileError.code === '23505') { // Unique violation
+        console.log('✅ Profile already exists, continuing...\n');
+      } else {
+        console.error('❌ Error creating profile:', profileError);
+        return;
+      }
+    } else {
+      console.log('✅ Profile created/updated\n');
     }
-
-    console.log('✅ Profile created\n');
 
     // Create sample songs
     console.log('📝 Creating sample songs...');
