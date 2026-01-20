@@ -42,6 +42,11 @@ export function MatchStatus() {
     return null;
   }
 
+  // If no confidence is provided (e.g., initial DISPLAY_UPDATE), don’t render status
+  if (displayUpdate.payload.matchConfidence === undefined) {
+    return null;
+  }
+
   const confidence = displayUpdate.payload.matchConfidence ?? 0;
   const isAutoAdvance = displayUpdate.payload.isAutoAdvance ?? false;
   const confidencePercent = Math.min(100, Math.round(confidence * 100)); // Cap at 100%

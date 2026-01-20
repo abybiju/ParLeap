@@ -1,7 +1,7 @@
 # 🚀 Deployment Status & Session Summary
 
 **Date:** January 19, 2026  
-**Status:** ✅ **ElevenLabs STT Live + PCM Audio Working + Custom Domain in Progress**
+**Status:** ✅ **ElevenLabs STT Live + PCM Audio Working + Matching Engine Operational + Custom Domain Complete**
 
 ---
 
@@ -35,6 +35,14 @@
   - Streams PCM audio to ElevenLabs.
   - Sends transcript updates via existing protocol.
   - Typed stream callbacks (TS7006 fixed).
+  - **Buffer preprocessing** (filler words, de-duplication, slicing).
+  - **Always sends DISPLAY_UPDATE with confidence** when match found.
+  - **Buffer trimming** after strong matches.
+- `backend/src/services/matcherService.ts`
+  - **Enhanced line transition detection** with end-window lookahead.
+  - **Weighted similarity boost** for next-line matches (capped at 1.0).
+- `frontend/components/operator/MatchStatus.tsx`
+  - **Confidence display capped at 100%**.
 
 ---
 
@@ -52,6 +60,8 @@
 ### Vercel (Frontend)
 - ✅ Deployed with **STT Provider: elevenlabs (PCM mode)** on `/test-websocket`.
 - ✅ Custom domains added: `www.parleap.com` (primary) + `parleap.com` (apex).
+- ✅ SSL certificates active for both domains.
+- ✅ Redirects working: `parleap.com` → `www.parleap.com`.
 
 ---
 
@@ -96,6 +106,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 - ✅ Microphone audio level animates
 - ✅ **Ghost Text shows live ElevenLabs transcription**
 - ✅ `www.parleap.com` resolves in Vercel (valid config)
+- ✅ **MatchStatus displays confidence** (78%, 100% verified)
+- ✅ **Auto-advance triggers** ("Auto-advanced" badge appears)
+- ✅ **Perfect matches detected** with high confidence
+- ✅ Both `parleap.com` and `www.parleap.com` load with HTTPS
 
 ---
 
@@ -112,6 +126,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 
 - ElevenLabs realtime STT is now working end‑to‑end.
 - PCM audio pipeline is active for ElevenLabs.
+- **Fuzzy matching engine is production-ready** with robust buffer preprocessing.
+- **MatchStatus confidence display** working correctly (capped at 100%).
+- **Auto-advance functionality** verified and operational.
 - Supabase can remain on mock fallback until database is healthy.
 
-**Status:** 🟢 **LIVE + VERIFIED**
+**Status:** 🟢 **LIVE + VERIFIED + MATCHING OPERATIONAL**
