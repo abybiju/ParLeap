@@ -74,6 +74,7 @@ interface SessionState {
   matcherConfig: MatcherConfig;
   lastMatchConfidence?: number;
   sttStream?: ReturnType<typeof createStreamingRecognition>;
+  lastTranscriptText?: string;
 }
 
 
@@ -228,6 +229,14 @@ function handleTranscriptionResult(
   receivedAt: number,
   processingStart: number
 ): void {
+  const allowPartialMatching = process.env.MATCHER_ALLOW_PARTIAL === 'true';
+  const shouldAttemptMatch = transcriptionResult.isFinal || allowPartialMatching;
+  const trimmedText = transcriptionResult.text.trim();
+
+  if (trimmedText.length > 0) {
+    session.lastTranscriptText = trimmedText;
+  }
+
   const transcriptMessage: TranscriptUpdateMessage = {
     type: 'TRANSCRIPT_UPDATE',
     payload: {
@@ -240,8 +249,13 @@ function handleTranscriptionResult(
 
   send(ws, transcriptMessage);
 
-  if (transcriptionResult.isFinal) {
-    session.rollingBuffer += ' ' + transcriptionResult.text;
+  if (shouldAttemptMatch) {
+    const matchText = trimmedText.length > 0 ? trimmedText : session.lastTranscriptText;
+    if (!matchText) {
+      return;
+    }
+
+    session.rollingBuffer += ' ' + matchText;
     const words = session.rollingBuffer.split(' ');
     if (words.length > 100) {
       session.rollingBuffer = words.slice(-100).join(' ');
