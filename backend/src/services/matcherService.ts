@@ -167,7 +167,7 @@ export function findBestMatch(
     
     // Use the higher of the two similarities, but weight end similarity more for next lines
     const similarity = i > songContext.currentLineIndex
-      ? Math.max(fullSimilarity, endSimilarity * 1.2) // Boost end match for next lines
+      ? Math.min(1.0, Math.max(fullSimilarity, endSimilarity * 1.2)) // Boost end match for next lines, cap at 1.0
       : fullSimilarity;
 
     if (config.debug) {
