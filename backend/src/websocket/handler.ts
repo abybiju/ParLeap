@@ -56,6 +56,26 @@ function parseNumberEnv(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function preprocessBufferText(text: string, maxWords = 12): string {
+  const fillers = new Set(['uh', 'um', 'oh', 'ah', 'uhh', 'umm', 'hmm']);
+  const words = text
+    .toLowerCase()
+    .replace(/[^\w\s']/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 0)
+    .filter((w) => !fillers.has(w));
+
+  const deduped: string[] = [];
+  for (const w of words) {
+    if (deduped.length === 0 || deduped[deduped.length - 1] !== w) {
+      deduped.push(w);
+    }
+  }
+
+  const sliced = deduped.slice(-maxWords);
+  return sliced.join(' ');
+}
+
 // ============================================
 // Session State
 // ============================================
@@ -138,7 +158,7 @@ async function handleStartSession(
   
   // Initialize matcher configuration
   const matcherConfig: MatcherConfig = validateConfig({
-    similarityThreshold: parseNumberEnv(process.env.MATCHER_SIMILARITY_THRESHOLD, 0.85),
+    similarityThreshold: parseNumberEnv(process.env.MATCHER_SIMILARITY_THRESHOLD, 0.7),
     minBufferLength: parseNumberEnv(process.env.MATCHER_MIN_BUFFER_LENGTH, 3),
     bufferWindow: parseNumberEnv(process.env.MATCHER_BUFFER_WINDOW, 100),
     debug: process.env.DEBUG_MATCHER === 'true',
@@ -261,11 +281,12 @@ function handleTranscriptionResult(
       session.rollingBuffer = words.slice(-100).join(' ');
     }
 
-    console.log(`[WS] Rolling buffer updated: "${session.rollingBuffer.slice(-50)}..."`);
+    const cleanedBuffer = preprocessBufferText(session.rollingBuffer, 12);
+    console.log(`[WS] Rolling buffer updated: "${cleanedBuffer.slice(-50)}..."`);
 
     if (session.songContext) {
       const matchResult = findBestMatch(
-        session.rollingBuffer,
+        cleanedBuffer,
         session.songContext,
         session.matcherConfig
       );
@@ -276,6 +297,9 @@ function handleTranscriptionResult(
         console.log(
           `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
         );
+
+        // Trim buffer after strong match to reduce noise for next lines
+        session.rollingBuffer = matchResult.matchedText;
 
         if (matchResult.nextLineIndex !== undefined && matchResult.isLineEnd) {
           session.currentSlideIndex = matchResult.nextLineIndex;
