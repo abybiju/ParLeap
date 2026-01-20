@@ -255,7 +255,12 @@ export function createSongContext(
   songData: SongData,
   currentLineIndex: number = 0
 ): SongContext {
-  const lines = splitLyricsIntoLines(songData.lyrics || '');
+  // Prefer pre-split lines when provided (e.g., from Supabase fetch)
+  // Fallback to parsing full lyrics if lines are missing
+  const lines =
+    songData.lines && songData.lines.length > 0
+      ? songData.lines
+      : splitLyricsIntoLines(songData.lyrics || '');
 
   return {
     id: songData.id,
