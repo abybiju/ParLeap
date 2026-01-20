@@ -249,7 +249,11 @@ function handleTranscriptionResult(
   receivedAt: number,
   processingStart: number
 ): void {
-  const allowPartialMatching = process.env.MATCHER_ALLOW_PARTIAL === 'true';
+  // Default to allowing partial matching to provide faster feedback
+  const allowPartialMatching =
+    process.env.MATCHER_ALLOW_PARTIAL === undefined
+      ? true
+      : process.env.MATCHER_ALLOW_PARTIAL === 'true';
   const shouldAttemptMatch = transcriptionResult.isFinal || allowPartialMatching;
   const trimmedText = transcriptionResult.text.trim();
 

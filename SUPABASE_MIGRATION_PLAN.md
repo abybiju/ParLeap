@@ -112,6 +112,8 @@
    - Find `SUPABASE_SERVICE_ROLE_KEY`
      - **Old**: `eyJhbGc...` (old key)
      - **New**: `eyJhbGc...` (new service_role key from Step 3)
+   - (Recommended) Find `MATCHER_ALLOW_PARTIAL`
+     - Set to `true` for faster matching on partial transcripts
 
 4. **Disable Mock Fallback** (Optional)
    - Find `SUPABASE_FALLBACK_TO_MOCK`
