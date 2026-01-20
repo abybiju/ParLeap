@@ -219,13 +219,31 @@ Was blind but now I see'
 
 ---
 
-### Step 7: Verify Connection
+### Step 7: Force Railway Redeploy (IMPORTANT!)
 
-1. **Check Backend Logs**
+**Railway doesn't always auto-redeploy when environment variables change. You MUST manually trigger a redeploy.**
+
+1. **Trigger Manual Redeploy**
    - Go to Railway dashboard
-   - Open **Deployments** → Latest deployment → **View Logs**
-   - Look for: `✅ Supabase connected` (or similar)
+   - Select your backend service (`@parleap/backend`)
+   - Go to **Deployments** tab
+   - Click **three dots (⋯)** on latest deployment
+   - Select **"Redeploy"**
+   - Wait for deployment to complete (~2-3 minutes)
+
+   **OR** push an empty commit:
+   ```bash
+   git commit --allow-empty -m "chore: trigger Railway redeploy"
+   git push origin main
+   ```
+
+2. **Check Backend Logs After Redeploy**
+   - Go to Railway dashboard
+   - Open **Deployments** → Latest deployment → **Deploy Logs**
+   - Look for: `✅ Supabase configured and connected`
    - Should NOT see: `⚠️ Supabase not configured - using mock data mode`
+
+**See [RAILWAY_REDEPLOY_GUIDE.md](./RAILWAY_REDEPLOY_GUIDE.md) for detailed redeploy instructions.**
 
 2. **Test WebSocket Connection**
    - Go to: https://www.parleap.com/test-websocket
