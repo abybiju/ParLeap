@@ -175,11 +175,31 @@ async function seedDatabase() {
       console.log('✅ Profile created/updated\n');
     }
 
-    // Create sample songs
+    // Check for existing songs first
+    console.log('📝 Checking for existing songs...');
+    const { data: existingSongs } = await supabase
+      .from('songs')
+      .select('id, title')
+      .eq('user_id', userId);
+
+    const existingSongTitles = new Set(existingSongs?.map(s => s.title) || []);
+    
+    // Create sample songs (skip if already exist)
     console.log('📝 Creating sample songs...');
     const songIds: string[] = [];
 
     for (const songData of SAMPLE_SONGS) {
+      // Skip if song already exists
+      if (existingSongTitles.has(songData.title)) {
+        console.log(`  ⏭️  ${songData.title} (already exists, skipping)`);
+        // Get the existing song ID
+        const existingSong = existingSongs?.find(s => s.title === songData.title);
+        if (existingSong?.id) {
+          songIds.push(existingSong.id);
+        }
+        continue;
+      }
+
       const { data, error } = await supabase
         .from('songs')
         .insert([
@@ -206,48 +226,93 @@ async function seedDatabase() {
 
     console.log(`\n✅ Created ${songIds.length} songs\n`);
 
-    // Create a test event
-    console.log('📝 Creating test event...');
-    const { data: eventData, error: eventError } = await supabase
+    // Check for existing event or create new one
+    console.log('📝 Checking for existing test event...');
+    const eventName = 'Sunday Service - December 14, 2025';
+    
+    const { data: existingEvents } = await supabase
       .from('events')
-      .insert([
-        {
-          user_id: userId,
-          name: 'Sunday Service - December 14, 2025',
-          event_date: new Date('2025-12-14T10:00:00').toISOString(),
-          status: 'draft',
-        },
-      ])
       .select('id')
-      .single();
+      .eq('user_id', userId)
+      .eq('name', eventName)
+      .limit(1);
 
-    if (eventError || !eventData) {
-      console.error('❌ Error creating event:', eventError);
-      return;
+    let eventId: string;
+    
+    if (existingEvents && existingEvents.length > 0) {
+      eventId = existingEvents[0].id;
+      console.log(`✅ Found existing event: ${eventId}\n`);
+    } else {
+      // Create a test event
+      console.log('📝 Creating new test event...');
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .insert([
+          {
+            user_id: userId,
+            name: eventName,
+            event_date: new Date('2025-12-14T10:00:00').toISOString(),
+            status: 'draft',
+          },
+        ])
+        .select('id')
+        .single();
+
+      if (eventError || !eventData) {
+        console.error('❌ Error creating event:', eventError);
+        return;
+      }
+
+      eventId = eventData.id;
+      console.log(`✅ Event created: ${eventId}\n`);
     }
 
-    const eventId = eventData.id;
-    console.log(`✅ Event created: ${eventId}\n`);
+    // Check existing setlist items
+    const { data: existingItems } = await supabase
+      .from('event_items')
+      .select('song_id, sequence_order')
+      .eq('event_id', eventId);
 
-    // Add songs to the event setlist
+    const existingSequenceOrders = new Set(existingItems?.map(item => item.sequence_order) || []);
+    
+    // Add songs to the event setlist (skip if already added)
     console.log('📝 Adding songs to setlist...');
+    let addedCount = 0;
     for (let i = 0; i < songIds.length; i++) {
+      const sequenceOrder = i + 1;
+      
+      // Skip if this sequence order already exists
+      if (existingSequenceOrders.has(sequenceOrder)) {
+        console.log(`  ⏭️  Song ${sequenceOrder} (already in setlist, skipping)`);
+        continue;
+      }
+
       const { error } = await supabase
         .from('event_items')
         .insert([
           {
             event_id: eventId,
             song_id: songIds[i],
-            sequence_order: i + 1,
+            sequence_order: sequenceOrder,
           },
         ]);
 
       if (error) {
+        // If it's a unique constraint error, skip
+        if (error.code === '23505') {
+          console.log(`  ⏭️  Song ${sequenceOrder} (already exists, skipping)`);
+          continue;
+        }
         console.error(`❌ Error adding song to setlist:`, error);
         continue;
       }
 
-      console.log(`  ✅ Song ${i + 1} added to setlist`);
+      console.log(`  ✅ Song ${sequenceOrder} added to setlist`);
+      addedCount++;
+    }
+    
+    if (addedCount === 0 && songIds.length > 0) {
+      console.log('  ℹ️  All songs already in setlist\n');
     }
 
     console.log('\n🎉 Database seed complete!\n');
