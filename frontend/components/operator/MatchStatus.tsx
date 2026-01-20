@@ -44,7 +44,7 @@ export function MatchStatus() {
 
   const confidence = displayUpdate.payload.matchConfidence ?? 0;
   const isAutoAdvance = displayUpdate.payload.isAutoAdvance ?? false;
-  const confidencePercent = Math.round(confidence * 100);
+  const confidencePercent = Math.min(100, Math.round(confidence * 100)); // Cap at 100%
 
   const getConfidenceColor = () => {
     if (confidence >= 0.85) return 'text-green-400';
