@@ -10,6 +10,18 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### January 20, 2026 - MatchStatus Confidence Bug Fixes
+- 🔧 **Critical Bug Fix**: MatchStatus not showing confidence percentage
+  - **Root Cause**: ElevenLabs sends cumulative transcripts (each includes all previous words), but handler was appending to buffer, causing massive duplication
+  - **Fix**: For ElevenLabs, REPLACE rolling buffer instead of appending
+  - **Fix**: Changed threshold comparison from `>` to `>=` for consistency with matcher logic
+  - **Fix**: `createSongContext` now uses provided `lines` from Supabase setlist instead of parsing empty `lyrics` field
+  - **Enhancement**: Added always-on logging for matcher attempts (shows in Railway logs without DEBUG_MATCHER)
+  - **Enhancement**: Increased buffer preprocessing window from 12 to 15 words
+  - **Commits**: `bc83e03` (buffer handling), `ea79be2` (song context)
+  - **Status**: Code pushed to GitHub, pending Railway manual deployment
+  - **Note**: Railway auto-deploy not working, requires manual trigger
+
 ### January 19, 2026 - ElevenLabs STT Integration & Matching Engine Production-Ready
 - ✅ **ElevenLabs Realtime STT**: Fully integrated and working end-to-end
 - ✅ **PCM Audio Capture**: Implemented for ElevenLabs streaming

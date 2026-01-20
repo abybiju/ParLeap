@@ -1,7 +1,7 @@
 # ParLeap - Complete Project Status
 
-**Last Updated:** January 19, 2026  
-**Status:** 🟢 **LIVE + VERIFIED + MATCHING OPERATIONAL**
+**Last Updated:** January 20, 2026  
+**Status:** 🟡 **LIVE + MATCHER FIXES PENDING DEPLOYMENT**
 
 ---
 
@@ -298,6 +298,17 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 
 ## 📅 Recent Updates
 
+### January 20, 2026
+- 🔧 **MatchStatus Confidence Fix**: Fixed critical bug preventing MatchStatus from displaying
+  - **Root Cause**: ElevenLabs sends cumulative transcripts, but code was appending (causing duplication)
+  - **Fix**: Replace rolling buffer for ElevenLabs instead of appending
+  - **Fix**: Changed threshold comparison from `>` to `>=` for consistency
+  - **Fix**: Song context now uses provided `lines` from Supabase instead of parsing empty `lyrics`
+  - **Enhancement**: Added always-on logging for matcher attempts (not just DEBUG_MATCHER)
+  - **Enhancement**: Increased buffer window from 12 to 15 words
+  - **Status**: Code committed (`bc83e03`, `ea79be2`) but pending Railway deployment
+  - **Note**: Railway auto-deploy not working, requires manual trigger
+
 ### January 19, 2026
 - ✅ ElevenLabs realtime STT integration complete
 - ✅ PCM audio capture implemented
@@ -331,6 +342,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 1. **Supabase Database**: Stuck in pausing state, using mock data fallback
    - **Workaround**: `SUPABASE_FALLBACK_TO_MOCK=true` enabled
    - **Action**: Wait for Supabase recovery or create new project
+
+2. **Railway Auto-Deploy**: Not automatically deploying on git push
+   - **Workaround**: Manual deploy trigger required in Railway dashboard
+   - **Action**: Check Railway Settings → Source → Auto Deploy configuration
+
+3. **MatchStatus Confidence**: Fixes committed but not yet deployed
+   - **Status**: Code fixes in commits `bc83e03` and `ea79be2`
+   - **Action**: Manually trigger Railway deployment to apply fixes
 
 ### Next Steps (Priority Order)
 1. **Supabase Recovery**: Restore database and migrate to real data

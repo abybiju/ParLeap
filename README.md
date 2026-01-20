@@ -4,7 +4,7 @@ Real-time AI-powered presentation orchestration platform.
 
 ## 🟢 Current Status
 
-**Last Updated:** January 19, 2026
+**Last Updated:** January 20, 2026
 
 ### Live Deployments
 - **Frontend**: [www.parleap.com](https://www.parleap.com) (Vercel)
@@ -17,6 +17,12 @@ Real-time AI-powered presentation orchestration platform.
 - ✅ **Fuzzy Matching**: Production-ready matching engine with auto-advance
 - ✅ **WebSocket Protocol**: Full bidirectional communication
 - ✅ **Custom Domain**: www.parleap.com with SSL certificates
+
+### Recent Fixes (Jan 20, 2026)
+- 🔧 **MatchStatus Confidence**: Fixed bug preventing confidence display
+  - Fixed ElevenLabs cumulative transcript handling
+  - Fixed song context building from Supabase data
+  - Code committed, pending Railway deployment
 
 ### Quick Status Check
 For complete project status, see **[PROJECT_STATUS_COMPLETE.md](./PROJECT_STATUS_COMPLETE.md)**
