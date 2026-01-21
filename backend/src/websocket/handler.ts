@@ -119,6 +119,22 @@ function sendError(ws: WebSocket, code: string, message: string, details?: unkno
   send(ws, errorMessage);
 }
 
+/**
+ * Broadcast a message to all WebSocket clients connected to the same eventId
+ */
+function broadcastToEvent(eventId: string, message: ServerMessage): void {
+  let sentCount = 0;
+  for (const [ws, session] of sessions.entries()) {
+    if (session.eventId === eventId && session.isActive && ws.readyState === ws.OPEN) {
+      send(ws, message);
+      sentCount++;
+    }
+  }
+  if (sentCount > 0) {
+    console.log(`[WS] Broadcasted ${message.type} to ${sentCount} client(s) for event ${eventId}`);
+  }
+}
+
 // ============================================
 // Message Handlers
 // ============================================
@@ -353,7 +369,7 @@ function handleTranscriptionResult(
           timing: createTiming(receivedAt, processingStart),
         };
 
-        send(ws, displayMessage);
+        broadcastToEvent(session.eventId, displayMessage);
 
         // Trim buffer after strong match to reduce noise for next lines
         session.rollingBuffer = matchResult.matchedText;
@@ -551,7 +567,7 @@ function handleManualOverride(
     },
     timing,
   };
-  send(ws, displayUpdate);
+  broadcastToEvent(session.eventId, displayUpdate);
 
   console.log(`[WS] Manual override: ${action} -> Song ${newSongIndex}, Slide ${newSlideIndex}${songChanged ? ' (song changed)' : ''}`);
 }
