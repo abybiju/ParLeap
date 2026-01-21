@@ -94,8 +94,9 @@ async function seedDatabase() {
     // Get a test user - for this demo, we'll use the service role to create test data
     // In production, you'd use actual authenticated users
     
-    const testEmail = 'test@parleap.local';
-    const testPassword = 'Test123456!';
+    // Use the actual user's email - change this to seed for your account
+    const testEmail = process.env.SEED_USER_EMAIL || 'abybaiju7@gmail.com';
+    const testPassword = 'Test123456!'; // Only used if creating new user
     
     // First, try to get existing user or create new one
     console.log('📝 Checking for test user...');
