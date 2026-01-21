@@ -38,7 +38,7 @@ export function GhostText() {
       const displayMsg = lastMessage as DisplayUpdateMessage;
       
       if (displayMsg.payload.isAutoAdvance) {
-        // Auto-advance detected
+        // Auto-advance detected - keep showing ghost text, just highlight
         setIsAutoAdvancing(true);
         setMatchConfidence(displayMsg.payload.matchConfidence ?? 0);
         setLastMatchedLine(displayMsg.payload.lineText);
@@ -51,11 +51,11 @@ export function GhostText() {
         setTimeout(() => {
           setIsAutoAdvancing(false);
         }, 2000);
+      } else {
+        // Manual slide change - clear ghost text
+        bufferRef.current = '';
+        setTranscript('');
       }
-      
-      // Clear buffer on manual slide change
-      bufferRef.current = '';
-      setTranscript('');
       return;
     }
 
