@@ -16,18 +16,43 @@ interface ProjectorDisplayProps {
  * Shows only lyrics with smooth transitions
  */
 export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
-  const { state, isConnected, startSession, lastMessage } = useWebSocket(true); // Auto-connect
+  const { state, isConnected, startSession, lastMessage, connect } = useWebSocket(false); // Don't auto-connect - match OperatorHUD pattern
   const [currentSlide, setCurrentSlide] = useState<DisplayUpdateMessage | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Auto-start session when connected
+  // Auto-connect on mount (but don't auto-start session)
   useEffect(() => {
-    if (isConnected && !sessionStarted) {
-      startSession(eventId);
-      setSessionStarted(true);
+    if (state === 'disconnected') {
+      console.log('[ProjectorDisplay] Auto-connecting WebSocket...');
+      connect();
     }
-  }, [isConnected, eventId, startSession, sessionStarted]);
+  }, [state, connect]);
+
+  // Auto-start session when connected (same pattern as OperatorHUD)
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    
+    if (isConnected && !sessionStarted) {
+      // Wait a bit for connection to stabilize
+      timer = setTimeout(() => {
+        if (isConnected) {
+          console.log('[ProjectorDisplay] Connection stable, starting session for event:', eventId);
+          startSession(eventId);
+          setSessionStarted(true);
+        }
+      }, 1000);
+    }
+    
+    // Reset session started flag when disconnected
+    if (state === 'disconnected') {
+      setSessionStarted(false);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isConnected, eventId, startSession, sessionStarted, state]);
 
   // Handle display updates
   useEffect(() => {
