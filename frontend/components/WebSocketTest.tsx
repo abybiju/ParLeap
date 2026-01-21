@@ -339,10 +339,18 @@ export function WebSocketTest() {
           </div>
         )}
 
-        {/* Ghost Text */}
+        {/* Real-Time Display Section */}
         {isConnected && (
           <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-slate-200">Real-Time Display</h3>
+              <span className="text-xs text-slate-500">(Live transcription + AI matching)</span>
+            </div>
+            
+            {/* Ghost Text - Shows live transcription */}
             <GhostText />
+            
+            {/* Match Status - Shows confidence when match found */}
             <MatchStatus />
           </div>
         )}
