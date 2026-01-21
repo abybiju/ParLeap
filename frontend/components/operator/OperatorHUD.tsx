@@ -43,16 +43,38 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
   const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
   const audioCapture = useAudioCapture({ usePcm: sttProvider === 'elevenlabs' });
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [connectionStable, setConnectionStable] = useState(false);
 
-  // Auto-start session when connected
+  // Wait for stable connection before allowing session start
   useEffect(() => {
-    console.log('[OperatorHUD] Connection state:', { isConnected, state, sessionStarted, eventId });
-    if (isConnected && !sessionStarted) {
+    let timer: NodeJS.Timeout | null = null;
+    
+    if (state === 'connected' && !connectionStable) {
+      // Add a small delay to ensure WebSocket is truly ready
+      timer = setTimeout(() => {
+        console.log('[OperatorHUD] Connection stabilized');
+        setConnectionStable(true);
+      }, 500);
+    }
+    
+    if (state !== 'connected') {
+      setConnectionStable(false);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [state, connectionStable]);
+
+  // Auto-start session when connection is stable
+  useEffect(() => {
+    console.log('[OperatorHUD] Connection state:', { isConnected, state, sessionStarted, connectionStable, eventId });
+    if (connectionStable && !sessionStarted) {
       console.log('[OperatorHUD] Starting session for event:', eventId);
       startSession(eventId);
       setSessionStarted(true);
     }
-  }, [isConnected, eventId, startSession, sessionStarted, state]);
+  }, [connectionStable, eventId, startSession, sessionStarted, isConnected, state]);
 
   // Auto-start audio capture when session starts
   useEffect(() => {
