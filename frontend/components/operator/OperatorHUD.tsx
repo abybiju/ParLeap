@@ -46,15 +46,21 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
 
   // Auto-start session when connected
   useEffect(() => {
+    console.log('[OperatorHUD] Connection state:', { isConnected, state, sessionStarted, eventId });
     if (isConnected && !sessionStarted) {
+      console.log('[OperatorHUD] Starting session for event:', eventId);
       startSession(eventId);
       setSessionStarted(true);
     }
-  }, [isConnected, eventId, startSession, sessionStarted]);
+  }, [isConnected, eventId, startSession, sessionStarted, state]);
 
   // Auto-start audio capture when session starts
   useEffect(() => {
+    if (lastMessage) {
+      console.log('[OperatorHUD] Received message:', lastMessage.type, lastMessage);
+    }
     if (lastMessage && isSessionStartedMessage(lastMessage)) {
+      console.log('[OperatorHUD] Session started! Setlist:', lastMessage.payload.setlist);
       if (!audioCapture.state.isRecording && audioCapture.state.permissionState === 'granted') {
         audioCapture.start().catch((error) => {
           console.error('Failed to start audio capture:', error);
