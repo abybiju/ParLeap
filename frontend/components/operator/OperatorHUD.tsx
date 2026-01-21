@@ -44,37 +44,59 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
   const audioCapture = useAudioCapture({ usePcm: sttProvider === 'elevenlabs' });
   const [sessionStarted, setSessionStarted] = useState(false);
   const [connectionStable, setConnectionStable] = useState(false);
+  const [pongReceived, setPongReceived] = useState(false);
 
-  // Wait for stable connection before allowing session start
+  // Reset session state when connection drops
+  useEffect(() => {
+    if (state !== 'connected') {
+      setSessionStarted(false);
+      setConnectionStable(false);
+      setPongReceived(false);
+    }
+  }, [state]);
+
+  // Track PONG messages to confirm bidirectional communication
+  useEffect(() => {
+    if (lastMessage && lastMessage.type === 'PONG') {
+      console.log('[OperatorHUD] PONG received - connection confirmed bidirectional');
+      setPongReceived(true);
+    }
+  }, [lastMessage]);
+
+  // Wait for stable connection AND PONG before allowing session start
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     
     if (state === 'connected' && !connectionStable) {
-      // Add a small delay to ensure WebSocket is truly ready
+      // Wait longer (1.5s) and require PONG response for true stability
       timer = setTimeout(() => {
-        console.log('[OperatorHUD] Connection stabilized');
-        setConnectionStable(true);
-      }, 500);
-    }
-    
-    if (state !== 'connected') {
-      setConnectionStable(false);
+        if (pongReceived || state === 'connected') {
+          console.log('[OperatorHUD] Connection stabilized', { pongReceived });
+          setConnectionStable(true);
+        }
+      }, 1500);
     }
     
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [state, connectionStable]);
+  }, [state, connectionStable, pongReceived]);
 
   // Auto-start session when connection is stable
   useEffect(() => {
-    console.log('[OperatorHUD] Connection state:', { isConnected, state, sessionStarted, connectionStable, eventId });
-    if (connectionStable && !sessionStarted) {
+    console.log('[OperatorHUD] Connection state:', { isConnected, state, sessionStarted, connectionStable, pongReceived, eventId });
+    if (connectionStable && !sessionStarted && isConnected) {
       console.log('[OperatorHUD] Starting session for event:', eventId);
-      startSession(eventId);
-      setSessionStarted(true);
+      // Double-check connection before sending
+      if (isConnected) {
+        startSession(eventId);
+        setSessionStarted(true);
+      } else {
+        console.warn('[OperatorHUD] Connection not ready, delaying session start');
+        setConnectionStable(false);
+      }
     }
-  }, [connectionStable, eventId, startSession, sessionStarted, isConnected, state]);
+  }, [connectionStable, eventId, startSession, sessionStarted, isConnected, state, pongReceived]);
 
   // Auto-start audio capture when session starts
   useEffect(() => {
