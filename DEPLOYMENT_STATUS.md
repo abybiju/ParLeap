@@ -1,7 +1,7 @@
 # 🚀 Deployment Status & Session Summary
 
-**Date:** January 19, 2026  
-**Status:** ✅ **ElevenLabs STT Live + PCM Audio Working + Matching Engine Operational + Custom Domain Complete**
+**Date:** January 21, 2026  
+**Status:** ✅ **Operator Console Live + Real-time Sync Working + Supabase Connected**
 
 ---
 
@@ -12,6 +12,14 @@
 - **ElevenLabs backend streaming** integrated and active in Railway logs.
 - **WebSocket test UI** shows active STT provider and PCM mode.
 - **End-to-end transcript** confirmed live in Ghost Text.
+
+## ✅ January 21, 2026 Updates
+
+- **Operator Console**: Complete dashboard, operator HUD, and projector view deployed
+- **WebSocket Stability**: Connection issues resolved, stable connections verified
+- **Broadcast Sync**: Real-time synchronization between operator and projector views working
+- **Supabase**: Real database integration, no more mock fallback
+- **CORS**: Updated to allow www.parleap.com (custom domain)
 
 ---
 
@@ -73,7 +81,7 @@ PORT=3001
 NODE_ENV=production
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
-CORS_ORIGIN=https://par-leap.vercel.app
+CORS_ORIGIN=https://www.parleap.com
 
 STT_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=...
@@ -129,6 +137,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 - **Fuzzy matching engine is production-ready** with robust buffer preprocessing.
 - **MatchStatus confidence display** working correctly (capped at 100%).
 - **Auto-advance functionality** verified and operational.
-- Supabase can remain on mock fallback until database is healthy.
+- Supabase database now connected with real data (no more mock fallback).
 
-**Status:** 🟢 **LIVE + VERIFIED + MATCHING OPERATIONAL**
+**Status:** 🟢 **FULLY OPERATIONAL - OPERATOR CONSOLE LIVE + REAL-TIME SYNC WORKING**
