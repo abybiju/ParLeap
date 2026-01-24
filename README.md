@@ -4,11 +4,14 @@ Real-time AI-powered presentation orchestration platform.
 
 ## 🟢 Current Status
 
-**Last Updated:** January 20, 2026
+**Last Updated:** January 21, 2026
 
 ### Live Deployments
 - **Frontend**: [www.parleap.com](https://www.parleap.com) (Vercel)
 - **Backend**: [parleapbackend-production.up.railway.app](https://parleapbackend-production.up.railway.app) (Railway)
+- **Dashboard**: [/dashboard](https://www.parleap.com/dashboard)
+- **Operator View**: [/live/[eventId]](https://www.parleap.com/live/[eventId])
+- **Projector View**: [/projector/[eventId]](https://www.parleap.com/projector/[eventId])
 - **Test Page**: [/test-websocket](https://www.parleap.com/test-websocket)
 
 ### What's Working Now
@@ -17,12 +20,24 @@ Real-time AI-powered presentation orchestration platform.
 - ✅ **Fuzzy Matching**: Production-ready matching engine with auto-advance
 - ✅ **WebSocket Protocol**: Full bidirectional communication
 - ✅ **Custom Domain**: www.parleap.com with SSL certificates
+- ✅ **Operator Console**: Complete dashboard, operator HUD, and projector view
+- ✅ **Real-time Sync**: Operator and projector views synchronized
+- ✅ **Cross-device**: Works on any computer, tablet, or phone
+- ✅ **Supabase Database**: Real data integration (no more mock fallback)
 
-### Recent Fixes (Jan 20, 2026)
-- 🔧 **MatchStatus Confidence**: Fixed bug preventing confidence display
-  - Fixed ElevenLabs cumulative transcript handling
-  - Fixed song context building from Supabase data
-  - Code committed, pending Railway deployment
+### Recent Updates (Jan 21, 2026)
+- ✅ **Operator Console Sprint**: Complete production-ready interface
+  - Event selector dashboard with card grid
+  - Three-panel operator HUD (Ghost Text | Slide Display | Setlist)
+  - Full-screen projector view for audience
+- 🔧 **WebSocket Stability**: Fixed intermittent connection issues
+  - Changed to manual connect pattern (matching test page)
+  - Added connection stabilization delay
+  - Stable connections, no more "CONNECTING" loops
+- 🔧 **Broadcast Synchronization**: Fixed projector view updates
+  - Added broadcastToEvent() helper function
+  - Manual overrides and AI auto-advances now broadcast to all clients
+  - Perfect real-time synchronization between views
 
 ### Quick Status Check
 For complete project status, see **[PROJECT_STATUS_COMPLETE.md](./PROJECT_STATUS_COMPLETE.md)**
@@ -111,7 +126,7 @@ For complete deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
    - CORS middleware configured
    - Health check endpoint (`/health`)
    - Environment variables configured
-4. ⚠️ **Supabase**: Using mock data fallback (database recovery pending)
+4. ✅ **Supabase**: Real database integration (migrations complete, data seeded)
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 
