@@ -28,6 +28,7 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - **Frontend**: https://www.parleap.com (primary) | https://parleap.com (redirects to www)
 - **Backend**: https://parleapbackend-production.up.railway.app
 - **Dashboard**: https://www.parleap.com/dashboard
+- **Songs Library**: https://www.parleap.com/songs
 - **Operator View**: https://www.parleap.com/live/[eventId]
 - **Projector View**: https://www.parleap.com/projector/[eventId]
 - **Test Page**: https://www.parleap.com/test-websocket
@@ -120,7 +121,7 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - ✅ MicrophoneStatus component (permission/status display)
 - ✅ WebSocketTest page (end-to-end testing)
 
-### Phase 4: Frontend Features (Partial)
+### Phase 4: Frontend Features (In Progress)
 
 #### 4.1 Authentication & User Management ✅
 - ✅ Supabase Auth integration
@@ -128,6 +129,19 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - ✅ Protected routes (middleware)
 - ⏭️ User profile management (pending)
 - ⏭️ Subscription tier handling (pending)
+
+#### 4.2 Content Library ✅
+- ✅ **Songs Library** (`/songs`) - Complete CRUD interface
+  - ✅ DataTable with fuzzy search and sorting
+  - ✅ Song Editor Modal with split-view (raw input | live preview)
+  - ✅ Stanza-aware parsing and preview cards
+  - ✅ localStorage draft auto-save with recovery
+  - ✅ Server Actions (createSong, updateSong, deleteSong)
+  - ✅ CCLI number field support
+  - ✅ Line count badges
+  - ✅ Real-time stanza preview
+  - ✅ Delete confirmation dialogs
+  - ✅ Toast notifications (Sonner)
 
 #### 4.4 Live Presentation Views ✅
 - ✅ **Operator Dashboard** (`/dashboard`)
@@ -318,6 +332,22 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ---
 
 ## 📅 Recent Updates
+
+### January 25, 2026
+- ✅ **Songs Library - Notion-Style Implementation**: Complete CRUD interface for song management
+  - ✅ Song Library page (`/songs`) with DataTable (sortable, searchable)
+  - ✅ Song Editor Modal with split-view (raw input | live preview)
+  - ✅ Stanza-aware parsing and glassmorphism preview cards
+  - ✅ localStorage draft auto-save with recovery prompts
+  - ✅ Server Actions for CRUD operations (createSong, updateSong, deleteSong)
+  - ✅ CCLI number field added to songs table (migration 002)
+  - ✅ Zod validation schema for songs
+  - ✅ useSongDraft hook for draft management
+  - ✅ Sonner toast notifications integrated
+  - ✅ Shadcn components installed (dialog, input, textarea, button, table, badge)
+  - ✅ react-hook-form + @hookform/resolvers for form management
+  - ✅ @tanstack/react-table for advanced table features
+  - **Features**: Fuzzy search, sortable columns, line count badges, real-time stanza preview, auto-save drafts
 
 ### January 21, 2026
 - ✅ **Operator Console Sprint Complete**: Built production-ready operator interface

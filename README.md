@@ -10,6 +10,7 @@ Real-time AI-powered presentation orchestration platform.
 - **Frontend**: [www.parleap.com](https://www.parleap.com) (Vercel)
 - **Backend**: [parleapbackend-production.up.railway.app](https://parleapbackend-production.up.railway.app) (Railway)
 - **Dashboard**: [/dashboard](https://www.parleap.com/dashboard)
+- **Songs Library**: [/songs](https://www.parleap.com/songs)
 - **Operator View**: [/live/[eventId]](https://www.parleap.com/live/[eventId])
 - **Projector View**: [/projector/[eventId]](https://www.parleap.com/projector/[eventId])
 - **Test Page**: [/test-websocket](https://www.parleap.com/test-websocket)
@@ -24,8 +25,22 @@ Real-time AI-powered presentation orchestration platform.
 - ✅ **Real-time Sync**: Operator and projector views synchronized
 - ✅ **Cross-device**: Works on any computer, tablet, or phone
 - ✅ **Supabase Database**: Real data integration (no more mock fallback)
+- ✅ **Songs Library**: Notion-style CRUD interface with stanza-aware editor
 
-### Recent Updates (Jan 21, 2026)
+### Recent Updates
+
+**January 25, 2026**
+- ✅ **Songs Library**: Complete Notion-style song management interface
+  - DataTable with fuzzy search and sorting
+  - Split-view editor (raw input | live preview)
+  - Stanza-aware parsing with glassmorphism preview cards
+  - localStorage draft auto-save with recovery
+  - Full CRUD operations (create, update, delete)
+  - CCLI number support
+  - Line count badges
+  - Toast notifications
+
+**January 21, 2026**
 - ✅ **Operator Console Sprint**: Complete production-ready interface
   - Event selector dashboard with card grid
   - Three-panel operator HUD (Ghost Text | Slide Display | Setlist)
@@ -204,7 +219,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 
 ### Phase 4: Frontend Features ⏭️ In Progress
 - ✅ **4.1 Authentication** ✅ (Partial)
-- ⏭️ **4.2 Content Library** (Pending)
+- ✅ **4.2 Content Library** ✅ (Songs Library Complete)
 - ⏭️ **4.3 Event Management** (Pending)
 - ✅ **4.4 Live Presentation Views** ✅ (Partial - Operator Dashboard)
 - ✅ **4.5 State Management** ✅ (Partial)
