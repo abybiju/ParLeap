@@ -30,6 +30,7 @@ export interface Database {
           subscription_tier?: 'free' | 'pro' | 'team'
           updated_at?: string
         }
+        Relationships: []
       }
       songs: {
         Row: {
@@ -38,6 +39,7 @@ export interface Database {
           title: string
           artist: string | null
           lyrics: string
+          ccli_number: string | null
           created_at: string
           updated_at: string
         }
@@ -47,6 +49,7 @@ export interface Database {
           title: string
           artist?: string | null
           lyrics: string
+          ccli_number?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -56,8 +59,18 @@ export interface Database {
           title?: string
           artist?: string | null
           lyrics?: string
+          ccli_number?: string | null
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'songs_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
       events: {
         Row: {
@@ -86,6 +99,15 @@ export interface Database {
           status?: 'draft' | 'live' | 'ended'
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'events_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
       }
       event_items: {
         Row: {
@@ -108,6 +130,22 @@ export interface Database {
           song_id?: string
           sequence_order?: number
         }
+        Relationships: [
+          {
+            foreignKeyName: 'event_items_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'event_items_song_id_fkey'
+            columns: ['song_id']
+            isOneToOne: false
+            referencedRelation: 'songs'
+            referencedColumns: ['id']
+          }
+        ]
       }
     }
     Views: {
@@ -117,6 +155,9 @@ export interface Database {
       [_ in never]: never
     }
     Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
       [_ in never]: never
     }
   }
