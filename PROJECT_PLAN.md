@@ -10,6 +10,23 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### January 25, 2026 - Songs Library Implementation Complete
+- ✅ **Songs Library - Notion-Style Implementation**: Complete CRUD interface for song management
+  - ✅ Song Library page (`/songs`) with DataTable (sortable, searchable)
+  - ✅ Song Editor Modal with split-view (raw input | live preview)
+  - ✅ Stanza-aware parsing and glassmorphism preview cards
+  - ✅ localStorage draft auto-save with recovery prompts
+  - ✅ Server Actions for CRUD operations (createSong, updateSong, deleteSong)
+  - ✅ CCLI number field added to songs table (migration 002)
+  - ✅ Zod validation schema for songs
+  - ✅ useSongDraft hook for draft management
+  - ✅ Sonner toast notifications integrated
+  - ✅ Shadcn components installed (dialog, input, textarea, button, table, badge)
+  - ✅ react-hook-form + @hookform/resolvers for form management
+  - ✅ @tanstack/react-table for advanced table features
+  - **Features**: Fuzzy search, sortable columns, line count badges, real-time stanza preview, auto-save drafts
+  - **Status**: Code committed locally, pending push to GitHub and deployment
+
 ### January 21, 2026 - Operator Console Sprint Complete
 - ✅ **Operator Console Implementation**: Complete production-ready interface
   - Event Selector Dashboard (`/dashboard`) - Lists user events with card grid
