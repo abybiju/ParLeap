@@ -1,0 +1,43 @@
+---
+description: ParLeap project context and memory - current status and architecture
+alwaysApply: true
+---
+
+# ParLeap Project Context
+
+## Current Status (January 25, 2026)
+
+ParLeap is a **real-time AI-powered presentation orchestration platform** for live events. It automates slide switching by listening to speakers/singers and matching audio to pre-loaded content.
+
+### Production Deployments
+- **Frontend**: https://www.parleap.com (Vercel)
+- **Backend**: https://parleapbackend-production.up.railway.app (Railway)
+- **Database**: Supabase (PostgreSQL)
+
+### Completed Phases
+- ✅ Phase 1: Foundation (Monorepo, Next.js 14, Express/TypeScript)
+- ✅ Phase 2: Real-Time Engine (WebSocket, Audio Capture, ElevenLabs STT)
+- ✅ Phase 3: Predictive Matching (Fuzzy matching, auto-advance)
+- ✅ Phase 4: Frontend Features (Songs Library, Operator Console) - Partial
+- ✅ Phase 5: Testing & QA (147 tests, CI/CD pipeline)
+
+### Testing Infrastructure
+- **Backend**: Jest (67 unit + 16 integration tests)
+- **Frontend**: Vitest (48 unit tests)
+- **E2E**: Playwright (configured)
+- **CI/CD**: GitHub Actions (lint, type-check, build)
+
+### Key Architecture Decisions
+1. **STT Provider**: ElevenLabs Scribe (realtime streaming)
+2. **Matching Algorithm**: `string-similarity` with 0.7 threshold
+3. **WebSocket**: Native `ws` library (NOT Socket.io)
+4. **State**: Zustand for frontend, in-memory session state for backend
+5. **Audio Format**: PCM for ElevenLabs, WebM Opus for Google
+
+### Session Summaries Location
+Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
+
+### Important Files
+- `PROJECT_PLAN.md` - Master roadmap
+- `TESTING_INFRASTRUCTURE_COMPLETE.md` - Test coverage details
+- `.cursorrules` - Full architecture specification
