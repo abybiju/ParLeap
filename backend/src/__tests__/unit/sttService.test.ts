@@ -106,9 +106,9 @@ describe('STT Service', () => {
       const { createStreamingRecognition } = await import('../../services/sttService');
       
       const stream = createStreamingRecognition();
-      const results: Array<{ text: string; isFinal: boolean }> = [];
+      const results: Array<{ text: string; isFinal: boolean; confidence?: number }> = [];
       
-      stream.on('data', (result) => {
+      stream.on('data', (result: { text: string; isFinal: boolean; confidence?: number }) => {
         results.push(result);
       });
       
@@ -147,7 +147,7 @@ describe('STT Service', () => {
       const stream = createStreamingRecognition();
       const errors: Error[] = [];
       
-      stream.on('error', (error) => {
+      stream.on('error', (error: Error) => {
         errors.push(error);
       });
       

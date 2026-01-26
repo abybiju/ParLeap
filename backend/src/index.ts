@@ -66,7 +66,8 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const key = getClientKey(req);
   if (isHttpRateLimited(key)) {
-    return res.status(429).json({ error: 'Rate limit exceeded' });
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
   }
   next();
 });

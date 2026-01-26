@@ -118,7 +118,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     }
 
     // 3. Parse lyrics into lines for each song
-    const songs: SongData[] = eventItems
+    const songs = eventItems
       .map((item) => {
         const songInfo = item.songs as unknown as (SongData & { lyrics: string }) | null;
         if (!songInfo) {
@@ -126,12 +126,13 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
           return null;
         }
 
-        return {
+        const songData: SongData = {
           id: songInfo.id,
           title: songInfo.title,
-          artist: songInfo.artist,
+          artist: songInfo.artist || undefined,
           lines: parseLyrics(songInfo.lyrics),
         };
+        return songData;
       })
       .filter((song): song is SongData => song !== null);
 

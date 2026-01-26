@@ -11,10 +11,22 @@ vi.mock('../../latency/tracker', () => ({
 }));
 
 describe('WebSocketClient', () => {
-  let mockWebSocket: any;
-  let mockWebSocketConstructor: any;
-  let WebSocketClient: any;
-  let client: any;
+  let mockWebSocket: {
+    send: jest.Mock;
+    close: jest.Mock;
+    readyState: number;
+    on: jest.Mock;
+    CONNECTING: number;
+    OPEN: number;
+    CLOSING: number;
+    CLOSED: number;
+    onopen: (() => void) | null;
+    onmessage: ((event: { data: string }) => void) | null;
+    onerror: ((error: Error) => void) | null;
+    onclose: (() => void) | null;
+  };
+  let mockWebSocketConstructor: unknown;
+  let client: unknown;
   
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -240,7 +252,7 @@ describe('WebSocketClient', () => {
       expect(rttHandler).toHaveBeenCalled();
       const calls = rttHandler.mock.calls;
       expect(calls.length).toBeGreaterThan(0);
-      const [currentRTT, averageRTT] = calls[calls.length - 1];
+      const [currentRTT] = calls[calls.length - 1];
       expect(currentRTT).toBeGreaterThanOrEqual(45);
       expect(currentRTT).toBeLessThanOrEqual(55);
     });

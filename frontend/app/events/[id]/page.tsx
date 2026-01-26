@@ -46,8 +46,12 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     .order('title', { ascending: true });
 
   const setlist = (eventItems ?? [])
-    .map((item) => {
-      const song = item.songs as { id: string; title: string; artist: string | null } | null;
+    .map((item: { 
+      id: string; 
+      sequence_order: number; 
+      songs: { id: string; title: string; artist: string | null } | null 
+    }) => {
+      const song = item.songs;
       if (!song) {
         return null;
       }
