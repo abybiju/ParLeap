@@ -361,7 +361,7 @@ describe('WebSocket Protocol Integration', () => {
   describe('Message Sequencing', () => {
     it('should handle multiple rapid messages in order', (done) => {
       client = new WebSocket(`ws://localhost:${serverPort}`);
-      const receivedMessages: any[] = [];
+      const receivedMessages: unknown[] = [];
       const expectedMessages = 5;
 
       client.on('open', () => {

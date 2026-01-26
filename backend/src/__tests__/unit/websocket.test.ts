@@ -26,7 +26,12 @@ jest.mock('../../services/matcherService', () => ({
 }));
 
 describe('WebSocket Handler', () => {
-  let mockWebSocket: any;
+  let mockWebSocket: {
+    send: jest.Mock;
+    close: jest.Mock;
+    readyState: number;
+    on: jest.Mock;
+  };
   let sentMessages: string[];
 
   beforeEach(() => {
@@ -237,7 +242,9 @@ describe('WebSocket Handler', () => {
         readyState: 1,
         OPEN: 1,
         send: jest.fn(),
-      } as any;
+        close: jest.fn(),
+        on: jest.fn(),
+      };
 
       const validMessage = JSON.stringify({
         type: 'START_SESSION',
@@ -258,7 +265,9 @@ describe('WebSocket Handler', () => {
         readyState: 1, // OPEN constant
         send: jest.fn(),
         OPEN: 1, // Add OPEN constant for comparison
-      } as any;
+        close: jest.fn(),
+        on: jest.fn(),
+      };
 
       const validMessage = JSON.stringify({
         type: 'PING',
@@ -283,7 +292,9 @@ describe('WebSocket Handler', () => {
         readyState: 1, // OPEN constant
         send: jest.fn(),
         OPEN: 1, // Add OPEN constant for comparison
-      } as any;
+        close: jest.fn(),
+        on: jest.fn(),
+      };
 
       const audioMessage = JSON.stringify({
         type: 'AUDIO_DATA',

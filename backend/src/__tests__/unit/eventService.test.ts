@@ -8,7 +8,7 @@
 const mockFrom = jest.fn();
 const mockSupabaseClient = {
   from: mockFrom,
-} as any;
+};
 
 jest.mock('../../config/supabase', () => ({
   supabase: mockSupabaseClient,
@@ -21,8 +21,6 @@ import {
   createSong,
   createEvent,
   addSongToEvent,
-  type EventData,
-  type SongData,
 } from '../../services/eventService';
 
 describe('Event Service', () => {
@@ -113,7 +111,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ select: mockSelect } as any);
+      mockFrom.mockReturnValue({ select: mockSelect });
 
       const result = await fetchEventData('non-existent-id');
 
@@ -267,7 +265,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ select: mockSelect } as any);
+      mockFrom.mockReturnValue({ select: mockSelect });
 
       const result = await fetchSongById(mockSongId);
 
@@ -287,7 +285,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ select: mockSelect } as any);
+      mockFrom.mockReturnValue({ select: mockSelect });
 
       const result = await fetchSongById('non-existent-id');
 
@@ -313,7 +311,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await createSong(
         mockUserId,
@@ -343,7 +341,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await createSong(mockUserId, 'Song Title', null, 'Lyrics');
 
@@ -365,7 +363,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await createSong(mockUserId, 'Title', 'Artist', 'Lyrics');
 
@@ -387,7 +385,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await createEvent(mockUserId, mockEventName);
 
@@ -412,7 +410,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await createEvent(mockUserId, mockEventName, eventDate);
 
@@ -434,7 +432,7 @@ describe('Event Service', () => {
         }),
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await createEvent(mockUserId, mockEventName);
 
@@ -452,7 +450,7 @@ describe('Event Service', () => {
         error: null,
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await addSongToEvent(mockEventId, mockSongId, mockSequenceOrder);
 
@@ -471,7 +469,7 @@ describe('Event Service', () => {
         error: { message: 'Database error' },
       });
 
-      mockFrom.mockReturnValue({ insert: mockInsert } as any);
+      mockFrom.mockReturnValue({ insert: mockInsert });
 
       const result = await addSongToEvent(mockEventId, mockSongId, mockSequenceOrder);
 
