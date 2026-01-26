@@ -317,6 +317,30 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ---
 
+### **Phase 5: Content Import Integration** (Post-Launch)
+
+#### 5.1 CCLI SongSelect API Integration
+- [ ] Apply for CCLI Developer Partner program
+- [ ] Implement OAuth 2.0 flow for CCLI account connection
+- [ ] Build search interface for CCLI SongSelect catalog
+- [ ] Import songs with formatted lyrics (automatic stanza breaks)
+- [ ] Store CCLI OAuth tokens securely (encrypted)
+- [ ] Handle API rate limits and errors gracefully
+- [ ] Fallback to manual entry if API unavailable
+
+**Benefits:**
+- Eliminates manual lyric entry (major time saver)
+- Automatic stanza formatting (solves parsing issues)
+- Includes CCLI number automatically
+- Legal compliance handled by churches' existing CCLI licenses
+- Industry-standard tool churches already trust
+
+**Estimated Timeline:** 2-3 weeks post-launch (after MVP stabilization)
+
+**See:** `CCLI_SONGSELECT_INTEGRATION.md` for detailed specification
+
+---
+
 ### **Phase 5: Testing & Optimization**
 
 #### 5.1 Testing Strategy
@@ -369,6 +393,30 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - [ ] User guide
 - [ ] Developer setup guide
 - [ ] Architecture diagrams
+
+---
+
+### **Phase 7: Content Import Integration** (Post-Launch)
+
+#### 7.1 CCLI SongSelect API Integration
+- [ ] Apply for CCLI Developer Partner program
+- [ ] Implement OAuth 2.0 flow for CCLI account connection
+- [ ] Build search interface for CCLI SongSelect catalog
+- [ ] Import songs with formatted lyrics (automatic stanza breaks)
+- [ ] Store CCLI OAuth tokens securely (encrypted)
+- [ ] Handle API rate limits and errors gracefully
+- [ ] Fallback to manual entry if API unavailable
+
+**Benefits:**
+- Eliminates manual lyric entry (major time saver)
+- Automatic stanza formatting (solves parsing issues)
+- Includes CCLI number automatically
+- Legal compliance handled by churches' existing CCLI licenses
+- Industry-standard tool churches already trust
+
+**Estimated Timeline:** 2-3 weeks post-launch (after MVP stabilization)
+
+**See:** `CCLI_SONGSELECT_INTEGRATION.md` for detailed specification
 
 ---
 
