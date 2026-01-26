@@ -77,6 +77,50 @@ function preprocessBufferText(text: string, maxWords = 12): string {
 }
 
 // ============================================
+// WebSocket Rate Limiting
+// ============================================
+
+interface WsRateState {
+  windowStart: number;
+  count: number;
+  audioWindowStart: number;
+  audioCount: number;
+}
+
+const WS_RATE_WINDOW_MS = parseNumberEnv(process.env.WS_RATE_LIMIT_WINDOW_MS, 10000);
+const WS_CONTROL_LIMIT = parseNumberEnv(process.env.WS_RATE_LIMIT_CONTROL, 30);
+const WS_AUDIO_LIMIT = parseNumberEnv(process.env.WS_RATE_LIMIT_AUDIO, 120);
+const wsRateLimits = new Map<WebSocket, WsRateState>();
+
+function isRateLimited(ws: WebSocket, messageType: string): boolean {
+  const now = Date.now();
+  const state = wsRateLimits.get(ws) ?? {
+    windowStart: now,
+    count: 0,
+    audioWindowStart: now,
+    audioCount: 0,
+  };
+
+  if (messageType === 'AUDIO_DATA') {
+    if (now - state.audioWindowStart > WS_RATE_WINDOW_MS) {
+      state.audioWindowStart = now;
+      state.audioCount = 0;
+    }
+    state.audioCount += 1;
+    wsRateLimits.set(ws, state);
+    return state.audioCount > WS_AUDIO_LIMIT;
+  }
+
+  if (now - state.windowStart > WS_RATE_WINDOW_MS) {
+    state.windowStart = now;
+    state.count = 0;
+  }
+  state.count += 1;
+  wsRateLimits.set(ws, state);
+  return state.count > WS_CONTROL_LIMIT;
+}
+
+// ============================================
 // Session State
 // ============================================
 
@@ -231,6 +275,7 @@ async function handleStartSession(
       setlist: session.songs.map((song) => ({
         id: song.id,
         title: song.title,
+        artist: song.artist,
         lines: song.lines,
       })),
     },
@@ -640,6 +685,15 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
     return;
   }
 
+  const messageType = typeof parsed === 'object' && parsed !== null && 'type' in parsed
+    ? String((parsed as { type?: unknown }).type)
+    : 'UNKNOWN';
+
+  if (isRateLimited(ws, messageType)) {
+    sendError(ws, 'RATE_LIMITED', 'Too many messages in a short period');
+    return;
+  }
+
   // Validate message structure
   const validation = validateClientMessage(parsed);
   if (!validation.success) {
@@ -689,6 +743,7 @@ export function handleClose(ws: WebSocket): void {
     }
     sessions.delete(ws);
   }
+  wsRateLimits.delete(ws);
 }
 
 /**

@@ -91,7 +91,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     // 2. Fetch event items (setlist) with song details
     const { data: eventItems, error: itemsError } = await supabase
       .from('event_items')
-      .select('sequence_order, songs(id, title, lyrics)')
+      .select('sequence_order, songs(id, title, artist, lyrics)')
       .eq('event_id', eventId)
       .order('sequence_order', { ascending: true });
 
@@ -129,6 +129,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         return {
           id: songInfo.id,
           title: songInfo.title,
+          artist: songInfo.artist,
           lines: parseLyrics(songInfo.lyrics),
         };
       })
