@@ -381,3 +381,60 @@ We've completed the foundation and latency monitoring infrastructure. Now we nee
 
 **Ready to start?** Begin with Phase 1.2 (Supabase Integration)!
 
+---
+
+## 🚀 Post-Launch Roadmap
+
+### Phase 7: Content Import Integration
+
+**Priority:** High (Post-Launch)  
+**Timeline:** 2-3 weeks after MVP stabilization
+
+#### CCLI SongSelect API Integration
+
+**Strategic Value:**
+- Major UX improvement - eliminates manual lyric entry
+- Competitive advantage - industry-standard integration
+- Solves current stanza parsing challenges automatically
+- Aligns with target market (churches using CCLI)
+
+**Implementation Phases:**
+
+1. **CCLI Developer Partner Application**
+   - Apply for CCLI Developer Partner program
+   - Get API credentials and documentation
+   - Review API rate limits and terms
+   - Set up OAuth application in CCLI portal
+
+2. **OAuth Integration**
+   - Implement OAuth 2.0 flow
+   - Store tokens securely (Supabase encrypted column)
+   - Handle token refresh
+   - Add "Connect CCLI" button to Songs Library
+
+3. **Search & Import UI**
+   - Build search interface
+   - Display search results
+   - Import song with formatted lyrics
+   - Handle errors gracefully
+
+4. **Testing & Polish**
+   - Test with real CCLI accounts
+   - Verify stanza formatting
+   - Test error scenarios
+   - Performance optimization
+
+**User Flow:**
+```
+User → Songs Library → "Import from CCLI" → OAuth → Search → Import → Auto-formatted lyrics saved
+```
+
+**Technical Components:**
+- OAuth integration (`frontend/lib/auth/ccli.ts`)
+- API service (`frontend/lib/services/ccliApi.ts`)
+- UI components (`frontend/components/songs/CcliImport.tsx`)
+- Database migration (add `ccli_oauth_token` to profiles)
+- Server actions (`importCcliSong`, `searchCcliSongs`)
+
+**See:** `CCLI_SONGSELECT_INTEGRATION.md` for complete specification
+

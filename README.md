@@ -161,6 +161,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 - [NEXT_PHASE_PLAN.md](./NEXT_PHASE_PLAN.md) - **Next phase implementation plan** (Current focus)
 - [PRODUCTION_TESTING.md](./PRODUCTION_TESTING.md) - Production testing guide
 - [supabase/README.md](./supabase/README.md) - Supabase setup guide
+- [CCLI_SONGSELECT_INTEGRATION.md](./CCLI_SONGSELECT_INTEGRATION.md) - **Future feature:** CCLI SongSelect API integration specification
 
 ## Project Status
 
@@ -227,4 +228,29 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 - ✅ **4.5 State Management** ✅ (Partial)
 
 **See [PROJECT_STATUS_COMPLETE.md](./PROJECT_STATUS_COMPLETE.md) for complete status.**
+
+---
+
+## 🚀 Future Enhancements
+
+### CCLI SongSelect API Integration (Post-Launch)
+
+**Priority:** High  
+**Timeline:** 2-3 weeks post-launch
+
+**Feature Overview:**
+- OAuth integration with CCLI accounts
+- Search and import songs directly from CCLI SongSelect catalog
+- Automatic stanza formatting (solves manual parsing)
+- Includes CCLI number and metadata automatically
+- Major time saver - eliminates manual lyric entry
+
+**Benefits:**
+- Eliminates manual lyric entry (saves hours per week)
+- Automatic stanza formatting (properly formatted lyrics)
+- Legal compliance (churches' existing CCLI licenses)
+- Industry-standard tool churches already trust
+- Competitive advantage in church software market
+
+**See:** `CCLI_SONGSELECT_INTEGRATION.md` for detailed specification
 
