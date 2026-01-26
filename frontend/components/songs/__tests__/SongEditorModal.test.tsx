@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SongEditorModal } from '../SongEditorModal';
 import type { Database } from '@/lib/supabase/types';
@@ -63,6 +63,7 @@ describe('SongEditorModal', () => {
         ccli_number: '1234567',
         lyrics: 'Amazing grace how sweet the sound',
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       render(
@@ -237,6 +238,7 @@ describe('SongEditorModal', () => {
         ccli_number: null,
         lyrics: 'Original lyrics',
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       vi.mocked(updateSong).mockResolvedValue({ success: true, id: '123' });
@@ -527,6 +529,7 @@ describe('SongEditorModal', () => {
         ccli_number: null,
         lyrics: 'Existing lyrics',
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       const { rerender } = render(

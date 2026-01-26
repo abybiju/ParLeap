@@ -182,13 +182,13 @@ export async function addSongToEvent(eventId: string, songId: string, sequenceOr
     return { success: false, error: 'Song not found or access denied' };
   }
 
-  const { data, error: insertError } = await supabase
-    .from('event_items')
+  const { data, error: insertError } = await (supabase
+    .from('event_items') as ReturnType<typeof supabase.from>)
     .insert({
       event_id: eventId,
       song_id: songId,
       sequence_order: sequenceOrder,
-    })
+    } as Record<string, unknown>)
     .select('id')
     .single();
 

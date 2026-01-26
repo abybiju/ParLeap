@@ -65,7 +65,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         setSetlistItems((prev) => [
           ...prev,
           {
-            id: result.id,
+            id: result.id as string,
             songId: song.id,
             title: song.title,
             artist: song.artist,
