@@ -25,7 +25,13 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
   - ✅ react-hook-form + @hookform/resolvers for form management
   - ✅ @tanstack/react-table for advanced table features
   - **Features**: Fuzzy search, sortable columns, line count badges, real-time stanza preview, auto-save drafts
-  - **Status**: Code committed locally, pending push to GitHub and deployment
+- 🔧 **Songs Library UX Fixes**:
+  - ✅ **Stanza Parser Enhanced**: Handles Windows (\r\n), Mac (\n), and multi-blank line separators
+  - ✅ **CCLI Optional Confirmed**: Empty field saves without validation errors
+  - ✅ **Visual Improvements**: Better glassmorphism, helper text for stanza separation
+  - **Result**: Paste any lyrics and save immediately without issues
+- ✅ **Home Page Updated**: Added navigation buttons (Song Library, Dashboard, Test WebSocket)
+- **Status**: Code committed locally, pending push to GitHub and deployment
 
 ### January 21, 2026 - Operator Console Sprint Complete
 - ✅ **Operator Console Implementation**: Complete production-ready interface
