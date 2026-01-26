@@ -106,7 +106,7 @@ describe('STT Service', () => {
       const { createStreamingRecognition } = await import('../../services/sttService');
       
       const stream = createStreamingRecognition();
-      const results: any[] = [];
+      const results: Array<{ text: string; isFinal: boolean }> = [];
       
       stream.on('data', (result) => {
         results.push(result);
