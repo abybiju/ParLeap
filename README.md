@@ -4,7 +4,7 @@ Real-time AI-powered presentation orchestration platform.
 
 ## 🟢 Current Status
 
-**Last Updated:** January 21, 2026
+**Last Updated:** January 25, 2026
 
 ### Live Deployments
 - **Frontend**: [www.parleap.com](https://www.parleap.com) (Vercel)
@@ -36,9 +36,11 @@ Real-time AI-powered presentation orchestration platform.
   - Stanza-aware parsing with glassmorphism preview cards
   - localStorage draft auto-save with recovery
   - Full CRUD operations (create, update, delete)
-  - CCLI number support
+  - CCLI number support (optional)
   - Line count badges
   - Toast notifications
+- 🔧 **UX Fixes**: Improved stanza parser for Windows/Mac line endings
+- ✅ **Home Page**: Added navigation buttons for quick access
 
 **January 21, 2026**
 - ✅ **Operator Console Sprint**: Complete production-ready interface

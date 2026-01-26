@@ -1,6 +1,6 @@
 # ParLeap - Complete Project Status
 
-**Last Updated:** January 21, 2026  
+**Last Updated:** January 25, 2026  
 **Status:** 🟢 **FULLY OPERATIONAL - PRODUCTION READY**
 
 ---
@@ -20,6 +20,7 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - ✅ **Database**: Supabase connected with real data
 - ✅ **Operator Console**: Complete dashboard, operator HUD, and projector view
 - ✅ **Synchronization**: Real-time sync between operator and projector views
+- ✅ **Songs Library**: Notion-style CRUD with stanza-aware editor and live preview
 
 ---
 
@@ -348,6 +349,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
   - ✅ react-hook-form + @hookform/resolvers for form management
   - ✅ @tanstack/react-table for advanced table features
   - **Features**: Fuzzy search, sortable columns, line count badges, real-time stanza preview, auto-save drafts
+- 🔧 **Songs Library UX Fixes**:
+  - ✅ **Stanza Parser Improved**: Enhanced `parseStanzas()` to handle various line endings (\r\n, \n)
+  - ✅ **Multiple Blank Lines**: Parser now correctly splits on double+ newlines
+  - ✅ **Windows Compatibility**: Line endings from Word/Google Docs now work correctly
+  - ✅ **Visual Feedback**: Added helper text "Separate stanzas with blank lines (press Enter twice)"
+  - ✅ **CCLI Validation**: Confirmed optional - empty field allowed without errors
+  - ✅ **Preview Enhancement**: Better glassmorphism styling with shadows and transitions
+  - **Result**: Can paste lyrics and save immediately without errors
+- ✅ **Home Page Navigation**: Added navigation buttons (Song Library, Dashboard, Test WebSocket)
 
 ### January 21, 2026
 - ✅ **Operator Console Sprint Complete**: Built production-ready operator interface
