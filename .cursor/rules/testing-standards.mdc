@@ -1,0 +1,68 @@
+---
+description: Testing standards and patterns for ParLeap
+globs: "**/*.test.{ts,tsx}"
+alwaysApply: false
+---
+
+# Testing Standards
+
+## Test File Locations
+- Backend: `backend/src/__tests__/unit/` and `backend/src/__tests__/integration/`
+- Frontend: `frontend/components/**/__tests__/` and `frontend/lib/**/__tests__/`
+- E2E: `e2e/`
+
+## Running Tests
+
+```bash
+# Backend
+cd backend && npm test              # All tests
+cd backend && npm test:coverage     # With coverage
+
+# Frontend
+cd frontend && npm test             # All tests
+cd frontend && npm test:coverage    # With coverage
+
+# E2E
+npm run test:e2e                    # Playwright
+```
+
+## Test Patterns
+
+### Backend (Jest)
+```typescript
+describe('ServiceName', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should do something', async () => {
+    // Arrange
+    const input = { ... };
+    
+    // Act
+    const result = await service.method(input);
+    
+    // Assert
+    expect(result).toBe(expected);
+  });
+});
+```
+
+### Frontend (Vitest)
+```typescript
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+describe('ComponentName', () => {
+  it('should render correctly', () => {
+    render(<Component />);
+    expect(screen.getByText('...')).toBeInTheDocument();
+  });
+});
+```
+
+## Important Notes
+- Test files are excluded from tsconfig type-checking
+- Tests are validated by their frameworks (Jest/Vitest)
+- Always mock external services (Supabase, WebSocket, STT)
+- Use `waitFor` for async UI updates
