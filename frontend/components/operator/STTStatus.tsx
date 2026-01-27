@@ -1,0 +1,74 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useWebSocket } from '@/lib/hooks/useWebSocket';
+import { isTranscriptUpdateMessage } from '@/lib/websocket/types';
+import { cn } from '@/lib/utils';
+
+/**
+ * STT Status Component
+ * 
+ * Shows the current STT provider and transcription status
+ * Helps diagnose why voice matching might not be working
+ */
+export function STTStatus() {
+  const { lastMessage } = useWebSocket(false);
+  const [hasReceivedTranscript, setHasReceivedTranscript] = useState(false);
+  const [lastTranscriptTime, setLastTranscriptTime] = useState<number | null>(null);
+  const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
+
+  useEffect(() => {
+    if (lastMessage && isTranscriptUpdateMessage(lastMessage)) {
+      setHasReceivedTranscript(true);
+      setLastTranscriptTime(Date.now());
+    }
+  }, [lastMessage]);
+
+  // Check if STT is working (received transcript in last 5 seconds)
+  const isSttActive = lastTranscriptTime && (Date.now() - lastTranscriptTime) < 5000;
+
+  const getStatusColor = () => {
+    if (sttProvider === 'mock') return 'text-orange-400';
+    if (isSttActive) return 'text-green-400';
+    return 'text-yellow-400';
+  };
+
+  const getStatusText = () => {
+    if (sttProvider === 'mock') {
+      return 'Mock Mode (Not Transcribing)';
+    }
+    if (isSttActive) {
+      return 'Active';
+    }
+    if (hasReceivedTranscript) {
+      return 'Inactive (No recent transcripts)';
+    }
+    return 'Waiting for transcription...';
+  };
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 p-3 backdrop-blur-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1">
+            STT Status
+          </h4>
+          <p className={cn('text-xs font-mono', getStatusColor())}>
+            {getStatusText()}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-slate-500">Provider</p>
+          <p className="text-xs font-mono text-slate-400 capitalize">{sttProvider}</p>
+        </div>
+      </div>
+      {sttProvider === 'mock' && (
+        <div className="mt-2 pt-2 border-t border-orange-500/20">
+          <p className="text-xs text-orange-300">
+            ⚠️ Configure STT_PROVIDER environment variable for real transcription
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
