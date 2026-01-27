@@ -5,7 +5,7 @@ alwaysApply: true
 
 # ParLeap Project Context
 
-## Current Status (January 26, 2026)
+## Current Status (January 27, 2026)
 
 ParLeap is a **real-time AI-powered presentation orchestration platform** for live events. It automates slide switching by listening to speakers/singers and matching audio to pre-loaded content.
 
@@ -18,8 +18,9 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 - ✅ Phase 1: Foundation (Monorepo, Next.js 14, Express/TypeScript)
 - ✅ Phase 2: Real-Time Engine (WebSocket, Audio Capture, ElevenLabs STT)
 - ✅ Phase 3: Predictive Matching (Fuzzy matching, auto-advance)
-- ✅ Phase 4: Frontend Features (Songs Library, Operator Console) - Partial
+- ✅ Phase 4: Frontend Features (Songs Library, Operator Console, Event Management)
 - ✅ Phase 5: Testing & QA (147 tests, CI/CD pipeline)
+- ✅ **Adaptive Live Mode** (Multi-song matching, manual override, auto-follow toggle)
 
 ### Testing Infrastructure
 - **Backend**: Jest (67 unit + 16 integration tests)
@@ -29,13 +30,29 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Key Architecture Decisions
 1. **STT Provider**: ElevenLabs Scribe (realtime streaming)
-2. **Matching Algorithm**: `string-similarity` with 0.7 threshold
+2. **Matching Algorithm**: `string-similarity` with multi-song support
+   - Current song checked first (Priority 1)
+   - Other songs only if confidence < 60%
+   - 85%+ threshold for auto-switch, 60-85% for suggestions
+   - Debouncing: 2 sustained matches + 3s cooldown
 3. **WebSocket**: Native `ws` library (NOT Socket.io)
 4. **State**: Zustand for frontend, in-memory session state for backend
 5. **Audio Format**: PCM for ElevenLabs, WebM Opus for Google
+6. **Matching Philosophy**: Single source of truth (backend only, no client-side matching)
+
+### Recent Features (January 27, 2026)
+
+**Adaptive Live Mode**
+- Multi-song matching: AI detects when singer jumps to different song
+- Debouncing: Requires 2 sustained matches before auto-switch
+- Auto-follow toggle: Operator can disable AI and take manual control
+- Clickable setlist: Click any song to jump immediately
+- Song suggestions: Toast notifications for medium-confidence matches (60-85%)
+- Smart optimization: Current song checked first, others only if confidence drops
 
 ### Session Summaries Location
 Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
+- **Latest**: `SESSION_SUMMARY_JAN_27_2026.md` - Adaptive Live Mode implementation
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap
