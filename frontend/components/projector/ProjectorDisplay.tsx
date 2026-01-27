@@ -32,6 +32,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   }, [state, connect]);
 
   // Auto-start session when connected (same pattern as OperatorHUD)
+  // Note: The projector view needs to start its own session to receive broadcasts
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     
@@ -49,6 +50,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     // Reset session started flag when disconnected
     if (state === 'disconnected') {
       setSessionStarted(false);
+      setCurrentSlide(null); // Clear slide when disconnected
     }
     
     return () => {
@@ -61,14 +63,24 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     if (!lastMessage) return;
 
     if (isSessionStartedMessage(lastMessage)) {
-      // Initial display update will come after session starts
+      // Session started - wait for initial display update
+      // The backend will send an initial DISPLAY_UPDATE after SESSION_STARTED
+      console.log('[ProjectorDisplay] Session started, waiting for initial display update');
       return;
     }
 
     if (isDisplayUpdateMessage(lastMessage)) {
       const displayMsg = lastMessage as DisplayUpdateMessage;
+      console.log('[ProjectorDisplay] Received DISPLAY_UPDATE:', displayMsg.payload);
       
-      // Smooth fade-out, then update content, then fade-in
+      // If this is the first slide (no currentSlide), show it immediately without transition
+      if (!currentSlide) {
+        setCurrentSlide(displayMsg);
+        setIsTransitioning(false);
+        return;
+      }
+      
+      // For subsequent slides, use smooth fade transition
       setIsTransitioning(true);
       setTimeout(() => {
         setCurrentSlide(displayMsg);
@@ -78,7 +90,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
         }, 50);
       }, 300);
     }
-  }, [lastMessage]);
+  }, [lastMessage, currentSlide]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -156,6 +168,12 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
         <div className="text-center">
           <p className="text-2xl text-slate-400">Waiting for session to start...</p>
+          {sessionStarted && (
+            <p className="text-sm text-slate-500 mt-2">Session started, waiting for display update...</p>
+          )}
+          {!sessionStarted && (
+            <p className="text-sm text-slate-500 mt-2">Starting session...</p>
+          )}
         </div>
       </div>
     );
