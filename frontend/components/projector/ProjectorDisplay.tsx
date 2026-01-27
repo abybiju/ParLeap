@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { isDisplayUpdateMessage, isSessionStartedMessage, type DisplayUpdateMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
@@ -14,12 +14,14 @@ interface ProjectorDisplayProps {
  * 
  * Clean, full-screen display for projector/second screen
  * Shows only lyrics with smooth transitions
+ * Supports keyboard shortcuts and full-screen mode
  */
 export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
-  const { state, isConnected, startSession, lastMessage, connect } = useWebSocket(false); // Don't auto-connect - match OperatorHUD pattern
+  const { state, isConnected, startSession, nextSlide, prevSlide, lastMessage, connect } = useWebSocket(false);
   const [currentSlide, setCurrentSlide] = useState<DisplayUpdateMessage | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Auto-connect on mount (but don't auto-start session)
   useEffect(() => {
@@ -54,7 +56,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     };
   }, [isConnected, eventId, startSession, sessionStarted, state]);
 
-  // Handle display updates
+  // Handle display updates with smooth transitions
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -66,14 +68,72 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     if (isDisplayUpdateMessage(lastMessage)) {
       const displayMsg = lastMessage as DisplayUpdateMessage;
       
-      // Smooth transition animation
+      // Smooth fade-out, then update content, then fade-in
       setIsTransitioning(true);
       setTimeout(() => {
         setCurrentSlide(displayMsg);
-        setIsTransitioning(false);
-      }, 250); // Half of transition duration for smooth fade
+        // Small delay before fade-in for smoother transition
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 50);
+      }, 300);
     }
   }, [lastMessage]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Only handle shortcuts when connected and not typing
+      if (!isConnected || state !== 'connected') return;
+      
+      // Space or ArrowRight: Next slide
+      if (e.key === ' ' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        nextSlide();
+      }
+      // Backspace or ArrowLeft: Previous slide
+      else if (e.key === 'Backspace' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevSlide();
+      }
+      // F11 or Escape: Toggle fullscreen (handled by browser, but we track it)
+      else if (e.key === 'F11') {
+        e.preventDefault();
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isConnected, state, nextSlide, prevSlide]);
+
+  // Track fullscreen state
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Request fullscreen on mount (optional - can be removed if not desired)
+  useEffect(() => {
+    // Only request fullscreen if user hasn't interacted yet (optional)
+    // Commented out by default - uncomment if you want auto-fullscreen
+    // const requestFullscreen = async () => {
+    //   try {
+    //     await document.documentElement.requestFullscreen();
+    //   } catch (err) {
+    //     // User denied or browser doesn't support
+    //   }
+    // };
+    // requestFullscreen();
+  }, []);
 
   // Show connection status if not connected
   if (!isConnected || state !== 'connected') {
@@ -105,31 +165,49 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden p-8">
-      {/* Song Title (Top) */}
+      {/* Song Title (Top) - with fade animation */}
       {songTitle && (
-        <div className="mb-8 text-center">
-          <h2 className="text-2xl md:text-3xl font-light text-slate-400">{songTitle}</h2>
+        <div 
+          className={cn(
+            'mb-8 text-center transition-all duration-500',
+            isTransitioning ? 'opacity-0 translate-y-[-10px]' : 'opacity-100 translate-y-0'
+          )}
+        >
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-light text-slate-400">{songTitle}</h2>
         </div>
       )}
 
-      {/* Main Lyrics Display */}
+      {/* Main Lyrics Display - with enhanced animations */}
       <div className="flex-1 flex items-center justify-center w-full max-w-6xl">
         <p
           className={cn(
-            'text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-light leading-relaxed text-center text-white',
-            'transition-all duration-500',
-            isTransitioning && 'opacity-0 scale-95',
-            !isTransitioning && 'opacity-100 scale-100'
+            'text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-light leading-relaxed text-center text-white',
+            'transition-all duration-500 ease-in-out',
+            isTransitioning 
+              ? 'opacity-0 scale-95 translate-y-4 blur-sm' 
+              : 'opacity-100 scale-100 translate-y-0 blur-0'
           )}
+          style={{
+            textShadow: '0 2px 20px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.1)',
+          }}
         >
           {lineText}
         </p>
       </div>
 
-      {/* Slide Number (Bottom, Subtle) */}
-      <div className="mt-8 text-center">
-        <p className="text-xs text-slate-700">{slideIndex + 1}</p>
-      </div>
+      {/* Slide Number (Bottom, Subtle) - hidden in fullscreen */}
+      {!isFullscreen && (
+        <div className="mt-8 text-center">
+          <p className="text-xs text-slate-700">{slideIndex + 1}</p>
+        </div>
+      )}
+
+      {/* Keyboard hint (only visible briefly on first load or when not fullscreen) */}
+      {!isFullscreen && (
+        <div className="absolute bottom-4 right-4 text-xs text-slate-600 opacity-50">
+          Space/→ Next • Backspace/← Prev • F11 Fullscreen
+        </div>
+      )}
     </div>
   );
 }

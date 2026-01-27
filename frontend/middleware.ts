@@ -9,6 +9,7 @@ const PROTECTED_PATHS = [
   '/events',
   '/live',
   '/operator',
+  '/profile',
 ]
 
 function isProtectedPath(pathname: string) {
@@ -70,6 +71,7 @@ export const config = {
     '/events/:path*',
     '/live/:path*',
     '/operator/:path*',
+    '/profile/:path*',
     '/auth/:path*',
   ],
 }

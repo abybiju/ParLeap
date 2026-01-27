@@ -5,7 +5,7 @@ alwaysApply: true
 
 # ParLeap Project Context
 
-## Current Status (January 25, 2026)
+## Current Status (January 26, 2026)
 
 ParLeap is a **real-time AI-powered presentation orchestration platform** for live events. It automates slide switching by listening to speakers/singers and matching audio to pre-loaded content.
 
@@ -41,3 +41,10 @@ Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
 - `PROJECT_PLAN.md` - Master roadmap
 - `TESTING_INFRASTRUCTURE_COMPLETE.md` - Test coverage details
 - `.cursorrules` - Full architecture specification
+- `CLAWDBOT_INSTRUCTIONS.md` - Operational directives for autonomous AI work (Governor System)
+
+### ClawdBot Governor System
+- **Status**: Active (January 26, 2026)
+- **File**: `CLAWDBOT_INSTRUCTIONS.md`
+- **Purpose**: Safety protocols and operational directives for autonomous AI work
+- **Integration**: References SOUL.md, AGENTS.md, .cursorrules, and project documentation
