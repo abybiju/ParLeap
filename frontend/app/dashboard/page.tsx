@@ -74,7 +74,7 @@ export default async function DashboardPage() {
           {/* Quick Links */}
           <div className="mt-8 pt-8 border-t border-white/10">
             <h2 className="text-sm font-semibold text-slate-300 mb-4">Quick Links</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <Link
                 href="/songs"
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-4 hover:border-indigo-300/50 transition shadow-lg shadow-indigo-500/10"
@@ -89,6 +89,14 @@ export default async function DashboardPage() {
               >
                 <h3 className="text-lg font-semibold text-white">Events & Setlists</h3>
                 <p className="text-sm text-slate-300 mt-1">Create events and arrange songs.</p>
+              </Link>
+
+              <Link
+                href="/profile"
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-4 hover:border-indigo-300/50 transition shadow-lg shadow-indigo-500/10"
+              >
+                <h3 className="text-lg font-semibold text-white">Profile</h3>
+                <p className="text-sm text-slate-300 mt-1">Manage your account settings.</p>
               </Link>
             </div>
           </div>

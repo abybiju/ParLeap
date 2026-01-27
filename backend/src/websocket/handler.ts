@@ -195,10 +195,21 @@ async function handleStartSession(
   const processingStart = Date.now();
   console.log(`[WS] Starting session for event: ${eventId}`);
 
-  // Check if session already exists
+  // Check if session already exists for this WebSocket
   if (sessions.has(ws)) {
     sendError(ws, 'SESSION_EXISTS', 'A session is already active for this connection');
     return;
+  }
+
+  // Check if there's already an active session for this eventId (from another client)
+  // If so, sync the new client to the current state
+  let existingSession: SessionState | null = null;
+  for (const [existingWs, existing] of sessions.entries()) {
+    if (existing.eventId === eventId && existing.isActive && existingWs.readyState === ws.OPEN) {
+      existingSession = existing;
+      console.log(`[WS] Found existing session for event ${eventId}, syncing new client to current state`);
+      break;
+    }
   }
 
   // Fetch real event data from Supabase
@@ -224,12 +235,16 @@ async function handleStartSession(
     debug: process.env.DEBUG_MATCHER === 'true',
   });
 
-  // Create song context for first song
-  const firstSong = eventData.songs[0];
+  // If there's an existing session, sync to its current state
+  // Otherwise, start from the beginning
+  const currentSongIndex = existingSession?.currentSongIndex ?? 0;
+  const currentSlideIndex = existingSession?.currentSlideIndex ?? 0;
+  const currentSong = eventData.songs[currentSongIndex] || eventData.songs[0];
+  
   const songContext = createSongContext(
-    { id: firstSong.id, sequence_order: 1 }, // Mock EventItemData
-    firstSong,
-    0
+    { id: currentSong.id, sequence_order: currentSongIndex + 1 },
+    currentSong,
+    currentSlideIndex
   );
   
   const session: SessionState = {
@@ -237,16 +252,18 @@ async function handleStartSession(
     eventId,
     eventName: eventData.name,
     songs: eventData.songs,
-    currentSongIndex: 0,
-    currentSlideIndex: 0,
-    rollingBuffer: '',
+    currentSongIndex,
+    currentSlideIndex,
+    rollingBuffer: existingSession?.rollingBuffer || '',
     isActive: true,
     songContext,
     matcherConfig,
-    lastMatchConfidence: 0,
+    lastMatchConfidence: existingSession?.lastMatchConfidence || 0,
   };
 
-  if (sttProvider === 'elevenlabs') {
+  // Only create STT stream for the first session (operator view)
+  // Projector views don't need audio transcription
+  if (sttProvider === 'elevenlabs' && !existingSession) {
     const stream = createStreamingRecognition();
     stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
       const processingStart = Date.now();
@@ -270,8 +287,8 @@ async function handleStartSession(
       eventId,
       eventName: session.eventName,
       totalSongs: session.songs.length,
-      currentSongIndex: 0,
-      currentSlideIndex: 0,
+      currentSongIndex,
+      currentSlideIndex,
       setlist: session.songs.map((song) => ({
         id: song.id,
         title: song.title,
@@ -284,15 +301,15 @@ async function handleStartSession(
 
   send(ws, response);
 
-  // Send initial display update
-  if (session.songs.length > 0 && session.songs[0].lines.length > 0) {
+  // Send current display update (synced to existing session if available)
+  if (currentSong && currentSong.lines.length > 0 && currentSong.lines[currentSlideIndex]) {
     const displayUpdate: DisplayUpdateMessage = {
       type: 'DISPLAY_UPDATE',
       payload: {
-        lineText: session.songs[0].lines[0],
-        slideIndex: 0,
-        songId: session.songs[0].id,
-        songTitle: session.songs[0].title,
+        lineText: currentSong.lines[currentSlideIndex],
+        slideIndex: currentSlideIndex,
+        songId: currentSong.id,
+        songTitle: currentSong.title,
         isAutoAdvance: false,
       },
       timing: createTiming(receivedAt, processingStart),
@@ -300,7 +317,7 @@ async function handleStartSession(
     send(ws, displayUpdate);
   }
 
-  console.log(`[WS] Session started: ${sessionId} with ${session.songs.length} songs`);
+  console.log(`[WS] Session started: ${sessionId} with ${session.songs.length} songs (synced to song ${currentSongIndex}, slide ${currentSlideIndex})`);
 }
 
 function handleTranscriptionResult(
