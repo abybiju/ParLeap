@@ -25,11 +25,12 @@ import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
 import {
-  findBestMatch,
+  findBestMatchAcrossAllSongs,
   createSongContext,
   validateConfig,
   type MatcherConfig,
   type SongContext,
+  type MultiSongMatchResult,
 } from '../services/matcherService';
 
 // ============================================
@@ -133,12 +134,22 @@ interface SessionState {
   currentSlideIndex: number;
   rollingBuffer: string;
   isActive: boolean;
+  isAutoFollowing: boolean; // Can be disabled by operator for manual control
   // Matcher state
   songContext?: SongContext;
   matcherConfig: MatcherConfig;
   lastMatchConfidence?: number;
   sttStream?: ReturnType<typeof createStreamingRecognition>;
   lastTranscriptText?: string;
+  // Debouncing for song switches (prevents false positives)
+  suggestedSongSwitch?: {
+    songId: string;
+    songIndex: number;
+    confidence: number;
+    firstDetectedAt: number; // Timestamp when first detected
+    matchCount: number; // How many consecutive times we've seen this match
+  };
+  lastSongSwitchAt?: number; // Timestamp of last song switch (for cooldown)
 }
 
 
@@ -267,9 +278,12 @@ async function handleStartSession(
     currentSlideIndex,
     rollingBuffer: existingSession?.rollingBuffer || '',
     isActive: true,
+    isAutoFollowing: true, // Auto-follow enabled by default
     songContext,
     matcherConfig,
     lastMatchConfidence: existingSession?.lastMatchConfidence || 0,
+    suggestedSongSwitch: undefined,
+    lastSongSwitchAt: undefined,
   };
 
   // Create STT stream if:
@@ -447,27 +461,147 @@ function handleTranscriptionResult(
 
       // Always log matcher attempt for debugging production issues
       console.log(`[WS] 🔍 Attempting match with buffer: "${cleanedBuffer.slice(0, 50)}..."`);
+      console.log(`[WS] 🔍 Current song: "${session.songContext?.title || 'N/A'}"`);
       console.log(`[WS] 🔍 Current line: "${session.songContext?.lines[session.songContext?.currentLineIndex || 0] || 'N/A'}"`);
-      console.log(`[WS] 🔍 Next line: "${session.songContext?.lines[(session.songContext?.currentLineIndex || 0) + 1] || 'N/A'}"`);
+      console.log(`[WS] 🔍 Auto-following: ${session.isAutoFollowing}`);
 
       if (session.songContext) {
-        const matchResult = findBestMatch(
+        // PHASE 1: Multi-song matching with debouncing
+        const multiSongResult: MultiSongMatchResult = findBestMatchAcrossAllSongs(
           cleanedBuffer,
           session.songContext,
+          session.songs,
+          session.currentSongIndex,
           session.matcherConfig
         );
 
+        const matchResult = multiSongResult.currentSongMatch;
         session.lastMatchConfidence = matchResult.confidence;
 
         // Always log match result for debugging
-        console.log(`[WS] 📊 Match result: found=${matchResult.matchFound}, confidence=${(matchResult.confidence * 100).toFixed(1)}%, threshold=${(session.matcherConfig.similarityThreshold * 100).toFixed(1)}%`);
+        console.log(`[WS] 📊 Current song match: found=${matchResult.matchFound}, confidence=${(matchResult.confidence * 100).toFixed(1)}%`);
         if (matchResult.matchFound) {
           console.log(`[WS] 📊 Matched line ${matchResult.currentLineIndex}: "${matchResult.matchedText}"`);
-          console.log(`[WS] 📊 isLineEnd=${matchResult.isLineEnd}, nextLineIndex=${matchResult.nextLineIndex || 'N/A'}`);
-        } else {
-          console.log(`[WS] 📊 No match - best score was ${(matchResult.confidence * 100).toFixed(1)}% (need ${(session.matcherConfig.similarityThreshold * 100).toFixed(1)}%)`);
         }
 
+        // PHASE 1: Handle song switch suggestions with debouncing
+        const SONG_SWITCH_COOLDOWN_MS = 3000; // 3 seconds cooldown after any song switch
+        const SONG_SWITCH_DEBOUNCE_MATCHES = 2; // Require 2 consecutive matches before switching
+        const now = Date.now();
+
+        if (multiSongResult.suggestedSongSwitch && session.isAutoFollowing) {
+          const suggestion = multiSongResult.suggestedSongSwitch;
+          
+          // Check if we're in cooldown period
+          if (session.lastSongSwitchAt && (now - session.lastSongSwitchAt < SONG_SWITCH_COOLDOWN_MS)) {
+            if (session.matcherConfig.debug) {
+              console.log(`[WS] 🚫 Song switch suggestion ignored (cooldown: ${SONG_SWITCH_COOLDOWN_MS - (now - session.lastSongSwitchAt)}ms remaining)`);
+            }
+          } else if (session.suggestedSongSwitch && 
+                     session.suggestedSongSwitch.songId === suggestion.songId) {
+            // Same song detected again - increment match count
+            session.suggestedSongSwitch.matchCount++;
+            console.log(`[WS] 🔁 Song switch suggestion sustained (${session.suggestedSongSwitch.matchCount}/${SONG_SWITCH_DEBOUNCE_MATCHES}): "${suggestion.songTitle}"`);
+
+            // DEBOUNCING: Only switch after N consecutive matches (prevents false positives)
+            if (session.suggestedSongSwitch.matchCount >= SONG_SWITCH_DEBOUNCE_MATCHES && 
+                suggestion.confidence >= 0.85) {
+              // AUTO-SWITCH: High confidence + sustained match
+              console.log(`[WS] 🎵 AUTO-SWITCHING to song "${suggestion.songTitle}" (sustained ${session.suggestedSongSwitch.matchCount} matches @ ${(suggestion.confidence * 100).toFixed(1)}%)`);
+              
+              // Perform the song switch
+              session.currentSongIndex = suggestion.songIndex;
+              session.currentSlideIndex = suggestion.matchedLineIndex;
+              session.songContext = createSongContext(
+                { id: suggestion.songId, sequence_order: suggestion.songIndex + 1 },
+                session.songs[suggestion.songIndex],
+                suggestion.matchedLineIndex
+              );
+              session.rollingBuffer = ''; // Clear buffer on song change
+              session.lastSongSwitchAt = now;
+              session.suggestedSongSwitch = undefined; // Clear suggestion
+
+              // Broadcast SONG_CHANGED to all clients
+              const songChangedMsg: SongChangedMessage = {
+                type: 'SONG_CHANGED',
+                payload: {
+                  songId: suggestion.songId,
+                  songTitle: suggestion.songTitle,
+                  songIndex: suggestion.songIndex,
+                  totalSlides: session.songs[suggestion.songIndex].lines.length,
+                },
+                timing: createTiming(receivedAt, processingStart),
+              };
+              broadcastToEvent(session.eventId, songChangedMsg);
+
+              // Send initial DISPLAY_UPDATE for the new song
+              const displayMsg: DisplayUpdateMessage = {
+                type: 'DISPLAY_UPDATE',
+                payload: {
+                  lineText: suggestion.matchedLine,
+                  slideIndex: suggestion.matchedLineIndex,
+                  songId: suggestion.songId,
+                  songTitle: suggestion.songTitle,
+                  matchConfidence: suggestion.confidence,
+                  isAutoAdvance: true,
+                },
+                timing: createTiming(receivedAt, processingStart),
+              };
+              broadcastToEvent(session.eventId, displayMsg);
+              return; // Exit early after song switch
+            } else if (suggestion.confidence >= 0.6 && suggestion.confidence < 0.85) {
+              // SUGGEST: Medium confidence - notify operator but don't auto-switch
+              const suggestionMsg: import('../types/websocket').SongSuggestionMessage = {
+                type: 'SONG_SUGGESTION',
+                payload: {
+                  suggestedSongId: suggestion.songId,
+                  suggestedSongTitle: suggestion.songTitle,
+                  suggestedSongIndex: suggestion.songIndex,
+                  confidence: suggestion.confidence,
+                  matchedLine: suggestion.matchedLine,
+                },
+                timing: createTiming(receivedAt, processingStart),
+              };
+              send(ws, suggestionMsg);
+            }
+          } else {
+            // New song suggestion - start debouncing
+            session.suggestedSongSwitch = {
+              songId: suggestion.songId,
+              songIndex: suggestion.songIndex,
+              confidence: suggestion.confidence,
+              firstDetectedAt: now,
+              matchCount: 1,
+            };
+            console.log(`[WS] 🎵 New song switch suggestion: "${suggestion.songTitle}" @ ${(suggestion.confidence * 100).toFixed(1)}% (1/${SONG_SWITCH_DEBOUNCE_MATCHES})`);
+
+            // Send suggestion toast for medium confidence
+            if (suggestion.confidence >= 0.6 && suggestion.confidence < 0.85) {
+              const suggestionMsg: import('../types/websocket').SongSuggestionMessage = {
+                type: 'SONG_SUGGESTION',
+                payload: {
+                  suggestedSongId: suggestion.songId,
+                  suggestedSongTitle: suggestion.songTitle,
+                  suggestedSongIndex: suggestion.songIndex,
+                  confidence: suggestion.confidence,
+                  matchedLine: suggestion.matchedLine,
+                },
+                timing: createTiming(receivedAt, processingStart),
+              };
+              send(ws, suggestionMsg);
+            }
+          }
+        } else {
+          // No song switch suggestion - clear any pending suggestion
+          if (session.suggestedSongSwitch) {
+            if (session.matcherConfig.debug) {
+              console.log(`[WS] Clearing song switch suggestion (no longer detected)`);
+            }
+            session.suggestedSongSwitch = undefined;
+          }
+        }
+
+      // Handle current song line matching (normal slide advance)
       if (matchResult.matchFound && matchResult.confidence >= session.matcherConfig.similarityThreshold) {
         if (session.matcherConfig.debug) {
           console.log(
@@ -650,6 +784,15 @@ function handleManualOverride(
     // Nothing changed, don't send update
     console.log(`[WS] Manual override: ${action} -> No change (already at Song ${newSongIndex}, Slide ${newSlideIndex})`);
     return;
+  }
+
+  // PHASE 1: Manual override disables auto-following temporarily
+  // Operator is taking control, so pause AI auto-switching
+  if (songChanged) {
+    console.log(`[WS] 🎛️  Manual song change detected - disabling auto-follow mode`);
+    session.isAutoFollowing = false;
+    // Clear any pending song switch suggestions
+    session.suggestedSongSwitch = undefined;
   }
 
   // Update session state
