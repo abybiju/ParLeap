@@ -23,7 +23,7 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
-import { transcribeAudioChunk, createStreamingRecognition, sttProvider } from '../services/sttService';
+import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
 import {
   findBestMatch,
   createSongContext,
@@ -265,17 +265,27 @@ async function handleStartSession(
   // Only create STT stream for the first session (operator view)
   // Projector views don't need audio transcription
   if (sttProvider === 'elevenlabs' && !existingSession) {
-    const stream = createStreamingRecognition();
-    stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
-      const processingStart = Date.now();
-      const receivedAtNow = Date.now();
-      handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
-    });
-    stream.on('error', (error: Error) => {
-      console.error('[STT] ElevenLabs stream error:', error);
-      sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
-    });
-    session.sttStream = stream;
+    if (!isElevenLabsConfigured) {
+      console.error('[STT] ❌ ElevenLabs selected but ELEVENLABS_API_KEY not configured');
+      sendError(ws, 'STT_ERROR', 'ElevenLabs API key not configured. Set ELEVENLABS_API_KEY in backend/.env');
+    } else {
+      console.log('[STT] 🚀 Creating ElevenLabs streaming recognition...');
+      const stream = createStreamingRecognition();
+      stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
+        const processingStart = Date.now();
+        const receivedAtNow = Date.now();
+        handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
+      });
+      stream.on('error', (error: Error) => {
+        console.error('[STT] ❌ ElevenLabs stream error:', error);
+        sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
+      });
+      stream.on('end', () => {
+        console.log('[STT] ElevenLabs stream ended');
+      });
+      session.sttStream = stream;
+      console.log('[STT] ✅ ElevenLabs stream initialized');
+    }
   }
 
   sessions.set(ws, session);
@@ -301,6 +311,12 @@ async function handleStartSession(
   };
 
   send(ws, response);
+
+  // Log STT configuration for debugging
+  console.log(`[WS] STT Provider: ${sttProvider}, Configured: ${sttProvider === 'elevenlabs' ? isElevenLabsConfigured : 'N/A'}`);
+  if (sttProvider === 'elevenlabs' && !isElevenLabsConfigured) {
+    console.warn('[WS] ⚠️  ElevenLabs selected but ELEVENLABS_API_KEY not set in backend/.env');
+  }
 
   // Send current display update (synced to existing session if available)
   if (currentSong && currentSong.lines.length > 0 && currentSong.lines[currentSlideIndex]) {
@@ -484,25 +500,34 @@ async function handleAudioData(
     return;
   }
 
-  console.log(`[WS] Received audio chunk: ${data.length} bytes (base64)`);
+  // Log audio format for debugging
+  console.log(`[WS] Received audio chunk: ${data.length} bytes (base64), format: ${format?.encoding || 'unknown'}, sampleRate: ${format?.sampleRate || 'unknown'}`);
 
   if (sttProvider === 'elevenlabs') {
     if (!session.sttStream) {
-      sendError(ws, 'STT_ERROR', 'ElevenLabs stream not initialized');
+      console.error('[WS] ❌ ElevenLabs stream not initialized for session');
+      sendError(ws, 'STT_ERROR', 'ElevenLabs stream not initialized. Check backend logs for STT initialization errors.');
       return;
     }
     if (format?.encoding !== 'pcm_s16le') {
-      sendError(ws, 'AUDIO_FORMAT_UNSUPPORTED', 'ElevenLabs requires PCM 16-bit audio', {
+      console.error(`[WS] ❌ Audio format mismatch: received ${format?.encoding || 'unknown'}, expected pcm_s16le`);
+      console.error(`[WS] ❌ Frontend must set NEXT_PUBLIC_STT_PROVIDER=elevenlabs to send PCM format`);
+      sendError(ws, 'AUDIO_FORMAT_UNSUPPORTED', 'ElevenLabs requires PCM 16-bit audio. Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment.', {
         encoding: format?.encoding,
+        expected: 'pcm_s16le',
       });
       return;
     }
     try {
       const audioBuffer = Buffer.from(data, 'base64');
       session.sttStream.write(audioBuffer);
+      // Log periodically (every 50 chunks) to avoid spam
+      if (Math.random() < 0.02) {
+        console.log(`[WS] ✅ Audio chunk sent to ElevenLabs: ${audioBuffer.length} bytes`);
+      }
     } catch (error) {
-      console.error('[WS] Error sending audio to ElevenLabs:', error);
-      sendError(ws, 'STT_ERROR', 'Error sending audio to ElevenLabs');
+      console.error('[WS] ❌ Error sending audio to ElevenLabs:', error);
+      sendError(ws, 'STT_ERROR', 'Error sending audio to ElevenLabs', { error: String(error) });
     }
     return;
   }

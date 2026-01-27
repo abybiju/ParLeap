@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
-import { isTranscriptUpdateMessage } from '@/lib/websocket/types';
+import { isTranscriptUpdateMessage, isErrorMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
 
 /**
@@ -15,12 +15,22 @@ export function STTStatus() {
   const { lastMessage } = useWebSocket(false);
   const [hasReceivedTranscript, setHasReceivedTranscript] = useState(false);
   const [lastTranscriptTime, setLastTranscriptTime] = useState<number | null>(null);
+  const [sttError, setSttError] = useState<string | null>(null);
   const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
 
   useEffect(() => {
     if (lastMessage && isTranscriptUpdateMessage(lastMessage)) {
       setHasReceivedTranscript(true);
       setLastTranscriptTime(Date.now());
+      setSttError(null); // Clear error on successful transcript
+    }
+    
+    // Check for STT-related errors
+    if (lastMessage && isErrorMessage(lastMessage)) {
+      const error = lastMessage.payload;
+      if (error.code === 'STT_ERROR' || error.code === 'AUDIO_FORMAT_UNSUPPORTED') {
+        setSttError(error.message);
+      }
     }
   }, [lastMessage]);
 
@@ -28,14 +38,27 @@ export function STTStatus() {
   const isSttActive = lastTranscriptTime && (Date.now() - lastTranscriptTime) < 5000;
 
   const getStatusColor = () => {
+    if (sttError) return 'text-red-400';
     if (sttProvider === 'mock') return 'text-orange-400';
     if (isSttActive) return 'text-green-400';
     return 'text-yellow-400';
   };
 
   const getStatusText = () => {
+    if (sttError) {
+      return 'Error';
+    }
     if (sttProvider === 'mock') {
       return 'Mock Mode (Not Transcribing)';
+    }
+    if (sttProvider === 'elevenlabs') {
+      if (isSttActive) {
+        return 'Active (Receiving transcripts)';
+      }
+      if (hasReceivedTranscript) {
+        return 'Inactive (No recent transcripts)';
+      }
+      return 'Waiting for transcription...';
     }
     if (isSttActive) {
       return 'Active';
@@ -65,7 +88,25 @@ export function STTStatus() {
       {sttProvider === 'mock' && (
         <div className="mt-2 pt-2 border-t border-orange-500/20">
           <p className="text-xs text-orange-300">
-            ⚠️ Configure STT_PROVIDER environment variable for real transcription
+            ⚠️ Configure NEXT_PUBLIC_STT_PROVIDER=elevenlabs for real transcription
+          </p>
+        </div>
+      )}
+      {sttError && (
+        <div className="mt-2 pt-2 border-t border-red-500/20">
+          <p className="text-xs text-red-300 font-medium mb-1">Error:</p>
+          <p className="text-xs text-red-400">{sttError}</p>
+          {sttError.includes('PCM') && (
+            <p className="text-xs text-red-300 mt-1">
+              💡 Fix: Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment
+            </p>
+          )}
+        </div>
+      )}
+      {sttProvider === 'elevenlabs' && !isSttActive && !hasReceivedTranscript && !sttError && (
+        <div className="mt-2 pt-2 border-t border-yellow-500/20">
+          <p className="text-xs text-yellow-300">
+            ⚠️ Check: ELEVENLABS_API_KEY configured in backend? Audio format is PCM?
           </p>
         </div>
       )}

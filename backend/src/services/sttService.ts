@@ -247,6 +247,7 @@ export function createStreamingRecognition(): {
     };
 
     socket.on('open', () => {
+      console.log('[STT] ✅ ElevenLabs WebSocket connected');
       flushPending();
     });
 
@@ -265,7 +266,11 @@ export function createStreamingRecognition(): {
             confidence: payload.confidence ?? 0.0,
             timestamp: new Date(),
           };
+          console.log(`[STT] 📝 ElevenLabs transcript: "${result.text}" (isFinal=${result.isFinal}, confidence=${result.confidence.toFixed(2)})`);
           callbacks.data?.forEach((cb) => cb(result));
+        } else if (payload.message_type) {
+          // Log other message types for debugging
+          console.log(`[STT] 📨 ElevenLabs message: ${payload.message_type}`, payload);
         }
       } catch (error) {
         callbacks.error?.forEach((cb) => cb(error as Error));
@@ -273,10 +278,12 @@ export function createStreamingRecognition(): {
     });
 
     socket.on('error', (error) => {
+      console.error('[STT] ❌ ElevenLabs WebSocket error:', error);
       callbacks.error?.forEach((cb) => cb(error as Error));
     });
 
-    socket.on('close', () => {
+    socket.on('close', (code, reason) => {
+      console.log(`[STT] ElevenLabs WebSocket closed: code=${code}, reason=${reason?.toString() || 'none'}`);
       callbacks.end?.forEach((cb) => cb());
     });
 
