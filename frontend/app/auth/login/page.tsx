@@ -109,10 +109,18 @@ function LoginForm() {
             disabled={isPending}
             className={cn(
               'w-full rounded-lg bg-indigo-500 px-4 py-2 text-white font-medium',
-              'hover:bg-indigo-400 transition disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/30'
+              'hover:bg-indigo-400 transition disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/30',
+              'flex items-center justify-center gap-2'
             )}
           >
-            {isPending ? 'Signing in...' : 'Sign in'}
+            {isPending ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Signing in...</span>
+              </>
+            ) : (
+              'Sign in'
+            )}
           </button>
         </form>
 
