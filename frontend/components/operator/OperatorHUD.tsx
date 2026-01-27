@@ -13,6 +13,7 @@ import { NextSlidePreview } from './NextSlidePreview';
 import { SetlistPanel } from './SetlistPanel';
 import { AudioLevelMeter } from './AudioLevelMeter';
 import { MicrophoneStatus } from './MicrophoneStatus';
+import { STTStatus } from './STTStatus';
 import { cn } from '@/lib/utils';
 
 interface OperatorHUDProps {
@@ -161,6 +162,7 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
               requestPermission={audioCapture.requestPermission}
             />
             <AudioLevelMeter state={audioCapture.state} />
+            <STTStatus />
           </div>
         </div>
 

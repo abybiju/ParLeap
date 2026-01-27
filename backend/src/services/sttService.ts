@@ -91,6 +91,17 @@ let mockPartialText = '';
 
 function generateMockTranscription(audioData: Buffer): TranscriptionResult {
   void audioData;
+  // Mock mode: Simulates transcription for testing
+  // ⚠️ WARNING: This does NOT transcribe real audio!
+  // In production, configure STT_PROVIDER=elevenlabs or Google Cloud for real transcription
+  
+  // Only log warning once per minute to avoid spam
+  const now = Date.now();
+  if (!mockTranscriptionPhrases[0] || (now % 60000) < 1000) {
+    console.warn('[STT] ⚠️  MOCK MODE: Not transcribing real audio. Voice matching will NOT work.');
+    console.warn('[STT] ⚠️  Configure STT_PROVIDER=elevenlabs (with ELEVENLABS_API_KEY) or Google Cloud for real transcription.');
+  }
+  
   // Simulate progressive transcription
   const phrase = mockTranscriptionPhrases[mockPhraseIndex % mockTranscriptionPhrases.length];
   const words = phrase.split(' ');
@@ -135,7 +146,10 @@ export async function transcribeAudioChunk(
 
     // Use mock transcription if Google Cloud not configured
     if (!speechClient || !isGoogleCloudConfigured) {
-      console.log('[STT] Using mock transcription');
+      if (sttProvider === 'mock') {
+        console.warn('[STT] ⚠️  MOCK MODE: No real STT configured. Set STT_PROVIDER=elevenlabs or configure Google Cloud.');
+        console.warn('[STT] ⚠️  Voice matching will NOT work in mock mode. Configure a real STT provider.');
+      }
       return generateMockTranscription(audioBuffer);
     }
     

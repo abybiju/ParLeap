@@ -228,11 +228,12 @@ async function handleStartSession(
   const sessionId = `session_${Date.now()}`;
   
   // Initialize matcher configuration
+  // Lower threshold for better matching (0.6 = 60% similarity required)
   const matcherConfig: MatcherConfig = validateConfig({
-    similarityThreshold: parseNumberEnv(process.env.MATCHER_SIMILARITY_THRESHOLD, 0.7),
-    minBufferLength: parseNumberEnv(process.env.MATCHER_MIN_BUFFER_LENGTH, 3),
+    similarityThreshold: parseNumberEnv(process.env.MATCHER_SIMILARITY_THRESHOLD, 0.6),
+    minBufferLength: parseNumberEnv(process.env.MATCHER_MIN_BUFFER_LENGTH, 2), // Lower from 3 to 2 words
     bufferWindow: parseNumberEnv(process.env.MATCHER_BUFFER_WINDOW, 100),
-    debug: process.env.DEBUG_MATCHER === 'true',
+    debug: process.env.DEBUG_MATCHER === 'true' || process.env.NODE_ENV !== 'production', // Enable debug in dev
   });
 
   // If there's an existing session, sync to its current state
@@ -335,6 +336,11 @@ function handleTranscriptionResult(
   const shouldAttemptMatch = transcriptionResult.isFinal || allowPartialMatching;
   const trimmedText = transcriptionResult.text.trim();
 
+  // Log transcription for debugging
+  if (trimmedText.length > 0) {
+    console.log(`[WS] 🎤 Transcription: "${trimmedText}" (isFinal=${transcriptionResult.isFinal}, confidence=${transcriptionResult.confidence?.toFixed(2) || 'N/A'})`);
+  }
+
   if (session.matcherConfig.debug) {
     console.log(`[WS] 📝 Transcript received: isFinal=${transcriptionResult.isFinal}, allowPartial=${allowPartialMatching}, shouldAttemptMatch=${shouldAttemptMatch}, text="${trimmedText}"`);
   }
@@ -391,20 +397,28 @@ function handleTranscriptionResult(
       return;
     }
 
-    // Always log matcher attempt for debugging production issues
-    console.log(`[WS] 🔍 Attempting match with buffer: "${cleanedBuffer.slice(0, 50)}..."`);
+      // Always log matcher attempt for debugging production issues
+      console.log(`[WS] 🔍 Attempting match with buffer: "${cleanedBuffer.slice(0, 50)}..."`);
+      console.log(`[WS] 🔍 Current line: "${session.songContext?.lines[session.songContext?.currentLineIndex || 0] || 'N/A'}"`);
+      console.log(`[WS] 🔍 Next line: "${session.songContext?.lines[(session.songContext?.currentLineIndex || 0) + 1] || 'N/A'}"`);
 
-    if (session.songContext) {
-      const matchResult = findBestMatch(
-        cleanedBuffer,
-        session.songContext,
-        session.matcherConfig
-      );
+      if (session.songContext) {
+        const matchResult = findBestMatch(
+          cleanedBuffer,
+          session.songContext,
+          session.matcherConfig
+        );
 
-      session.lastMatchConfidence = matchResult.confidence;
+        session.lastMatchConfidence = matchResult.confidence;
 
-      // Always log match result for debugging
-      console.log(`[WS] 📊 Match result: found=${matchResult.matchFound}, confidence=${(matchResult.confidence * 100).toFixed(1)}%, threshold=${(session.matcherConfig.similarityThreshold * 100).toFixed(1)}%`);
+        // Always log match result for debugging
+        console.log(`[WS] 📊 Match result: found=${matchResult.matchFound}, confidence=${(matchResult.confidence * 100).toFixed(1)}%, threshold=${(session.matcherConfig.similarityThreshold * 100).toFixed(1)}%`);
+        if (matchResult.matchFound) {
+          console.log(`[WS] 📊 Matched line ${matchResult.currentLineIndex}: "${matchResult.matchedText}"`);
+          console.log(`[WS] 📊 isLineEnd=${matchResult.isLineEnd}, nextLineIndex=${matchResult.nextLineIndex || 'N/A'}`);
+        } else {
+          console.log(`[WS] 📊 No match - best score was ${(matchResult.confidence * 100).toFixed(1)}% (need ${(session.matcherConfig.similarityThreshold * 100).toFixed(1)}%)`);
+        }
 
       if (matchResult.matchFound && matchResult.confidence >= session.matcherConfig.similarityThreshold) {
         if (session.matcherConfig.debug) {
