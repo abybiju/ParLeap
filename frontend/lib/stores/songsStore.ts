@@ -58,12 +58,13 @@ export const useSongsStore = create<SongsState>((set, get) => ({
       return null;
     }
 
-    const { data, error } = await supabase
-      .from('songs')
+    // Using type assertion to work around Supabase type inference issues
+    const { data, error } = await (supabase
+      .from('songs') as ReturnType<typeof supabase.from>)
       .insert({
         ...songData,
         user_id: user.id,
-      })
+      } as Record<string, unknown>)
       .select()
       .single();
 
@@ -87,12 +88,13 @@ export const useSongsStore = create<SongsState>((set, get) => ({
     set({ loading: true, error: null });
     const supabase = createClient();
 
-    const { data, error } = await supabase
-      .from('songs')
+    // Using type assertion to work around Supabase type inference issues
+    const { data, error } = await (supabase
+      .from('songs') as ReturnType<typeof supabase.from>)
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
-      })
+      } as Record<string, unknown>)
       .eq('id', id)
       .select()
       .single();

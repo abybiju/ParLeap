@@ -39,12 +39,13 @@ export default function ProfilePage() {
     setIsUpdating(true);
     const supabase = createClient();
 
-    const { error } = await supabase
-      .from('profiles')
+    // Using type assertion to work around Supabase type inference issues
+    const { error } = await (supabase
+      .from('profiles') as ReturnType<typeof supabase.from>)
       .update({
         username: username || null,
         updated_at: new Date().toISOString(),
-      })
+      } as Record<string, unknown>)
       .eq('id', user.id);
 
     if (error) {

@@ -86,7 +86,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       .order('sequence_order', { ascending: true });
 
     const eventWithItems: EventWithItems = {
-      ...event,
+      ...(event as Event),
       items: items || [],
     };
 
@@ -104,12 +104,13 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       return null;
     }
 
-    const { data, error } = await supabase
-      .from('events')
+    // Using type assertion to work around Supabase type inference issues
+    const { data, error } = await (supabase
+      .from('events') as ReturnType<typeof supabase.from>)
       .insert({
         ...eventData,
         user_id: user.id,
-      })
+      } as Record<string, unknown>)
       .select()
       .single();
 
@@ -133,12 +134,13 @@ export const useEventsStore = create<EventsState>((set, get) => ({
     set({ loading: true, error: null });
     const supabase = createClient();
 
-    const { data, error } = await supabase
-      .from('events')
+    // Using type assertion to work around Supabase type inference issues
+    const { data, error } = await (supabase
+      .from('events') as ReturnType<typeof supabase.from>)
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
-      })
+      } as Record<string, unknown>)
       .eq('id', id)
       .select()
       .single();
@@ -155,7 +157,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
     // Update currentEvent if it's the one being updated
     const currentEvent = get().currentEvent;
     const updatedCurrentEvent = currentEvent && currentEvent.id === id 
-      ? { ...currentEvent, ...data }
+      ? { ...currentEvent, ...(data as Event) }
       : currentEvent;
 
     set({ 
