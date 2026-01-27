@@ -12,7 +12,8 @@ interface EventCardProps {
 
 export function EventCard({ event }: EventCardProps) {
   const eventDate = event.event_date ? new Date(event.event_date) : null;
-  const formattedDate = eventDate
+  // Format date only (no time) for cleaner display
+  const formattedDate = eventDate && !Number.isNaN(eventDate.getTime())
     ? eventDate.toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
