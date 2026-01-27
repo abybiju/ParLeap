@@ -28,6 +28,21 @@ export interface MatchResult {
 }
 
 /**
+ * Multi-song match result (for checking all songs in setlist)
+ */
+export interface MultiSongMatchResult {
+  currentSongMatch: MatchResult;
+  suggestedSongSwitch?: {
+    songId: string;
+    songTitle: string;
+    songIndex: number;
+    confidence: number;
+    matchedLine: string;
+    matchedLineIndex: number;
+  };
+}
+
+/**
  * Song context for matching
  */
 export interface SongContext {
@@ -293,5 +308,133 @@ export function validateConfig(config: Partial<MatcherConfig>): MatcherConfig {
     bufferWindow: Math.max(1, config.bufferWindow ?? DEFAULT_CONFIG.bufferWindow),
     debug: config.debug ?? DEFAULT_CONFIG.debug,
   };
+}
+
+/**
+ * Find best match across ALL songs in the setlist (Adaptive Live Mode)
+ * 
+ * Optimization Strategy:
+ * 1. Check current song FIRST (Priority 1) - most common case
+ * 2. Only check other songs if current song confidence is LOW (< 60%)
+ * 3. Use higher threshold for song switches (0.85+) to prevent false positives
+ * 
+ * This prevents expensive multi-song scanning when the singer is on-track.
+ */
+export function findBestMatchAcrossAllSongs(
+  buffer: string,
+  currentSongContext: SongContext,
+  allSongs: SongData[],
+  currentSongIndex: number,
+  config: MatcherConfig = DEFAULT_CONFIG
+): MultiSongMatchResult {
+  const result: MultiSongMatchResult = {
+    currentSongMatch: findBestMatch(buffer, currentSongContext, config),
+  };
+
+  // OPTIMIZATION: If current song has good confidence, don't check others
+  // This is the 90% case - singer is on the right song
+  const SONG_SWITCH_MIN_CONFIDENCE = 0.85; // Higher threshold for song switches
+  const CURRENT_SONG_LOW_CONFIDENCE = 0.6; // Only check others if current < 60%
+
+  if (result.currentSongMatch.confidence >= CURRENT_SONG_LOW_CONFIDENCE) {
+    // Current song is matching well, no need to check others
+    if (config.debug) {
+      console.log(
+        `[MULTI-SONG] Current song confidence ${(result.currentSongMatch.confidence * 100).toFixed(1)}% is good (>60%), skipping other songs`
+      );
+    }
+    return result;
+  }
+
+  if (config.debug) {
+    console.log(
+      `[MULTI-SONG] Current song confidence ${(result.currentSongMatch.confidence * 100).toFixed(1)}% is low (<60%), checking other songs...`
+    );
+  }
+
+  // Check all OTHER songs for better matches
+  let bestOtherSongScore = 0;
+  let bestOtherSongIndex = -1;
+  let bestOtherSongLineIndex = -1;
+  let bestOtherSongLineText = '';
+
+  for (let i = 0; i < allSongs.length; i++) {
+    // Skip current song (already checked)
+    if (i === currentSongIndex) continue;
+
+    const song = allSongs[i];
+    const lines = song.lines && song.lines.length > 0 
+      ? song.lines 
+      : splitLyricsIntoLines(song.lyrics || '');
+
+    if (lines.length === 0) continue;
+
+    // Check this song (look at first few lines only for efficiency)
+    const lookAheadLines = Math.min(5, lines.length); // Only check first 5 lines
+    const normalizedBuffer = normalizeText(buffer);
+
+    for (let lineIdx = 0; lineIdx < lookAheadLines; lineIdx++) {
+      const line = lines[lineIdx];
+      const normalizedLine = normalizeText(line);
+      const similarity = compareTwoStrings(normalizedBuffer, normalizedLine);
+
+      if (similarity > bestOtherSongScore) {
+        bestOtherSongScore = similarity;
+        bestOtherSongIndex = i;
+        bestOtherSongLineIndex = lineIdx;
+        bestOtherSongLineText = line;
+      }
+
+      if (config.debug) {
+        console.log(
+          `[MULTI-SONG] Song ${i} ("${song.title}") Line ${lineIdx}: ${(similarity * 100).toFixed(1)}%`
+        );
+      }
+    }
+  }
+
+  // Only suggest song switch if confidence is HIGH (85%+) to prevent false positives
+  if (bestOtherSongScore >= SONG_SWITCH_MIN_CONFIDENCE) {
+    const suggestedSong = allSongs[bestOtherSongIndex];
+    result.suggestedSongSwitch = {
+      songId: suggestedSong.id,
+      songTitle: suggestedSong.title,
+      songIndex: bestOtherSongIndex,
+      confidence: bestOtherSongScore,
+      matchedLine: bestOtherSongLineText,
+      matchedLineIndex: bestOtherSongLineIndex,
+    };
+
+    if (config.debug) {
+      console.log(
+        `[MULTI-SONG] 🎵 SONG SWITCH DETECTED: "${suggestedSong.title}" @ ${(bestOtherSongScore * 100).toFixed(1)}%`
+      );
+    }
+  } else if (bestOtherSongScore >= 0.6) {
+    // Medium confidence (60-85%) - suggest but don't auto-switch
+    const suggestedSong = allSongs[bestOtherSongIndex];
+    result.suggestedSongSwitch = {
+      songId: suggestedSong.id,
+      songTitle: suggestedSong.title,
+      songIndex: bestOtherSongIndex,
+      confidence: bestOtherSongScore,
+      matchedLine: bestOtherSongLineText,
+      matchedLineIndex: bestOtherSongLineIndex,
+    };
+
+    if (config.debug) {
+      console.log(
+        `[MULTI-SONG] 🤔 Possible song switch to "${suggestedSong.title}" @ ${(bestOtherSongScore * 100).toFixed(1)}% (medium confidence)`
+      );
+    }
+  } else {
+    if (config.debug) {
+      console.log(
+        `[MULTI-SONG] No strong match in other songs (best: ${(bestOtherSongScore * 100).toFixed(1)}%)`
+      );
+    }
+  }
+
+  return result;
 }
 

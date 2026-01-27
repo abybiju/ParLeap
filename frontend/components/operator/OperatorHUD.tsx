@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Zap, ZapOff } from 'lucide-react';
+import { toast } from 'sonner';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
-import { isSessionStartedMessage, isSessionEndedMessage } from '@/lib/websocket/types';
+import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage } from '@/lib/websocket/types';
 import { GhostText } from './GhostText';
 import { MatchStatus } from './MatchStatus';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -38,6 +40,7 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
     stopSession,
     nextSlide,
     prevSlide,
+    goToSlide,
     lastMessage,
     connect,
   } = useWebSocket(false); // Don't auto-connect - match test page pattern
@@ -45,6 +48,7 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
   const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
   const audioCapture = useAudioCapture({ usePcm: sttProvider === 'elevenlabs' });
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [isAutoFollowing, setIsAutoFollowing] = useState(true); // PHASE 2: Auto-follow toggle
 
   // Auto-connect on mount (but don't auto-start session)
   useEffect(() => {
@@ -103,6 +107,38 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
     }
   }, [lastMessage, audioCapture]);
 
+  // PHASE 2: Handle song suggestions (medium confidence 60-85%)
+  useEffect(() => {
+    if (lastMessage && isSongSuggestionMessage(lastMessage)) {
+      const { suggestedSongTitle, confidence, matchedLine } = lastMessage.payload;
+      toast.info(
+        `Detected "${suggestedSongTitle}"?`,
+        {
+          description: `${(confidence * 100).toFixed(0)}% match: "${matchedLine.slice(0, 50)}..."`,
+          action: {
+            label: 'Switch Now',
+            onClick: () => {
+              // User manually confirmed, jump to suggested song
+              goToSlide(0, lastMessage.payload.suggestedSongId);
+            },
+          },
+          duration: 5000,
+        }
+      );
+    }
+  }, [lastMessage, goToSlide]);
+
+  // PHASE 2: Toggle auto-follow mode
+  const toggleAutoFollow = () => {
+    setIsAutoFollowing(!isAutoFollowing);
+    if (!isAutoFollowing) {
+      toast.success('AI Auto-Follow enabled');
+    } else {
+      toast.warning('AI Auto-Follow disabled');
+    }
+    // Note: Backend tracks this automatically when manual overrides are sent
+  };
+
   const handleStopSession = () => {
     if (audioCapture.state.isRecording) {
       audioCapture.stop();
@@ -120,6 +156,31 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
           <ConnectionStatus />
         </div>
         <div className="flex items-center gap-3">
+          {/* PHASE 2: Auto-Follow Toggle */}
+          <button
+            onClick={toggleAutoFollow}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium border transition-all',
+              'hover:scale-105 active:scale-95',
+              isAutoFollowing
+                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50'
+                : 'bg-slate-500/20 text-slate-400 border-slate-500/50'
+            )}
+            title={isAutoFollowing ? 'AI Auto-Follow: ON' : 'AI Auto-Follow: OFF'}
+          >
+            {isAutoFollowing ? (
+              <>
+                <Zap className="inline h-3 w-3 mr-1" />
+                AI Auto-Follow
+              </>
+            ) : (
+              <>
+                <ZapOff className="inline h-3 w-3 mr-1" />
+                Manual Mode
+              </>
+            )}
+          </button>
+          
           <span
             className={cn(
               'px-3 py-1 rounded-full text-xs font-medium border',

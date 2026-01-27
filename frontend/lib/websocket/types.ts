@@ -117,6 +117,22 @@ export interface SongChangedMessage {
   timing?: TimingMetadata;
 }
 
+/**
+ * SONG_SUGGESTION - AI detected a possible song switch (medium confidence 60-85%)
+ * Sent when matcher finds better match in different song but not confident enough to auto-switch
+ */
+export interface SongSuggestionMessage {
+  type: 'SONG_SUGGESTION';
+  payload: {
+    suggestedSongId: string;
+    suggestedSongTitle: string;
+    suggestedSongIndex: number;
+    confidence: number;
+    matchedLine: string;
+  };
+  timing?: TimingMetadata;
+}
+
 export interface SessionEndedMessage {
   type: 'SESSION_ENDED';
   payload: {
@@ -149,6 +165,7 @@ export type ServerMessage =
   | TranscriptUpdateMessage
   | DisplayUpdateMessage
   | SongChangedMessage
+  | SongSuggestionMessage
   | SessionEndedMessage
   | ErrorMessage
   | PongMessage;
@@ -184,6 +201,10 @@ export function isSongChangedMessage(msg: ServerMessage): msg is SongChangedMess
 
 export function isSessionEndedMessage(msg: ServerMessage): msg is SessionEndedMessage {
   return msg.type === 'SESSION_ENDED';
+}
+
+export function isSongSuggestionMessage(msg: ServerMessage): msg is SongSuggestionMessage {
+  return msg.type === 'SONG_SUGGESTION';
 }
 
 export function isErrorMessage(msg: ServerMessage): msg is ErrorMessage {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Play } from 'lucide-react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useSlideCache } from '@/lib/stores/slideCache';
 import { isDisplayUpdateMessage, isSessionStartedMessage, type DisplayUpdateMessage } from '@/lib/websocket/types';
@@ -10,12 +11,20 @@ import { cn } from '@/lib/utils';
  * Setlist Panel Component
  * 
  * Displays the full setlist with current song/slide highlighted
+ * PHASE 2: Songs are now clickable for manual override
  */
 export function SetlistPanel() {
-  const { lastMessage } = useWebSocket(false);
+  const { lastMessage, goToSlide } = useWebSocket(false);
   const slideCache = useSlideCache();
   const [currentSongId, setCurrentSongId] = useState<string | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
+
+  // Handle manual song jump
+  const handleSongClick = (songId: string, songIndex: number) => {
+    // Jump to first slide of the clicked song
+    goToSlide(0, songId);
+    console.log(`[SetlistPanel] Manual override: Jumping to song "${songId}" (index ${songIndex})`);
+  };
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -54,28 +63,38 @@ export function SetlistPanel() {
           const isCurrentSong = song.id === currentSongId;
           
           return (
-            <div
+            <button
               key={song.id}
+              onClick={() => handleSongClick(song.id, songIndex)}
+              disabled={isCurrentSong}
               className={cn(
-                'rounded-lg border p-3 transition-all',
+                'w-full rounded-lg border p-3 transition-all text-left',
+                'hover:border-indigo-400/50 hover:bg-indigo-500/5',
+                'focus:outline-none focus:ring-2 focus:ring-indigo-500/50',
+                'disabled:cursor-default disabled:hover:border-indigo-500/50 disabled:hover:bg-indigo-500/10',
                 isCurrentSong
                   ? 'border-indigo-500/50 bg-indigo-500/10'
-                  : 'border-white/10 bg-white/5'
+                  : 'border-white/10 bg-white/5 cursor-pointer'
               )}
             >
               <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p
-                    className={cn(
-                      'text-sm font-medium',
-                      isCurrentSong ? 'text-indigo-300' : 'text-slate-300'
-                    )}
-                  >
-                    {songIndex + 1}. {song.title}
-                  </p>
-                  {song.artist && (
-                    <p className="text-xs text-slate-500 mt-0.5">{song.artist}</p>
+                <div className="flex-1 flex items-start gap-2">
+                  {!isCurrentSong && (
+                    <Play className="h-4 w-4 text-slate-400 flex-shrink-0 mt-0.5" />
                   )}
+                  <div className="flex-1">
+                    <p
+                      className={cn(
+                        'text-sm font-medium',
+                        isCurrentSong ? 'text-indigo-300' : 'text-slate-300'
+                      )}
+                    >
+                      {songIndex + 1}. {song.title}
+                    </p>
+                    {song.artist && (
+                      <p className="text-xs text-slate-500 mt-0.5">{song.artist}</p>
+                    )}
+                  </div>
                 </div>
                 {isCurrentSong && (
                   <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-medium">
@@ -108,7 +127,7 @@ export function SetlistPanel() {
                   </p>
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
