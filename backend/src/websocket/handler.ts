@@ -203,11 +203,21 @@ async function handleStartSession(
 
   // Check if there's already an active session for this eventId (from another client)
   // If so, sync the new client to the current state
+  // IMPORTANT: Only consider sessions with OPEN WebSocket connections (not stale)
   let existingSession: SessionState | null = null;
+  let existingSessionWithSTT: SessionState | null = null;
   for (const [existingWs, existing] of sessions.entries()) {
+    // Only consider truly active sessions (WebSocket must be OPEN)
     if (existing.eventId === eventId && existing.isActive && existingWs.readyState === ws.OPEN) {
       existingSession = existing;
-      console.log(`[WS] Found existing session for event ${eventId}, syncing new client to current state`);
+      // Track if any existing session has an STT stream
+      if (existing.sttStream) {
+        existingSessionWithSTT = existing;
+        console.log(`[WS] Found existing session with STT stream for event ${eventId}`);
+      } else {
+        console.log(`[WS] Found existing session WITHOUT STT stream for event ${eventId} (likely projector view)`);
+      }
+      console.log(`[WS] Syncing new client to current state (song ${existing.currentSongIndex}, slide ${existing.currentSlideIndex})`);
       break;
     }
   }
@@ -262,9 +272,13 @@ async function handleStartSession(
     lastMatchConfidence: existingSession?.lastMatchConfidence || 0,
   };
 
-  // Only create STT stream for the first session (operator view)
-  // Projector views don't need audio transcription
-  if (sttProvider === 'elevenlabs' && !existingSession) {
+  // Create STT stream if:
+  // 1. No existing session (first client), OR
+  // 2. Existing session but it doesn't have an STT stream (projector connected first)
+  // This ensures the operator view always gets STT, even if projector connects first
+  const shouldCreateSTT = sttProvider === 'elevenlabs' && !existingSessionWithSTT;
+  
+  if (shouldCreateSTT) {
     if (!isElevenLabsConfigured) {
       console.error('[STT] ❌ ElevenLabs selected but ELEVENLABS_API_KEY not configured');
       sendError(ws, 'STT_ERROR', 'ElevenLabs API key not configured. Set ELEVENLABS_API_KEY in backend/.env');
@@ -274,6 +288,8 @@ async function handleStartSession(
       stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
         const processingStart = Date.now();
         const receivedAtNow = Date.now();
+        // Broadcast transcription to ALL sessions for this event, not just this one
+        // This allows projector views to also receive transcript updates if needed
         handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
       });
       stream.on('error', (error: Error) => {
@@ -284,8 +300,22 @@ async function handleStartSession(
         console.log('[STT] ElevenLabs stream ended');
       });
       session.sttStream = stream;
-      console.log('[STT] ✅ ElevenLabs stream initialized');
+      console.log('[STT] ✅ ElevenLabs stream initialized for new session');
+      
+      // If there's an existing session without STT, share the stream with it
+      // This handles the case where projector connected first
+      if (existingSession && !existingSession.sttStream) {
+        console.log('[STT] 📡 Sharing STT stream with existing session (projector view)');
+        existingSession.sttStream = stream;
+      }
     }
+  } else if (existingSessionWithSTT && existingSessionWithSTT.sttStream) {
+    // Share existing STT stream with new session (operator reconnected or projector connecting after operator)
+    console.log('[STT] 📡 Reusing existing STT stream from another session');
+    session.sttStream = existingSessionWithSTT.sttStream;
+  } else if (sttProvider === 'elevenlabs' && !isElevenLabsConfigured) {
+    // Log warning if ElevenLabs is selected but not configured
+    console.warn('[STT] ⚠️  ElevenLabs selected but ELEVENLABS_API_KEY not configured - STT will not work');
   }
 
   sessions.set(ws, session);
@@ -344,6 +374,8 @@ function handleTranscriptionResult(
   receivedAt: number,
   processingStart: number
 ): void {
+  // Send transcript to the session that received it (usually the one with STT stream)
+  // Matching will be processed for this session
   // Default to allowing partial matching to provide faster feedback
   const allowPartialMatching =
     process.env.MATCHER_ALLOW_PARTIAL === undefined
