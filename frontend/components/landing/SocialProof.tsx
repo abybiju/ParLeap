@@ -50,7 +50,7 @@ export function SocialProof() {
               className="glass-card p-8 lg:p-10 transition-all duration-500 ease-out cursor-default hover:-translate-y-2 hover:scale-[1.02] hover:shadow-[0_20px_80px_-10px_rgba(255,140,66,0.3)] hover:border-[#FF8C42]/50 will-change-transform"
             >
               <blockquote className="text-xl lg:text-2xl text-white leading-relaxed mb-6">
-                "{testimonial.quote}"
+                &ldquo;{testimonial.quote}&rdquo;
               </blockquote>
               <cite className="text-gray-400 text-lg not-italic">
                 — {testimonial.author}, {testimonial.role}
