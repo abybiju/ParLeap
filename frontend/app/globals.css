@@ -24,6 +24,8 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+    --brand-orange-start: 255 140 0;
+    --brand-orange-end: 255 69 0;
   }
 
   .dark {
@@ -46,12 +48,58 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+    --brand-orange-start: 255 140 0;
+    --brand-orange-end: 255 69 0;
+  }
+}
+
+/* Deep Space Sunrise Theme */
+@layer base {
+  body {
+    background-color: #050505;
+    background-image: radial-gradient(
+      circle at top center,
+      rgba(255, 140, 0, 0.15),
+      rgba(255, 69, 0, 0.1),
+      transparent 70%
+    );
+    min-height: 100vh;
+  }
+}
+
+/* Glass Card Utilities */
+@layer utilities {
+  .glass-card {
+    @apply backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl;
+  }
+  
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/20;
+  }
+  
+  .gradient-brand {
+    background: linear-gradient(135deg, rgb(var(--brand-orange-start)), rgb(var(--brand-orange-end)));
+  }
+  
+  .pause-on-hover:hover {
+    animation-play-state: paused;
+  }
+  
+  .group-pause-on-hover {
+    animation-play-state: running;
+  }
+  
+  .group:hover .group-pause-on-hover {
+    animation-play-state: paused;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
   }
   body {
     @apply bg-background text-foreground;

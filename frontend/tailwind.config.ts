@@ -52,6 +52,12 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        brand: {
+          orange: {
+            start: "rgb(var(--brand-orange-start))",
+            end: "rgb(var(--brand-orange-end))",
+          },
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -67,10 +73,54 @@ const config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        float: {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        "pulse-glow": {
+          "0%, 100%": { opacity: "0.8", boxShadow: "0 0 20px rgba(255, 140, 0, 0.3)" },
+          "50%": { opacity: "1", boxShadow: "0 0 40px rgba(255, 140, 0, 0.6)" },
+        },
+        waveform: {
+          "0%, 100%": { transform: "scaleY(0.3)" },
+          "50%": { transform: "scaleY(1)" },
+        },
+        aurora: {
+          "0%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" },
+        },
+        "marquee-up": {
+          "0%": { transform: "translateY(0%)" },
+          "100%": { transform: "translateY(-100%)" },
+        },
+        "marquee-up-reverse": {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(0%)" },
+        },
+        "scroll-up": {
+          "0%": { transform: "translateY(0%)" },
+          "100%": { transform: "translateY(-50%)" },
+        },
+        "scroll-down": {
+          "0%": { transform: "translateY(-50%)" },
+          "100%": { transform: "translateY(0%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        float: "float 6s ease-in-out infinite",
+        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        waveform: "waveform 0.8s ease-in-out infinite",
+        aurora: "aurora 15s ease-in-out infinite",
+        "marquee-up-slow": "marquee-up 40s linear infinite",
+        "marquee-up-medium": "marquee-up 30s linear infinite",
+        "marquee-up-slow-reverse": "marquee-up-reverse 45s linear infinite",
+        "scroll-up": "scroll-up 60s linear infinite",
+        "scroll-down": "scroll-down 50s linear infinite",
+        "scroll-up-slow": "scroll-up 90s linear infinite",
+        "scroll-down-slow": "scroll-down 80s linear infinite",
       },
     },
   },
