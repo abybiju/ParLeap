@@ -27,9 +27,11 @@ The ParLeap landing page features a modern, Superlist-inspired design with a "De
 
 ### 1. Header (`frontend/components/layout/Header.tsx`)
 - Fixed position, glassmorphic navbar
-- Logo + "ParLeap" text
-- Center navigation (Features, Pricing, Download)
-- Right actions (Sign In, Get Started button)
+- Height: `h-20` (80px) with top padding `pt-6` (24px) for visual spacing
+- Logo + "ParLeap" text (left-aligned, flex-shrink-0)
+- Navigation links (Features, Pricing, Download) positioned between logo and buttons using flex-1 justify-end
+- Right actions (Sign In, Get Started button) with flex-shrink-0
+- Responsive: Nav links hidden on mobile (`hidden md:flex`), logo and buttons remain visible
 
 ### 2. Hero Section (`frontend/components/landing/HeroSection.tsx`)
 - **Headline**: "You speak, It flows." (two-line format)

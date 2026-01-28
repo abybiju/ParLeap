@@ -228,9 +228,11 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
   - Social icons (Instagram, LinkedIn, YouTube)
   - Copyright and legal links
 - ✅ **Sticky Header**
-  - Glassmorphic navbar
-  - Logo + navigation links
-  - Sign In + Get Started buttons
+  - Glassmorphic navbar with increased height (h-20) and top spacing (pt-6)
+  - Logo positioned on left
+  - Navigation links (Features, Pricing, Download) positioned between logo and buttons (not centered)
+  - Sign In + Get Started buttons on right
+  - Responsive: Nav links hidden on mobile, logo and buttons remain visible
 - ✅ **Animations**
   - Framer Motion throughout
   - Scroll-triggered fade-up animations
