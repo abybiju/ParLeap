@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button'
 
 export function Header() {
   return (
-    <header className="fixed top-0 w-full z-50 backdrop-blur-xl bg-black/50 border-b border-white/5">
+    <header className="fixed top-0 w-full z-50 backdrop-blur-xl bg-black/50 border-b border-white/5 pt-6">
       <div className="container mx-auto px-4">
-        <nav className="flex items-center justify-between h-16">
+        <nav className="flex items-center h-20">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity flex-shrink-0">
             <Image
               src="/logo.png"
               alt="ParLeap"
@@ -21,8 +21,8 @@ export function Header() {
             <span className="text-white font-semibold text-lg">ParLeap</span>
           </Link>
 
-          {/* Center Links */}
-          <div className="hidden md:flex items-center gap-8">
+          {/* Navigation Links - Positioned between logo and buttons */}
+          <div className="hidden md:flex items-center gap-6 flex-1 justify-end mr-8">
             <Link
               href="#features"
               className="text-neutral-400 hover:text-white transition-colors"
@@ -44,7 +44,7 @@ export function Header() {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-shrink-0">
             <Link
               href="/auth/login"
               className="text-neutral-400 hover:text-white transition-colors hidden sm:block"
