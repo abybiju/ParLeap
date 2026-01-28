@@ -9,7 +9,7 @@ import { TypewriterText } from '@/components/ui/TypewriterText'
 
 export function HeroSection() {
   return (
-    <section className="min-h-screen flex items-center justify-center px-4 py-20 pt-40">
+    <section className="min-h-screen flex items-center justify-center px-4 py-20 pt-48">
       <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center mt-8">
         {/* Left: Text Content */}
         <motion.div
