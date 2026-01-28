@@ -103,7 +103,7 @@ export function TestimonialWall() {
                   className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md transition-all duration-300 opacity-80 scale-100 hover:scale-110 hover:z-50 hover:opacity-100 hover:border-[#FF8C42]/50 hover:shadow-[0_0_50px_-10px_rgba(255,140,66,0.3)] hover:bg-[#0A0A0A] relative"
                 >
                   <blockquote className="text-lg text-white leading-relaxed mb-4">
-                    "{testimonial.quote}"
+                    &ldquo;{testimonial.quote}&rdquo;
                   </blockquote>
                   <cite className="text-gray-400 text-sm not-italic">
                     — {testimonial.author}, {testimonial.role}
@@ -117,7 +117,7 @@ export function TestimonialWall() {
                   className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md transition-all duration-300 opacity-80 scale-100 hover:scale-110 hover:z-50 hover:opacity-100 hover:border-[#FF8C42]/50 hover:shadow-[0_0_50px_-10px_rgba(255,140,66,0.3)] hover:bg-[#0A0A0A] relative"
                 >
                   <blockquote className="text-lg text-white leading-relaxed mb-4">
-                    "{testimonial.quote}"
+                    &ldquo;{testimonial.quote}&rdquo;
                   </blockquote>
                   <cite className="text-gray-400 text-sm not-italic">
                     — {testimonial.author}, {testimonial.role}
@@ -137,7 +137,7 @@ export function TestimonialWall() {
                   className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md transition-all duration-300 opacity-80 scale-100 hover:scale-110 hover:z-50 hover:opacity-100 hover:border-[#FF8C42]/50 hover:shadow-[0_0_50px_-10px_rgba(255,140,66,0.3)] hover:bg-[#0A0A0A] relative"
                 >
                   <blockquote className="text-lg text-white leading-relaxed mb-4">
-                    "{testimonial.quote}"
+                    &ldquo;{testimonial.quote}&rdquo;
                   </blockquote>
                   <cite className="text-gray-400 text-sm not-italic">
                     — {testimonial.author}, {testimonial.role}
@@ -151,7 +151,7 @@ export function TestimonialWall() {
                   className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md transition-all duration-300 opacity-80 scale-100 hover:scale-110 hover:z-50 hover:opacity-100 hover:border-[#FF8C42]/50 hover:shadow-[0_0_50px_-10px_rgba(255,140,66,0.3)] hover:bg-[#0A0A0A] relative"
                 >
                   <blockquote className="text-lg text-white leading-relaxed mb-4">
-                    "{testimonial.quote}"
+                    &ldquo;{testimonial.quote}&rdquo;
                   </blockquote>
                   <cite className="text-gray-400 text-sm not-italic">
                     — {testimonial.author}, {testimonial.role}
@@ -171,7 +171,7 @@ export function TestimonialWall() {
                   className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md transition-all duration-300 opacity-80 scale-100 hover:scale-110 hover:z-50 hover:opacity-100 hover:border-[#FF8C42]/50 hover:shadow-[0_0_50px_-10px_rgba(255,140,66,0.3)] hover:bg-[#0A0A0A] relative"
                 >
                   <blockquote className="text-lg text-white leading-relaxed mb-4">
-                    "{testimonial.quote}"
+                    &ldquo;{testimonial.quote}&rdquo;
                   </blockquote>
                   <cite className="text-gray-400 text-sm not-italic">
                     — {testimonial.author}, {testimonial.role}
@@ -185,7 +185,7 @@ export function TestimonialWall() {
                   className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md transition-all duration-300 opacity-80 scale-100 hover:scale-110 hover:z-50 hover:opacity-100 hover:border-[#FF8C42]/50 hover:shadow-[0_0_50px_-10px_rgba(255,140,66,0.3)] hover:bg-[#0A0A0A] relative"
                 >
                   <blockquote className="text-lg text-white leading-relaxed mb-4">
-                    "{testimonial.quote}"
+                    &ldquo;{testimonial.quote}&rdquo;
                   </blockquote>
                   <cite className="text-gray-400 text-sm not-italic">
                     — {testimonial.author}, {testimonial.role}

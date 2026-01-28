@@ -34,7 +34,7 @@ export function FeatureGrid() {
               <h3 className="text-2xl font-semibold text-white">Real-Time Confidence Engine</h3>
             </div>
             <p className="text-gray-300 leading-relaxed text-lg">
-              Our AI calculates match confidence every 50ms. If it's not sure, it asks you. If it is sure, it just works.
+              Our AI calculates match confidence every 50ms. If it&apos;s not sure, it asks you. If it is sure, it just works.
             </p>
             <ConfidenceGraph />
           </motion.div>
