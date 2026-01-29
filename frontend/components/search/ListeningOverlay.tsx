@@ -118,20 +118,20 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       // Start timer
       timerRef.current = setInterval(() => {
         setRecordingTime((t) => {
-          // Cap at 10 seconds for display
-          if (t >= 10) {
-            return 10
+          // Cap at 5 seconds for display (reduced to prevent payload too large)
+          if (t >= 5) {
+            return 5
           }
           return t + 1
         })
       }, 1000)
 
-      // Auto-stop after 10 seconds
+      // Auto-stop after 5 seconds (reduced to prevent payload too large)
       autoStopTimeoutRef.current = setTimeout(() => {
         if (isRecordingRef.current) {
           stopRecording()
         }
-      }, 10000)
+      }, 5000)
     } catch (err) {
       console.error('Failed to start recording:', err)
       setError('Could not access microphone. Please grant permission.')
@@ -276,17 +276,38 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       clearTimeout(timeoutId)
 
       if (!response.ok) {
+        // Clone response before reading to avoid "body already read" error
+        const responseClone = response.clone()
         let errorData: any = {}
+        let errorMessage = `Search failed: ${response.status} ${response.statusText}`
+        
         try {
-          errorData = await response.json()
+          errorData = await responseClone.json()
+          errorMessage = errorData.error || errorMessage
         } catch {
-          // Response is not JSON
-          const text = await response.text()
-          console.error('[HumSearch] Non-JSON error response:', text)
-          throw new Error(`Search failed: ${response.status} ${response.statusText}`)
+          // Response is not JSON, try text
+          try {
+            const text = await response.text()
+            console.error('[HumSearch] Non-JSON error response:', text)
+            errorMessage = text || errorMessage
+          } catch {
+            // Can't read response at all
+            console.error('[HumSearch] Cannot read error response')
+          }
         }
+        
         console.error('[HumSearch] Error response:', errorData)
-        throw new Error(errorData.error || `Search failed: ${response.status}`)
+        
+        // Provide user-friendly error messages
+        if (response.status === 413) {
+          throw new Error('Audio file too large. Please record a shorter clip (3-5 seconds).')
+        } else if (response.status === 400) {
+          throw new Error(errorMessage || 'Invalid audio format. Please try again.')
+        } else if (response.status >= 500) {
+          throw new Error('Server error. Please try again later.')
+        } else {
+          throw new Error(errorMessage)
+        }
       }
 
       const data = await response.json()
@@ -361,7 +382,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
               Listening...
             </p>
             <p className="text-white/60 mb-6">
-              Hum your melody ({Math.max(0, 10 - recordingTime)}s remaining)
+              Hum your melody ({Math.max(0, 5 - recordingTime)}s remaining)
             </p>
 
             {/* Real Waveform Visualization */}

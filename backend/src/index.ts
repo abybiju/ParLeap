@@ -55,7 +55,9 @@ app.use(
 );
 
 // Middleware
-app.use(express.json());
+// Increase body size limit to 10MB for audio uploads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
