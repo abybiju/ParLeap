@@ -131,8 +131,8 @@ export async function getMelodyVector(audioBuffer: Buffer): Promise<number[]> {
       onsets.push(...o);
       contours.push(...c);
     },
-    (_p: number) => {
-      // Progress callback (optional)
+    () => {
+      // Progress callback (not used)
     }
   );
   
