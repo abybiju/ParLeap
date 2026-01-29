@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X, Music, Loader2, Sparkles, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +56,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       return () => clearTimeout(timeout)
     } else {
       stopRecording()
+      return undefined
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
