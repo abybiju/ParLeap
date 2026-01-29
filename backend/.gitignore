@@ -6,3 +6,7 @@ dist/
 .DS_Store
 *.tsbuildinfo
 
+# Audio files for local ingestion (too large for git)
+songs_input/
+*.wav
+*.mp3
