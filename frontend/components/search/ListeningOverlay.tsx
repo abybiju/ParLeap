@@ -36,6 +36,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isRecordingRef = useRef<boolean>(false)
 
   // Clean up on unmount or close
@@ -44,6 +45,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       isRecordingRef.current = false
       if (timerRef.current) clearInterval(timerRef.current)
       if (autoStopTimeoutRef.current) clearTimeout(autoStopTimeoutRef.current)
+      if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
       stopRecording()
     }
   }, [])
@@ -234,7 +236,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       const wavBuffer = audioBufferToWav(audioBuffer)
       const base64Audio = arrayBufferToBase64(wavBuffer)
 
-      // Send to backend with timeout
+      // Send to backend with async job pattern
       // Use production backend URL if NEXT_PUBLIC_BACKEND_URL is not set
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
         (typeof window !== 'undefined' && window.location.hostname === 'www.parleap.com' 
@@ -244,10 +246,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       console.log('[HumSearch] Sending request to:', `${backendUrl}/api/hum-search`)
       console.log('[HumSearch] Audio size:', base64Audio.length, 'chars (base64)')
       
-      // Create abort controller for timeout
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-      
+      // Create job (returns immediately)
       let response: Response
       try {
         response = await fetch(`${backendUrl}/api/hum-search`, {
@@ -258,25 +257,17 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
             limit: 5,
             threshold: 0.4,
           }),
-          signal: controller.signal,
         })
         console.log('[HumSearch] Response status:', response.status, response.statusText)
       } catch (err) {
-        clearTimeout(timeoutId)
         console.error('[HumSearch] Fetch error:', err)
-        if (err instanceof Error && err.name === 'AbortError') {
-          throw new Error('Request timed out. Please try again.')
-        }
         if (err instanceof Error && err.message.includes('Failed to fetch')) {
           throw new Error(`Cannot connect to backend. Check if ${backendUrl} is accessible.`)
         }
         throw err
       }
-      
-      clearTimeout(timeoutId)
 
       if (!response.ok) {
-        // Clone response before reading to avoid "body already read" error
         const responseClone = response.clone()
         let errorData: any = {}
         let errorMessage = `Search failed: ${response.status} ${response.statusText}`
@@ -285,20 +276,15 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
           errorData = await responseClone.json()
           errorMessage = errorData.error || errorMessage
         } catch {
-          // Response is not JSON, try text
           try {
             const text = await response.text()
             console.error('[HumSearch] Non-JSON error response:', text)
             errorMessage = text || errorMessage
           } catch {
-            // Can't read response at all
             console.error('[HumSearch] Cannot read error response')
           }
         }
         
-        console.error('[HumSearch] Error response:', errorData)
-        
-        // Provide user-friendly error messages
         if (response.status === 413) {
           throw new Error('Audio file too large. Please record a shorter clip (3-5 seconds).')
         } else if (response.status === 400) {
@@ -310,17 +296,54 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
         }
       }
 
-      const data = await response.json()
-      console.log('[HumSearch] Received results:', data)
+      const jobData = await response.json()
+      console.log('[HumSearch] Created job:', jobData.jobId)
       
-      if (data.results && data.results.length > 0) {
-        setResults(data.results)
-        setState('results')
-      } else {
-        console.log('[HumSearch] No results found')
-        setError('No matching songs found. Try humming louder or longer!')
-        setState('error')
+      if (!jobData.jobId) {
+        throw new Error('Failed to create search job')
       }
+
+      // Poll for results (max 60 seconds, every 1 second)
+      const maxAttempts = 60
+      let attempts = 0
+      
+      const pollForResults = async (): Promise<void> => {
+        try {
+          const statusResponse = await fetch(`${backendUrl}/api/hum-search/${jobData.jobId}`)
+          
+          if (!statusResponse.ok) {
+            throw new Error(`Failed to check job status: ${statusResponse.status}`)
+          }
+          
+          const statusData = await statusResponse.json()
+          console.log(`[HumSearch] Job ${jobData.jobId} status:`, statusData.status)
+          
+          if (statusData.status === 'completed') {
+            if (statusData.results && statusData.results.length > 0) {
+              setResults(statusData.results)
+              setState('results')
+            } else {
+              setError('No matching songs found. Try humming louder or longer!')
+              setState('error')
+            }
+          } else if (statusData.status === 'failed') {
+            throw new Error(statusData.error || 'Search failed')
+          } else {
+            // Still processing, poll again
+            attempts++
+            if (attempts >= maxAttempts) {
+              throw new Error('Search timed out. Please try again.')
+            }
+            pollingTimeoutRef.current = setTimeout(pollForResults, 1000) // Poll every second
+          }
+        } catch (err) {
+          console.error('[HumSearch] Polling error:', err)
+          throw err
+        }
+      }
+      
+      // Start polling
+      await pollForResults()
     } catch (err) {
       console.error('[HumSearch] Processing error:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to search. Please try again.'
