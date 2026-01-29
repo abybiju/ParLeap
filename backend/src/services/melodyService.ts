@@ -89,6 +89,7 @@ function findModelPath(): string {
 }
 
 const modelPath = findModelPath();
+console.log(`[MelodyService] Using BasicPitch model at: ${modelPath}`);
 
 /**
  * Extract a 128-dimensional melody vector from audio buffer
@@ -97,10 +98,20 @@ const modelPath = findModelPath();
  * @returns Promise resolving to 128D vector (64 pitch intervals + 64 rhythm ratios)
  */
 export async function getMelodyVector(audioBuffer: Buffer): Promise<number[]> {
+  console.log(`[MelodyService] Extracting melody vector from ${audioBuffer.length} byte WAV file`);
+  
   // 1. Decode WAV to float32 samples
   // Note: BasicPitch resamples to 22050 Hz internally, so we don't need sampleRate
-  const wav = new WaveFile(audioBuffer);
+  let wav: WaveFile;
+  try {
+    wav = new WaveFile(audioBuffer);
+  } catch (err) {
+    console.error('[MelodyService] Failed to parse WAV file:', err);
+    throw new Error(`Invalid WAV file: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+  
   const samples = wav.getSamples(true, Float32Array);
+  console.log(`[MelodyService] Decoded WAV: ${Array.isArray(samples) ? 'stereo' : 'mono'}, ${Array.isArray(samples) ? samples[0].length : samples.length} samples`);
   
   // Handle mono/stereo conversion
   let audioData: Float32Array;
@@ -118,24 +129,38 @@ export async function getMelodyVector(audioBuffer: Buffer): Promise<number[]> {
   
   // 2. Run BasicPitch to extract MIDI notes
   // BasicPitch will load the model internally from the path
-  const basicPitch = new BasicPitch(modelPath);
+  console.log('[MelodyService] Initializing BasicPitch model...');
+  let basicPitch: BasicPitch;
+  try {
+    basicPitch = new BasicPitch(modelPath);
+  } catch (err) {
+    console.error('[MelodyService] Failed to initialize BasicPitch:', err);
+    throw new Error(`Failed to load BasicPitch model: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
   
+  console.log('[MelodyService] Running BasicPitch inference...');
   // Collect frames, onsets, and contours from callbacks
   const frames: number[][] = [];
   const onsets: number[][] = [];
   const contours: number[][] = [];
   
-  await basicPitch.evaluateModel(
-    audioData,
-    (f: number[][], o: number[][], c: number[][]) => {
-      frames.push(...f);
-      onsets.push(...o);
-      contours.push(...c);
-    },
-    () => {
-      // Progress callback (not used)
-    }
-  );
+  try {
+    await basicPitch.evaluateModel(
+      audioData,
+      (f: number[][], o: number[][], c: number[][]) => {
+        frames.push(...f);
+        onsets.push(...o);
+        contours.push(...c);
+      },
+      () => {
+        // Progress callback (not used)
+      }
+    );
+    console.log(`[MelodyService] BasicPitch inference complete: ${frames.length} frames, ${onsets.length} onsets`);
+  } catch (err) {
+    console.error('[MelodyService] BasicPitch inference failed:', err);
+    throw new Error(`Melody extraction failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
   
   // Convert frames/onsets to note events
   // Parameters: onsetThreshold, frameThreshold, minNoteLength
@@ -184,7 +209,10 @@ export async function getMelodyVector(audioBuffer: Buffer): Promise<number[]> {
   const pitchVector = resizeArray(pitchIntervals, 64);
   const rhythmVector = resizeArray(rhythmRatios, 64);
   
-  return [...pitchVector, ...rhythmVector];
+  const finalVector = [...pitchVector, ...rhythmVector];
+  console.log(`[MelodyService] Extracted 128D vector: pitch range [${Math.min(...pitchVector).toFixed(2)}, ${Math.max(...pitchVector).toFixed(2)}], rhythm range [${Math.min(...rhythmVector).toFixed(2)}, ${Math.max(...rhythmVector).toFixed(2)}]`);
+  
+  return finalVector;
 }
 
 /**

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Music, Loader2, Sparkles, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { audioBufferToWav, arrayBufferToBase64 } from '@/lib/audioUtils'
 
 interface SearchResult {
   songId: string
@@ -27,11 +28,12 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(16).fill(0.1))
   const [recordingTime, setRecordingTime] = useState(0)
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const audioChunksRef = useRef<Float32Array[]>([])
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Clean up on unmount or close
@@ -67,41 +69,42 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 44100,
+          sampleRate: 22050, // Match BasicPitch's expected sample rate
         } 
       })
 
-      // Set up audio analysis for visualization
-      audioContextRef.current = new AudioContext()
+      mediaStreamRef.current = stream
+
+      // Set up AudioContext for recording and visualization
+      audioContextRef.current = new AudioContext({ sampleRate: 22050 })
       const source = audioContextRef.current.createMediaStreamSource(stream)
+      
+      // Set up analyser for visualization
       analyserRef.current = audioContextRef.current.createAnalyser()
       analyserRef.current.fftSize = 64
       source.connect(analyserRef.current)
 
+      // Set up ScriptProcessorNode to capture raw audio samples
+      // Note: ScriptProcessorNode is deprecated but widely supported
+      // Alternative would be AudioWorklet but requires separate file
+      const bufferSize = 4096
+      const scriptProcessor = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1)
+      scriptProcessorRef.current = scriptProcessor
+      
+      audioChunksRef.current = []
+      
+      scriptProcessor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0)
+        // Copy the audio data
+        audioChunksRef.current.push(new Float32Array(inputData))
+      }
+      
+      source.connect(scriptProcessor)
+      scriptProcessor.connect(audioContextRef.current.destination)
+
       // Start visualizing
       visualize()
 
-      // Set up MediaRecorder - try WAV-compatible format
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=pcm')
-        ? 'audio/webm;codecs=pcm'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : 'audio/mp4'
-
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType })
-      chunksRef.current = []
-
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data)
-        }
-      }
-
-      mediaRecorderRef.current.onstop = () => {
-        processRecording()
-      }
-
-      mediaRecorderRef.current.start(100) // Collect in 100ms chunks
       setState('recording')
       setRecordingTime(0)
 
@@ -112,7 +115,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
 
       // Auto-stop after 10 seconds
       setTimeout(() => {
-        if (mediaRecorderRef.current?.state === 'recording') {
+        if (state === 'recording') {
           stopRecording()
         }
       }, 10000)
@@ -132,10 +135,25 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop()
-      mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop())
+    
+    // Disconnect script processor
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect()
+      scriptProcessorRef.current = null
     }
+    
+    // Stop media stream tracks
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+      mediaStreamRef.current = null
+    }
+    
+    // Process the recording
+    if (audioChunksRef.current.length > 0) {
+      processRecording()
+    }
+    
+    // Close audio context
     if (audioContextRef.current?.state !== 'closed') {
       audioContextRef.current?.close()
     }
@@ -167,18 +185,27 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
     setAudioLevels(Array(16).fill(0.1))
 
     try {
-      const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' })
-      
-      // Convert to base64
-      const reader = new FileReader()
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onloadend = () => {
-          const base64 = (reader.result as string).split(',')[1]
-          resolve(base64)
-        }
-      })
-      reader.readAsDataURL(audioBlob)
-      const base64Audio = await base64Promise
+      if (!audioContextRef.current || audioChunksRef.current.length === 0) {
+        throw new Error('No audio data recorded')
+      }
+
+      // Combine all audio chunks into a single Float32Array
+      const totalLength = audioChunksRef.current.reduce((sum, chunk) => sum + chunk.length, 0)
+      const combinedAudio = new Float32Array(totalLength)
+      let offset = 0
+      for (const chunk of audioChunksRef.current) {
+        combinedAudio.set(chunk, offset)
+        offset += chunk.length
+      }
+
+      // Create AudioBuffer from the combined samples
+      const sampleRate = audioContextRef.current.sampleRate
+      const audioBuffer = audioContextRef.current.createBuffer(1, combinedAudio.length, sampleRate)
+      audioBuffer.copyToChannel(combinedAudio, 0)
+
+      // Convert AudioBuffer to WAV format
+      const wavBuffer = audioBufferToWav(audioBuffer)
+      const base64Audio = arrayBufferToBase64(wavBuffer)
 
       // Send to backend
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
@@ -193,7 +220,8 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       })
 
       if (!response.ok) {
-        throw new Error('Search failed')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Search failed: ${response.status}`)
       }
 
       const data = await response.json()
@@ -207,8 +235,12 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       }
     } catch (err) {
       console.error('Processing error:', err)
-      setError('Failed to search. Please try again.')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to search. Please try again.'
+      setError(errorMessage)
       setState('error')
+    } finally {
+      // Clear audio chunks for next recording
+      audioChunksRef.current = []
     }
   }
 

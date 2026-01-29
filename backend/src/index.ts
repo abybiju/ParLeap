@@ -110,20 +110,52 @@ app.get('/health', (_req, res) => {
 // Hum-to-Search endpoint
 // Accepts audio as base64 WAV in JSON body
 app.post('/api/hum-search', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { audio, limit = 5, threshold = 0.5 } = req.body;
 
     if (!audio) {
+      console.log('[HumSearch] Missing audio data');
       res.status(400).json({ error: 'Missing audio data' });
       return;
     }
 
     // Decode base64 audio to buffer
-    const audioBuffer = Buffer.from(audio, 'base64');
+    let audioBuffer: Buffer;
+    try {
+      audioBuffer = Buffer.from(audio, 'base64');
+    } catch (err) {
+      console.error('[HumSearch] Failed to decode base64:', err);
+      res.status(400).json({ error: 'Invalid base64 audio data' });
+      return;
+    }
+
     console.log(`[HumSearch] Received ${audioBuffer.length} bytes of audio`);
+
+    // Validate WAV format - check for RIFF header
+    if (audioBuffer.length < 12) {
+      console.error('[HumSearch] Audio buffer too small:', audioBuffer.length);
+      res.status(400).json({ error: 'Invalid audio format - file too small' });
+      return;
+    }
+
+    const header = audioBuffer.slice(0, 4).toString('ascii');
+    const format = audioBuffer.slice(8, 12).toString('ascii');
+    
+    if (header !== 'RIFF' || format !== 'WAVE') {
+      console.error(`[HumSearch] Invalid audio format - header: ${header}, format: ${format}`);
+      console.log(`[HumSearch] First 12 bytes:`, Array.from(audioBuffer.slice(0, 12)).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' '));
+      res.status(400).json({ error: 'Invalid audio format - expected WAV (RIFF/WAVE)' });
+      return;
+    }
+
+    console.log('[HumSearch] Audio format validated as WAV');
 
     // Search for matching songs
     const results = await searchByHum(audioBuffer, limit, threshold);
+
+    const duration = Date.now() - startTime;
+    console.log(`[HumSearch] Search completed in ${duration}ms, found ${results.length} results`);
 
     res.json({
       success: true,
@@ -131,7 +163,14 @@ app.post('/api/hum-search', async (req, res) => {
       count: results.length,
     });
   } catch (error) {
-    console.error('[HumSearch] Error:', error);
+    const duration = Date.now() - startTime;
+    console.error(`[HumSearch] Error after ${duration}ms:`, error);
+    
+    // Log stack trace for debugging
+    if (error instanceof Error) {
+      console.error('[HumSearch] Error stack:', error.stack);
+    }
+    
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Search failed',
     });
