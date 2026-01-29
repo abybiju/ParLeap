@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
-import { searchByHum } from './services/humSearchService';
+import { searchByHum, SearchResult } from './services/humSearchService';
 import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
 
 const app = express();
@@ -206,11 +206,12 @@ app.get('/api/hum-search/:jobId', (req, res) => {
   }
 
   if (job.status === 'completed') {
+    const results = job.result as SearchResult[] | undefined;
     res.json({
       success: true,
       status: 'completed',
-      results: job.result,
-      count: job.result?.length || 0,
+      results: results || [],
+      count: results?.length || 0,
     });
   } else if (job.status === 'failed') {
     res.status(500).json({
