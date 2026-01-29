@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
+import { searchByHum } from './services/humSearchService';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -104,6 +105,37 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     activeSessions: getSessionCount(),
   });
+});
+
+// Hum-to-Search endpoint
+// Accepts audio as base64 WAV in JSON body
+app.post('/api/hum-search', async (req, res) => {
+  try {
+    const { audio, limit = 5, threshold = 0.5 } = req.body;
+
+    if (!audio) {
+      res.status(400).json({ error: 'Missing audio data' });
+      return;
+    }
+
+    // Decode base64 audio to buffer
+    const audioBuffer = Buffer.from(audio, 'base64');
+    console.log(`[HumSearch] Received ${audioBuffer.length} bytes of audio`);
+
+    // Search for matching songs
+    const results = await searchByHum(audioBuffer, limit, threshold);
+
+    res.json({
+      success: true,
+      results,
+      count: results.length,
+    });
+  } catch (error) {
+    console.error('[HumSearch] Error:', error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Search failed',
+    });
+  }
 });
 
 app.use((err: Error, _req: express.Request, res: express.Response) => {

@@ -29,6 +29,16 @@ Real-time AI-powered presentation orchestration platform.
 
 ### Recent Updates
 
+**January 29, 2026**
+- ✅ **Hum-to-Search UI Components**: Visual interface for humming feature
+  - Circular microphone button (`HumButton`) with idle/listening states
+  - Pulsing ring animation when listening (red icon with `animate-ping`)
+  - Full-screen overlay (`ListeningOverlay`) with "Hum a song..." prompt
+  - CSS-only waveform animation (12 bars with staggered delays)
+  - Integrated into Song Library search bar
+  - Visual-only implementation (no audio logic yet)
+  - Glassmorphism design matching existing UI patterns
+
 **January 28, 2026**
 - ✅ **Landing Page Redesign**: Complete Superlist-inspired UI overhaul
   - Modern "Deep Space Sunrise" theme with glassmorphism effects

@@ -85,6 +85,36 @@ const config = {
           "0%, 100%": { transform: "scaleY(0.3)" },
           "50%": { transform: "scaleY(1)" },
         },
+        "waveform-fast": {
+          "0%, 100%": { transform: "scaleY(0.2)" },
+          "25%": { transform: "scaleY(0.8)" },
+          "50%": { transform: "scaleY(1)" },
+          "75%": { transform: "scaleY(0.6)" },
+        },
+        "pulse-ring": {
+          "0%": { transform: "scale(1)", opacity: "0.8" },
+          "100%": { transform: "scale(2.5)", opacity: "0" },
+        },
+        "pulse-ring-slow": {
+          "0%": { transform: "scale(1)", opacity: "0.6" },
+          "100%": { transform: "scale(3)", opacity: "0" },
+        },
+        "bounce-subtle": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-5px)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(20px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "scale-in": {
+          "0%": { opacity: "0", transform: "scale(0.9)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
         aurora: {
           "0%": { backgroundPosition: "0% 50%" },
           "50%": { backgroundPosition: "100% 50%" },
@@ -113,6 +143,13 @@ const config = {
         float: "float 6s ease-in-out infinite",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         waveform: "waveform 0.8s ease-in-out infinite",
+        "waveform-fast": "waveform-fast 0.5s ease-in-out infinite",
+        "pulse-ring": "pulse-ring 1.5s ease-out infinite",
+        "pulse-ring-slow": "pulse-ring-slow 2s ease-out infinite",
+        "bounce-subtle": "bounce-subtle 2s ease-in-out infinite",
+        shimmer: "shimmer 2s linear infinite",
+        "fade-in-up": "fade-in-up 0.5s ease-out forwards",
+        "scale-in": "scale-in 0.3s ease-out forwards",
         aurora: "aurora 15s ease-in-out infinite",
         "marquee-up-slow": "marquee-up 40s linear infinite",
         "marquee-up-medium": "marquee-up 30s linear infinite",
