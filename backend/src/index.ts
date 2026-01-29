@@ -3,6 +3,7 @@ import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
 import { searchByHum } from './services/humSearchService';
+import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -153,17 +154,32 @@ app.post('/api/hum-search', async (req, res) => {
 
     console.log('[HumSearch] Audio format validated as WAV');
 
-    // Search for matching songs
-    const results = await searchByHum(audioBuffer, limit, threshold);
+    // Create async job and return immediately
+    const jobId = createJob();
+    console.log(`[HumSearch] Created job ${jobId}, processing in background...`);
 
-    const duration = Date.now() - startTime;
-    console.log(`[HumSearch] Search completed in ${duration}ms, found ${results.length} results`);
-
+    // Return job ID immediately
     res.json({
       success: true,
-      results,
-      count: results.length,
+      jobId,
+      status: 'processing',
+      message: 'Processing audio...',
     });
+
+    // Process in background (don't await)
+    (async () => {
+      try {
+        setJobProcessing(jobId);
+        const results = await searchByHum(audioBuffer, limit, threshold);
+        const duration = Date.now() - startTime;
+        console.log(`[HumSearch] Job ${jobId} completed in ${duration}ms, found ${results.length} results`);
+        setJobCompleted(jobId, results);
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        console.error(`[HumSearch] Job ${jobId} failed after ${duration}ms:`, error);
+        setJobFailed(jobId, error instanceof Error ? error.message : 'Search failed');
+      }
+    })();
   } catch (error) {
     const duration = Date.now() - startTime;
     console.error(`[HumSearch] Error after ${duration}ms:`, error);
@@ -175,6 +191,38 @@ app.post('/api/hum-search', async (req, res) => {
     
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Search failed',
+    });
+  }
+});
+
+// Job status endpoint
+app.get('/api/hum-search/:jobId', (req, res) => {
+  const { jobId } = req.params;
+  const job = getJobStatus(jobId);
+
+  if (!job) {
+    res.status(404).json({ error: 'Job not found' });
+    return;
+  }
+
+  if (job.status === 'completed') {
+    res.json({
+      success: true,
+      status: 'completed',
+      results: job.result,
+      count: job.result?.length || 0,
+    });
+  } else if (job.status === 'failed') {
+    res.status(500).json({
+      success: false,
+      status: 'failed',
+      error: job.error,
+    });
+  } else {
+    res.json({
+      success: true,
+      status: job.status,
+      message: job.status === 'processing' ? 'Still processing...' : 'Pending...',
     });
   }
 });
