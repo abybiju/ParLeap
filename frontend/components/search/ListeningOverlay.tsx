@@ -35,12 +35,16 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isRecordingRef = useRef<boolean>(false)
 
   // Clean up on unmount or close
   useEffect(() => {
     return () => {
-      stopRecording()
+      isRecordingRef.current = false
       if (timerRef.current) clearInterval(timerRef.current)
+      if (autoStopTimeoutRef.current) clearTimeout(autoStopTimeoutRef.current)
+      stopRecording()
     }
   }, [])
 
@@ -51,12 +55,14 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       setError(null)
       setResults([])
       setRecordingTime(0)
+      isRecordingRef.current = false
       // Auto-start recording after a brief delay
       const timeout = setTimeout(() => {
         startRecording()
       }, 500)
       return () => clearTimeout(timeout)
     } else {
+      isRecordingRef.current = false
       stopRecording()
       return undefined
     }
@@ -105,17 +111,24 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       // Start visualizing
       visualize()
 
+      isRecordingRef.current = true
       setState('recording')
       setRecordingTime(0)
 
       // Start timer
       timerRef.current = setInterval(() => {
-        setRecordingTime((t) => t + 1)
+        setRecordingTime((t) => {
+          // Cap at 10 seconds for display
+          if (t >= 10) {
+            return 10
+          }
+          return t + 1
+        })
       }, 1000)
 
       // Auto-stop after 10 seconds
-      setTimeout(() => {
-        if (state === 'recording') {
+      autoStopTimeoutRef.current = setTimeout(() => {
+        if (isRecordingRef.current) {
           stopRecording()
         }
       }, 10000)
@@ -127,10 +140,21 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
   }
 
   const stopRecording = () => {
+    // Prevent multiple calls
+    if (!isRecordingRef.current) return
+    
+    isRecordingRef.current = false
+    
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
+    
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current)
+      autoStopTimeoutRef.current = null
+    }
+    
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
@@ -148,9 +172,12 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       mediaStreamRef.current = null
     }
     
-    // Process the recording
+    // Process the recording only if we have data
     if (audioChunksRef.current.length > 0) {
       processRecording()
+    } else {
+      setError('No audio recorded. Please try again.')
+      setState('error')
     }
     
     // Close audio context
@@ -207,34 +234,74 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       const wavBuffer = audioBufferToWav(audioBuffer)
       const base64Audio = arrayBufferToBase64(wavBuffer)
 
-      // Send to backend
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
-      const response = await fetch(`${backendUrl}/api/hum-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          audio: base64Audio,
-          limit: 5,
-          threshold: 0.4,
-        }),
-      })
+      // Send to backend with timeout
+      // Use production backend URL if NEXT_PUBLIC_BACKEND_URL is not set
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
+        (typeof window !== 'undefined' && window.location.hostname === 'www.parleap.com' 
+          ? 'https://parleapbackend-production.up.railway.app'
+          : 'http://localhost:3001')
+      
+      console.log('[HumSearch] Sending request to:', `${backendUrl}/api/hum-search`)
+      console.log('[HumSearch] Audio size:', base64Audio.length, 'chars (base64)')
+      
+      // Create abort controller for timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+      
+      let response: Response
+      try {
+        response = await fetch(`${backendUrl}/api/hum-search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audio: base64Audio,
+            limit: 5,
+            threshold: 0.4,
+          }),
+          signal: controller.signal,
+        })
+        console.log('[HumSearch] Response status:', response.status, response.statusText)
+      } catch (err) {
+        clearTimeout(timeoutId)
+        console.error('[HumSearch] Fetch error:', err)
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.')
+        }
+        if (err instanceof Error && err.message.includes('Failed to fetch')) {
+          throw new Error(`Cannot connect to backend. Check if ${backendUrl} is accessible.`)
+        }
+        throw err
+      }
+      
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        let errorData: any = {}
+        try {
+          errorData = await response.json()
+        } catch {
+          // Response is not JSON
+          const text = await response.text()
+          console.error('[HumSearch] Non-JSON error response:', text)
+          throw new Error(`Search failed: ${response.status} ${response.statusText}`)
+        }
+        console.error('[HumSearch] Error response:', errorData)
         throw new Error(errorData.error || `Search failed: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log('[HumSearch] Received results:', data)
       
       if (data.results && data.results.length > 0) {
         setResults(data.results)
         setState('results')
       } else {
+        console.log('[HumSearch] No results found')
         setError('No matching songs found. Try humming louder or longer!')
         setState('error')
       }
     } catch (err) {
-      console.error('Processing error:', err)
+      console.error('[HumSearch] Processing error:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to search. Please try again.'
       setError(errorMessage)
       setState('error')
@@ -294,7 +361,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
               Listening...
             </p>
             <p className="text-white/60 mb-6">
-              Hum your melody ({10 - recordingTime}s remaining)
+              Hum your melody ({Math.max(0, 10 - recordingTime)}s remaining)
             </p>
 
             {/* Real Waveform Visualization */}
