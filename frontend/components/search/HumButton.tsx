@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Mic, Music2 } from 'lucide-react'
+import { Mic } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ListeningOverlay } from './ListeningOverlay'
 

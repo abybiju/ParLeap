@@ -36,8 +36,9 @@ interface MelodyNote {
 // Monkey-patch global fetch to handle file:// URLs in Node.js
 // This is needed because TensorFlow.js uses fetch() to load models
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+globalThis.fetch = async (input: any, init?: RequestInit): Promise<Response> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url || String(input);
   
   if (url.startsWith('file://')) {
     const filePath = url.replace('file://', '');
