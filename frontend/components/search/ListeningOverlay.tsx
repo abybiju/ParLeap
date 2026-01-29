@@ -57,6 +57,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
     } else {
       stopRecording()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const startRecording = async () => {
