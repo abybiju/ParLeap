@@ -3,15 +3,15 @@
  * For production, consider using Redis or a proper queue system
  */
 
-interface Job {
+interface Job<T = unknown> {
   id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
-  result?: any;
+  result?: T;
   error?: string;
   createdAt: number;
 }
 
-const jobs = new Map<string, Job>();
+const jobs = new Map<string, Job<unknown>>();
 
 /**
  * Create a new job
@@ -38,14 +38,14 @@ export function createJob(): string {
 /**
  * Get job status
  */
-export function getJobStatus(id: string): Job | null {
+export function getJobStatus(id: string): Job<unknown> | null {
   return jobs.get(id) || null;
 }
 
 /**
  * Update job status
  */
-export function updateJob(id: string, updates: Partial<Job>): void {
+export function updateJob(id: string, updates: Partial<Job<unknown>>): void {
   const job = jobs.get(id);
   if (job) {
     Object.assign(job, updates);
@@ -62,7 +62,7 @@ export function setJobProcessing(id: string): void {
 /**
  * Set job as completed with result
  */
-export function setJobCompleted(id: string, result: any): void {
+export function setJobCompleted<T>(id: string, result: T): void {
   updateJob(id, { status: 'completed', result });
 }
 

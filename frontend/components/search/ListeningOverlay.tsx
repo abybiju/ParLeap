@@ -48,6 +48,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
       stopRecording()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Reset state when opening
