@@ -4,13 +4,27 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Play } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { TypewriterText } from '@/components/ui/TypewriterText'
+import { SplineViewer } from '@/components/SplineViewer'
 
 export function HeroSection() {
   return (
-    <section className="min-h-screen flex items-center justify-center px-4 py-20 pt-48">
-      <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center mt-8">
+    <section className="min-h-screen flex items-center justify-center px-4 py-20 pt-48 relative overflow-hidden">
+      {/* Spacer for fixed header */}
+      <div className="absolute top-0 left-0 right-0 h-24" />
+      {/* Spline Background Layer - Mouse Follow Effect (only in hero section) */}
+      <div className="absolute inset-0 z-0">
+        <SplineViewer
+          url="https://prod.spline.design/kzdIEyudaZu1oiNQ/scene.splinecode"
+          className="w-full h-full"
+        />
+        {/* Gradient Overlay: Lighter at top to merge with header, darker at bottom */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/90 pointer-events-none" />
+        {/* Bottom fade: Smoothly transitions to the next section */}
+        <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-black/40 to-black pointer-events-none" />
+      </div>
+
+      <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center mt-8 relative z-10">
         {/* Left: Text Content */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -56,49 +70,8 @@ export function HeroSection() {
           </div>
         </motion.div>
 
-        {/* Right: 3D Floating Mockup */}
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="flex justify-center lg:justify-end"
-        >
-          <motion.div
-            className="relative"
-            style={{
-              perspective: '2000px',
-            }}
-            animate={{
-              y: [0, -10, 0],
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-          >
-            <motion.div
-              className="rounded-xl border border-white/10 overflow-hidden shadow-2xl shadow-orange-500/20"
-              style={{
-                transform: 'rotateX(5deg) rotateY(-5deg)',
-                transformStyle: 'preserve-3d',
-              }}
-              whileHover={{
-                scale: 1.02,
-                transition: { duration: 0.3 },
-              }}
-            >
-              <Image
-                src="/live-page-mockup.png"
-                alt="ParLeap Live Page"
-                width={800}
-                height={600}
-                className="rounded-xl w-full h-auto max-w-full"
-                priority
-              />
-            </motion.div>
-          </motion.div>
-        </motion.div>
+        {/* Right: Empty - Spline background shows through */}
+        <div className="hidden lg:block"></div>
       </div>
     </section>
   )

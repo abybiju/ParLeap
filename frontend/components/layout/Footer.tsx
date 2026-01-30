@@ -12,16 +12,17 @@ export function Footer() {
         <div className="grid md:grid-cols-3 gap-8 mb-8">
           {/* Left: Logo + Tagline */}
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/logo.png"
-                alt="ParLeap"
-                width={32}
-                height={32}
-                className="w-8 h-8"
-              />
-              <span className="text-white font-semibold text-lg">ParLeap</span>
-            </div>
+            <Link href="/" className="flex items-center hover:opacity-80 transition-opacity w-fit">
+              <div className="relative w-12 h-12">
+                <Image
+                  src="/logo.png"
+                  alt="ParLeap"
+                  width={48}
+                  height={48}
+                  className="w-12 h-12"
+                />
+              </div>
+            </Link>
             <p className="text-neutral-500 text-sm">
               You speak, It flows
             </p>

@@ -23,8 +23,11 @@ const problems = [
 
 export function ProblemFraming() {
   return (
-    <section className="py-20 px-4">
-      <div className="container mx-auto">
+    <section className="py-20 px-4 relative">
+      {/* Top fade overlay: Smoothly transitions from hero section's black background */}
+      <div className="absolute top-0 left-0 right-0 h-80 bg-gradient-to-b from-black via-black/60 to-transparent pointer-events-none" />
+      
+      <div className="container mx-auto relative z-10">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
