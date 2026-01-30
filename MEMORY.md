@@ -1,5 +1,21 @@
 # ParLeap AI - Memory Log
 
+## Session: January 29, 2026 - Landing Page Redesign Complete ✅
+
+### Landing Page Updates
+- **Spline 3D Integration**: Cursor-follow effect background in hero section
+- **Glass Header**: Seamless merge with hero, larger logo (56px), increased height (h-24)
+- **New Logo**: Transparent gradient design, matches Superlist style
+- **Footer**: Logo only (no text), consistent with header
+- **UI Placeholder**: Archived to `frontend/public/assets/archive/ui-mockup-placeholder.png` for future use
+- **Smooth Transitions**: Gradient overlays between sections for unified design
+
+### Git Status
+- ✅ Committed: `dd1c52a` - Landing page redesign with Spline 3D background
+- ⏳ Push pending: Network issue (will push when available)
+
+---
+
 ## Session: January 29, 2026 - Hum-to-Search Implementation & Debugging
 
 ### Current Status: ⚠️ IN PROGRESS - Async Processing Implemented
