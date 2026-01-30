@@ -1,5 +1,23 @@
 # ParLeap AI - Memory Log
 
+## Session: January 29, 2026 - Hum-to-Search Implementation & Debugging
+
+### Current Status: ⚠️ IN PROGRESS - Async Processing Implemented
+
+**What's Working:**
+- ✅ Ingestion pipeline (2 songs processed successfully)
+- ✅ Database migration applied (song_fingerprints table + match_songs function)
+- ✅ Backend API endpoint created
+- ✅ Frontend UI with real audio recording
+- ✅ Async job queue implemented (prevents timeouts)
+
+**Current Issues:**
+- ⚠️ BasicPitch inference is very slow (30-60 seconds) causing timeouts
+- ⚠️ Async processing implemented but needs testing
+- ⚠️ TypeScript errors fixed but not yet pushed
+
+---
+
 ## Session: January 29, 2026 - Hum-to-Search COMPLETE! 🎉
 
 ### What We Accomplished Today
@@ -59,7 +77,94 @@ frontend/tailwind.config.ts               (new animations)
 - **Key-Invariant**: Uses semitone differences, not absolute pitches
 - **Tempo-Invariant**: Normalizes rhythm ratios by total duration
 - **Search Threshold**: 0.4 (40% similarity minimum)
-- **Recording Duration**: 10 seconds max, user can stop early
+- **Recording Duration**: 5 seconds max (reduced from 10s to prevent payload issues)
+
+---
+
+## Session: January 29, 2026 - Production Debugging & Async Processing
+
+### Issues Fixed Today
+
+1. **Audio Format Mismatch** ✅ FIXED
+   - Problem: Frontend recorded WebM, backend expected WAV
+   - Solution: Created `audioUtils.ts` with WAV encoder, switched to AudioContext
+
+2. **Payload Too Large (413 Error)** ✅ FIXED
+   - Problem: 10 seconds = 578KB base64, exceeded Express default
+   - Solution: Reduced to 5 seconds, increased Express limit to 10MB
+
+3. **Request Timeouts** ✅ FIXED (Async Solution)
+   - Problem: BasicPitch takes 30-60s, frontend timeout = 30s
+   - Solution: Async job queue - return jobId immediately, poll for results
+
+4. **Timer Bug** ✅ FIXED
+   - Problem: Timer went negative, auto-stop didn't work
+   - Solution: Used refs instead of state closures, proper cleanup
+
+5. **TypeScript Errors** ✅ FIXED (Not Yet Pushed)
+   - Problem: `any` types in jobQueue, missing type assertions
+   - Solution: Generics `Job<T>`, added type assertions for `job.result`
+
+### Async Job Queue Implementation
+
+**Backend:**
+- `POST /api/hum-search` - Creates job, returns jobId immediately
+- `GET /api/hum-search/:jobId` - Poll for status/results
+- In-memory job storage (Map<string, Job>)
+- Auto-cleanup after 1 hour
+
+**Frontend:**
+- Creates job → gets jobId
+- Polls every 1 second (max 60 attempts)
+- Shows "Analyzing melody..." while polling
+- No timeout errors
+
+### Files Created/Modified
+
+**New:**
+- `frontend/lib/audioUtils.ts` - WAV encoder
+- `backend/src/services/jobQueue.ts` - Async queue
+- `HUM_SEARCH_STATUS.md` - Status documentation
+
+**Modified:**
+- `frontend/components/search/ListeningOverlay.tsx` - Complete rewrite (WAV + async)
+- `backend/src/index.ts` - Async endpoints, payload limit
+- `backend/src/services/melodyService.ts` - Enhanced logging
+
+### Current Status
+
+**Ready:**
+- ✅ All code written
+- ✅ TypeScript passes locally
+- ✅ Lint passes locally
+- ✅ Async processing implemented
+
+**Pending:**
+- ⏳ Push latest TypeScript fixes
+- ⏳ Test end-to-end in production
+- ⏳ Verify BasicPitch works on Railway
+- ⏳ Check processing times in logs
+
+### Tomorrow's Priorities
+
+1. Push latest commits (TypeScript fixes for job.result)
+2. Test async processing end-to-end
+3. Monitor Railway logs for performance
+4. Consider optimizations if BasicPitch is too slow
+5. Add user feedback for long processing times
+
+### Backup Plan: Fastify Server Approach
+
+**If async processing doesn't work, user has researched an alternative:**
+
+- Use Fastify instead of Express
+- Handle file uploads with `@fastify/multipart`
+- Simpler request/response (no async queue needed)
+- Might handle large payloads better
+
+**See `TODO_TOMORROW.md` for full implementation details.**
+
+**Note:** This doesn't solve BasicPitch slowness but might simplify architecture and handle uploads better.
 
 ### Status
 - ✅ Ingestion pipeline working

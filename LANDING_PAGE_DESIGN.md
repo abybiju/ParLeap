@@ -105,10 +105,10 @@ The ParLeap landing page features a modern, Superlist-inspired design with a "De
 ## Assets
 
 ### Images
-- `/public/logo.png` - Main logo
+- `/public/logo.png` - Main logo (transparent background, gradient design)
 - `/public/hero-logo.png` - Hero section logo
 - `/public/logo-mask.png` - CSS mask for video logo
-- `/public/live-page-mockup.png` - 3D mockup image
+- `/public/assets/archive/ui-mockup-placeholder.png` - 3D mockup image (archived for future use)
 
 ### Videos
 - `/public/gradient.mp4` - Gradient video for liquid logo effect
@@ -151,8 +151,10 @@ frontend/
     ├── logo.png
     ├── hero-logo.png
     ├── logo-mask.png
-    ├── live-page-mockup.png
-    └── gradient.mp4
+    ├── gradient.mp4
+    └── assets/
+        └── archive/
+            └── ui-mockup-placeholder.png (archived for future use)
 ```
 
 ## Dependencies
