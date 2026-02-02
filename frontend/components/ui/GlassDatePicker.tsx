@@ -26,7 +26,7 @@ function getTimezoneAbbr(): string {
     // Extract abbreviation from timezone string (e.g., "America/New_York" -> "EST")
     const date = new Date()
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
+      timeZone: timezone,
       timeZoneName: 'short',
     }).formatToParts(date)
     const tzPart = parts.find((part) => part.type === 'timeZoneName')
