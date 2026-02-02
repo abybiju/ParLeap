@@ -468,7 +468,7 @@ export function GlassDatePicker({ value, onChange, placeholder = 'Select date an
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.08]">
           <span className="text-xs text-slate-400">
-            📍 {timezone} (Auto)
+            {timezone} (Auto)
           </span>
         </div>
       </PopoverContent>
