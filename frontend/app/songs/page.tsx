@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SongsPageClient } from './SongsPageClient';
+import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
 
 export const metadata = {
   title: 'Song Library | ParLeap',
@@ -35,7 +36,8 @@ export default async function SongsPage() {
   const songs = await getSongs();
 
   return (
-    <div className="min-h-screen bg-background">
+    <AppPageWrapper className="bg-background">
+      <div>
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-6 py-4">
@@ -56,7 +58,8 @@ export default async function SongsPage() {
           <SongsPageClient initialSongs={songs} />
         </Suspense>
       </main>
-    </div>
+      </div>
+    </AppPageWrapper>
   );
 }
 

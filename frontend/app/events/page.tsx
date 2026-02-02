@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { EventCard } from '@/components/dashboard/EventCard';
 import type { Database } from '@/lib/supabase/types';
+import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
 
 export default async function EventsPage() {
   const supabase = createClient();
@@ -23,8 +24,8 @@ export default async function EventsPage() {
     .returns<EventRow[]>();
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+    <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 shadow-xl shadow-slate-900/40 backdrop-blur">
           <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -58,6 +59,7 @@ export default async function EventsPage() {
           )}
         </div>
       </div>
-    </main>
+      </main>
+    </AppPageWrapper>
   );
 }

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { AppPageWrapper } from '@/components/layout/AppPageWrapper'
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Enter a valid email' }),
@@ -48,7 +49,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <AppPageWrapper className="flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 shadow-xl shadow-slate-900/50 backdrop-blur border border-white/10">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-white">Sign in to ParLeap</h1>
@@ -131,18 +132,18 @@ function LoginForm() {
           </Link>
         </p>
       </div>
-    </div>
+    </AppPageWrapper>
   )
 }
 
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <AppPageWrapper className="flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 shadow-xl shadow-slate-900/50 backdrop-blur border border-white/10">
           <div className="text-center text-white">Loading...</div>
         </div>
-      </div>
+      </AppPageWrapper>
     }>
       <LoginForm />
     </Suspense>

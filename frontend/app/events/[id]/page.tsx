@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { EventForm } from '@/components/events/EventForm';
 import { SetlistBuilder } from '@/components/events/SetlistBuilder';
 import type { Database } from '@/lib/supabase/types';
+import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
 
 interface EventDetailPageProps {
   params: {
@@ -68,8 +69,8 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <div className="mx-auto max-w-5xl px-6 py-10 space-y-8">
+    <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      <main className="mx-auto max-w-5xl px-6 py-10 space-y-8">
         {/* Back to Dashboard Button */}
         <Link
           href="/dashboard"
@@ -82,6 +83,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         <EventForm mode="edit" event={event} />
         <SetlistBuilder eventId={params.id} initialSetlist={setlist} songs={songs ?? []} />
       </div>
-    </main>
+      </main>
+    </AppPageWrapper>
   );
 }

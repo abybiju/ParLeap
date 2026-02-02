@@ -1,5 +1,35 @@
 # ParLeap AI - Memory Log
 
+## Session: January 30, 2026 - TypeScript Fixes & Watermark Discussion ✅
+
+### What We Accomplished
+1. **TypeScript Declarations Fixed**
+   - Created `frontend/types/spline-viewer.d.ts`
+   - Updated `tsconfig.json` to include types directory
+   - Fixed CI/CD type-check errors for custom web components
+
+2. **Tested Local Changes (Reverted)**
+   - Tried black gradient instead of brown - darkened robot's face
+   - Confirmed current design is optimal
+   - Kept published version intact
+
+3. **Spline Watermark Research**
+   - Free tier includes "Built with Spline" watermark
+   - Options: Spline Pro ($12/month), keep free with watermark, or migrate to Three.js
+   - **Decision**: Keep current setup (watermark is subtle and professional)
+
+### Git Status
+- ✅ Committed: TypeScript declarations fix
+- ⏳ Push pending: Network issues
+- ⏳ Previous commit ready: `dd1c52a` - Landing page redesign
+
+### Next Steps
+- Push commits when network available
+- Final decision on Spline watermark approach
+- Continue with feature development
+
+---
+
 ## Session: January 29, 2026 - Landing Page Redesign Complete ✅
 
 ### Landing Page Updates
@@ -12,7 +42,6 @@
 
 ### Git Status
 - ✅ Committed: `dd1c52a` - Landing page redesign with Spline 3D background
-- ⏳ Push pending: Network issue (will push when available)
 
 ---
 
