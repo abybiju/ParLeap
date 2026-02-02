@@ -14,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { useCommandMenu } from '@/components/providers/CommandProvider'
+import { Search } from 'lucide-react'
 
 interface Notification {
   id: string
@@ -66,6 +68,7 @@ const mockNotifications: Notification[] = [
 export function DashboardHeader() {
   const router = useRouter()
   const { user, profile, fetchUser, signOut } = useAuthStore()
+  const { setOpen: setCommandMenuOpen } = useCommandMenu()
   const [notifications] = useState<Notification[]>(mockNotifications)
 
   // Fetch user data on mount
@@ -143,6 +146,18 @@ export function DashboardHeader() {
             />
           </div>
         </Link>
+
+        {/* Center: Search Bar */}
+        <button
+          onClick={() => setCommandMenuOpen(true)}
+          className="flex-1 max-w-xl mx-8 flex items-center gap-3 px-4 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all text-left text-sm text-white/60 hover:text-white/80"
+        >
+          <Search className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1">Search songs, events, or commands...</span>
+          <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white/40 bg-white/5 border border-white/10 rounded">
+            <span className="text-[10px]">⌘</span>K
+          </kbd>
+        </button>
 
         {/* Right Side: Utility Cluster */}
         <div className="flex items-center gap-4 flex-shrink-0">

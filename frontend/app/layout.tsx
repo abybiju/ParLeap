@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'sonner'
 import { ConditionalHeader } from '@/components/layout/ConditionalHeader'
+import { CommandProvider } from '@/components/providers/CommandProvider'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -49,9 +50,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className={inter.className}>
-        <ConditionalHeader />
-        {children}
-        <Toaster richColors position="bottom-right" />
+        <CommandProvider>
+          <ConditionalHeader />
+          {children}
+          <Toaster richColors position="bottom-right" />
+        </CommandProvider>
       </body>
     </html>
   )
