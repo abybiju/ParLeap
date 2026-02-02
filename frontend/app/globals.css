@@ -108,6 +108,22 @@
   .mission-list-row:hover {
     @apply bg-white/[0.04] border-white/[0.06];
   }
+
+  /* Fluid Energy Animation for Holographic Effect */
+  @keyframes fluid-energy {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .animate-fluid-energy {
+    animation: fluid-energy 8s ease-in-out infinite;
+    background: linear-gradient(90deg, rgba(255,140,0,0.1), rgba(239,68,68,0.15), rgba(255,140,0,0.1));
+    background-size: 200% 100%;
+  }
 }
 
 @layer base {
