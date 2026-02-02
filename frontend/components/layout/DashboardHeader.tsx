@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { HelpCircle, Bell, Settings, LogOut } from 'lucide-react'
+import { HelpCircle, Bell, Settings, LogOut, Calendar, CheckCircle, Info, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -15,9 +15,58 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAuthStore } from '@/lib/stores/authStore'
 
+interface Notification {
+  id: string
+  type: 'event' | 'system' | 'success' | 'warning'
+  title: string
+  message: string
+  timestamp: Date
+  read: boolean
+  actionUrl?: string
+}
+
+const mockNotifications: Notification[] = [
+  {
+    id: '1',
+    type: 'event',
+    title: 'Sunday Service Starting Soon',
+    message: 'Your event "Sunday Service" starts in 15 minutes',
+    timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+    read: false,
+    actionUrl: '/events/123'
+  },
+  {
+    id: '2',
+    type: 'success',
+    title: 'Setlist Updated',
+    message: '3 songs added to "Sunday Service" setlist',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+    read: false,
+    actionUrl: '/events/123'
+  },
+  {
+    id: '3',
+    type: 'system',
+    title: 'New Feature Available',
+    message: 'Try the new Hum Search feature to find songs by melody',
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+    read: true
+  },
+  {
+    id: '4',
+    type: 'warning',
+    title: 'Low Song Count',
+    message: 'Your event "Youth Night" only has 2 songs. Consider adding more.',
+    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    read: true,
+    actionUrl: '/events/456'
+  }
+]
+
 export function DashboardHeader() {
   const router = useRouter()
   const { user, profile, fetchUser, signOut } = useAuthStore()
+  const [notifications] = useState<Notification[]>(mockNotifications)
 
   // Fetch user data on mount
   useEffect(() => {
@@ -41,6 +90,42 @@ export function DashboardHeader() {
     await signOut()
     router.push('/auth/login')
   }
+
+  // Get unread notification count
+  const getUnreadCount = (): number => {
+    return notifications.filter(n => !n.read).length
+  }
+
+  // Format timestamp to relative time
+  const formatTimestamp = (date: Date): string => {
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / (1000 * 60))
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  // Get notification icon based on type
+  const getNotificationIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'event':
+        return <Calendar className="w-5 h-5 text-blue-400" />
+      case 'success':
+        return <CheckCircle className="w-5 h-5 text-green-400" />
+      case 'system':
+        return <Info className="w-5 h-5 text-slate-400" />
+      case 'warning':
+        return <AlertCircle className="w-5 h-5 text-yellow-400" />
+    }
+  }
+
+  const unreadCount = getUnreadCount()
 
   return (
     <header className="fixed top-0 w-full z-50 h-16 border-b border-white/10 bg-black/50 backdrop-blur-xl">
@@ -72,14 +157,72 @@ export function DashboardHeader() {
           </Button>
 
           {/* Notifications Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-white/60 hover:text-white hover:bg-white/10"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/60 hover:text-white hover:bg-white/10 relative"
+                aria-label="Notifications"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
+              <div className="px-3 py-2 border-b border-white/[0.08]">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <span className="text-xs text-slate-400">{unreadCount} unread</span>
+                  )}
+                </div>
+              </div>
+              {notifications.length === 0 ? (
+                <div className="px-3 py-8 text-center">
+                  <p className="text-sm text-slate-400">No notifications</p>
+                </div>
+              ) : (
+                <div className="py-1">
+                  {notifications.map((notification) => (
+                    <div key={notification.id}>
+                      <DropdownMenuItem
+                        asChild
+                        className="p-0 focus:bg-transparent"
+                      >
+                        <Link
+                          href={notification.actionUrl || '#'}
+                          className="flex items-start gap-3 px-3 py-3 rounded-md hover:bg-white/[0.08] transition-colors cursor-pointer w-full"
+                        >
+                          <div className="flex-shrink-0 mt-0.5">
+                            {getNotificationIcon(notification.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-medium text-white">
+                                {notification.title}
+                              </p>
+                              {!notification.read && (
+                                <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
+                              {notification.message}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {formatTimestamp(notification.timestamp)}
+                            </p>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* User Menu */}
           <DropdownMenu>
