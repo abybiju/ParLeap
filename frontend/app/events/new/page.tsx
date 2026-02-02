@@ -28,7 +28,6 @@ export default async function NewEventPage() {
         </Link>
 
         <EventForm mode="create" />
-      </div>
       </main>
     </AppPageWrapper>
   );

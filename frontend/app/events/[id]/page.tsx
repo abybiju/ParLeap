@@ -82,7 +82,6 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
 
         <EventForm mode="edit" event={event} />
         <SetlistBuilder eventId={params.id} initialSetlist={setlist} songs={songs ?? []} />
-      </div>
       </main>
     </AppPageWrapper>
   );
