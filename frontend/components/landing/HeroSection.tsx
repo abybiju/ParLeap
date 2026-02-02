@@ -18,10 +18,10 @@ export function HeroSection() {
           url="https://prod.spline.design/kzdIEyudaZu1oiNQ/scene.splinecode"
           className="w-full h-full"
         />
-        {/* Gradient Overlay: Lighter at top to merge with header, darker at bottom */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/90 pointer-events-none" />
+        {/* Old Brand Gradient: Light beige/off-white at top transitioning to dark reddish-black */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#F5F5F0] via-[#8B5A5A] to-[#2A1A1A] pointer-events-none" />
         {/* Bottom fade: Smoothly transitions to the next section */}
-        <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-black/40 to-black pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-[#2A1A1A]/60 to-[#1A0A0A] pointer-events-none" />
       </div>
 
       <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center mt-8 relative z-10">
