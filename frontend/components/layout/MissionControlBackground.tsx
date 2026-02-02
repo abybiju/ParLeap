@@ -9,6 +9,8 @@ export function MissionControlBackground() {
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       {/* Base gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
+      {/* Prominent top-right blob for glass reflection */}
+      <div className="absolute -top-32 -right-32 h-[500px] w-[500px] rounded-full bg-orange-600/20 blur-[120px]" />
       {/* Orange blob - top left */}
       <div
         className="absolute -top-40 -left-40 h-96 w-96 rounded-full opacity-30 blur-3xl"
