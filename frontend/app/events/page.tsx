@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { EventCard } from '@/components/dashboard/EventCard';
 import type { Database } from '@/lib/supabase/types';
 import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
+import { MissionControlBackground } from '@/components/layout/MissionControlBackground';
 
 export default async function EventsPage() {
   const supabase = createClient();
@@ -24,19 +25,21 @@ export default async function EventsPage() {
     .returns<EventRow[]>();
 
   return (
-    <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <AppPageWrapper className="relative text-white">
+      <MissionControlBackground />
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-8 shadow-xl shadow-slate-900/40 backdrop-blur">
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-8 shadow-xl backdrop-blur-xl">
           <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold">Events & Setlists</h1>
-              <p className="text-sm text-slate-300">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Mission Control</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">Events & Setlists</h1>
+              <p className="text-sm text-slate-400">
                 Create events, schedule services, and build live setlists.
               </p>
             </div>
             <Link
               href="/events/new"
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition"
+              className="rounded-lg bg-gradient-to-r from-[#FF8C42] to-[#FF3C38] px-4 py-2 text-sm font-medium text-white shadow-lg shadow-orange-500/20 transition hover:opacity-90"
             >
               New Event
             </Link>
@@ -53,8 +56,14 @@ export default async function EventsPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
+            <div className="mission-card p-8 text-center">
               <p className="text-slate-400">No events yet. Create your first event to get started.</p>
+              <Link
+                href="/events/new"
+                className="mt-4 inline-block rounded-lg bg-gradient-to-r from-[#FF8C42] to-[#FF3C38] px-6 py-2 text-sm font-medium text-white shadow-lg shadow-orange-500/20 transition hover:opacity-90"
+              >
+                Create Event
+              </Link>
             </div>
           )}
         </div>

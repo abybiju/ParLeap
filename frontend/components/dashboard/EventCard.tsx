@@ -47,7 +47,7 @@ export function EventCard({ event }: EventCardProps) {
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-6 hover:border-indigo-300/50 transition-all duration-200 shadow-lg shadow-indigo-500/10 backdrop-blur">
+    <div className="mission-card p-6">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-white mb-1">{event.name}</h3>
@@ -66,13 +66,13 @@ export function EventCard({ event }: EventCardProps) {
       <div className="flex gap-2 mt-4">
         <Link
           href={`/live/${event.id}`}
-          className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition text-center"
+          className="flex-1 rounded-lg bg-gradient-to-r from-[#FF8C42] to-[#FF3C38] px-4 py-2 text-center text-sm font-medium text-white shadow-lg shadow-orange-500/20 transition hover:opacity-90"
         >
           Launch Live
         </Link>
         <Link
           href={`/events/${event.id}`}
-          className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium transition"
+          className="px-4 py-2 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/10 text-slate-300 text-sm font-medium transition"
         >
           Edit
         </Link>
