@@ -194,8 +194,9 @@ export function DashboardHeader() {
                       >
                         <Link
                           href={notification.actionUrl || '#'}
-                          className="flex items-start gap-3 px-3 py-3 rounded-md hover:bg-white/[0.08] transition-colors cursor-pointer w-full"
+                          className="group relative flex items-start gap-3 px-3 py-3 rounded-md transition-all duration-200 cursor-pointer w-full bg-transparent hover:bg-white/5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]"
                         >
+                          <div className="absolute left-0 top-2 bottom-2 w-1 bg-orange-500 rounded-r-full opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 ease-out" />
                           <div className="flex-shrink-0 mt-0.5">
                             {getNotificationIcon(notification.type)}
                           </div>
@@ -208,7 +209,7 @@ export function DashboardHeader() {
                                 <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />
                               )}
                             </div>
-                            <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
+                            <p className="text-xs text-slate-400 group-hover:text-gray-300 mt-0.5 line-clamp-2 transition-colors">
                               {notification.message}
                             </p>
                             <p className="text-xs text-slate-500 mt-1">
