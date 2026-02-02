@@ -42,7 +42,14 @@ export default async function DashboardPage() {
   }
 
   // Find hero event: Live first, then upcoming within 48 hours
-  let heroEvent: typeof events[0] | null = null
+  type EventType = {
+    id: string;
+    name: string;
+    event_date: string | null;
+    status: 'draft' | 'live' | 'ended';
+    created_at: string;
+  }
+  let heroEvent: EventType | null = null
   if (events && events.length > 0) {
     // Priority 1: Live event
     heroEvent = events.find(e => e.status === 'live') || null
