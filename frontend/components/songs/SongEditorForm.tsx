@@ -41,7 +41,7 @@ export function SongEditorForm({
   const [isPending, startTransition] = useTransition()
   const isEditing = Boolean(song)
   
-  const { saveDraftDebounced, loadDraft, clearDraft, hasDraft } = useSongDraft(
+  const { saveDraftDebounced, loadDraft, clearDraft } = useSongDraft(
     song?.id
   )
 
