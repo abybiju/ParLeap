@@ -4,6 +4,7 @@ import { EventCard } from '@/components/dashboard/EventCard'
 import { redirect } from 'next/navigation'
 import { AppPageWrapper } from '@/components/layout/AppPageWrapper'
 import { MissionControlBackground } from '@/components/layout/MissionControlBackground'
+import { Music, Calendar, User } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -33,9 +34,9 @@ export default async function DashboardPage() {
   return (
     <AppPageWrapper className="relative text-white">
       <MissionControlBackground />
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-8 shadow-xl backdrop-blur-xl">
-          <div className="flex items-center justify-between mb-8">
+      <main className="mx-auto max-w-7xl px-6 py-10">
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Mission Control</p>
               <h1 className="text-2xl font-semibold tracking-tight text-white">Dashboard</h1>
@@ -53,17 +54,17 @@ export default async function DashboardPage() {
 
           {/* Events Grid */}
           {error ? (
-            <div className="mt-8 p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
               <p className="text-sm text-red-400">Error loading events: {error.message}</p>
             </div>
           ) : events && events.length > 0 ? (
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {events.map((event) => (
                 <EventCard key={event.id} event={event as any} />
               ))}
             </div>
           ) : (
-            <div className="mission-card mt-8 p-8 text-center">
+            <div className="mission-card p-8 text-center">
               <p className="mb-4 text-slate-400">No events yet. Create your first event to get started.</p>
               <Link
                 href="/events/new"
@@ -74,39 +75,33 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          {/* Quick Links - Linear-style list */}
-          <div className="mt-10 pt-8 border-t border-white/[0.06]">
-            <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">Quick Links</h2>
-            <div className="divide-y divide-white/[0.04] rounded-lg border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+          {/* Quick Links - Glass Card Grid */}
+          <div className="pt-8 border-t border-white/[0.06]">
+            <h2 className="mb-6 text-xs font-medium uppercase tracking-wider text-slate-500">Quick Links</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Link
                 href="/songs"
-                className="mission-list-row flex items-center justify-between px-4 py-3"
+                className="mission-card relative block p-6"
               >
-                <div>
-                  <h3 className="text-sm font-medium text-white">Songs Library</h3>
-                  <p className="text-xs text-slate-500">Manage lyrics and content</p>
-                </div>
-                <span className="text-slate-600">→</span>
+                <h3 className="text-sm font-medium text-white mb-1">Songs Library</h3>
+                <p className="text-xs text-slate-500">Manage lyrics and content</p>
+                <Music className="absolute bottom-4 right-4 h-12 w-12 text-white/20" />
               </Link>
               <Link
                 href="/events"
-                className="mission-list-row flex items-center justify-between px-4 py-3"
+                className="mission-card relative block p-6"
               >
-                <div>
-                  <h3 className="text-sm font-medium text-white">Events & Setlists</h3>
-                  <p className="text-xs text-slate-500">Create events and arrange songs</p>
-                </div>
-                <span className="text-slate-600">→</span>
+                <h3 className="text-sm font-medium text-white mb-1">Events & Setlists</h3>
+                <p className="text-xs text-slate-500">Create events and arrange songs</p>
+                <Calendar className="absolute bottom-4 right-4 h-12 w-12 text-white/20" />
               </Link>
               <Link
                 href="/profile"
-                className="mission-list-row flex items-center justify-between px-4 py-3"
+                className="mission-card relative block p-6"
               >
-                <div>
-                  <h3 className="text-sm font-medium text-white">Profile</h3>
-                  <p className="text-xs text-slate-500">Manage your account settings</p>
-                </div>
-                <span className="text-slate-600">→</span>
+                <h3 className="text-sm font-medium text-white mb-1">Profile</h3>
+                <p className="text-xs text-slate-500">Manage your account settings</p>
+                <User className="absolute bottom-4 right-4 h-12 w-12 text-white/20" />
               </Link>
             </div>
           </div>
