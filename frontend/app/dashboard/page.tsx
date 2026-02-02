@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { AppPageWrapper } from '@/components/layout/AppPageWrapper'
 import { MissionControlBackground } from '@/components/layout/MissionControlBackground'
 import { Music, Calendar, User } from 'lucide-react'
+import { DashboardHero } from '@/components/dashboard/DashboardHero'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -31,6 +32,37 @@ export default async function DashboardPage() {
       created_at: string;
     }>>()
 
+  // Helper: Check if event is within 48 hours
+  function isWithin48Hours(dateString: string | null): boolean {
+    if (!dateString) return false
+    const eventDate = new Date(dateString)
+    const now = new Date()
+    const hoursUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+    return hoursUntil > 0 && hoursUntil <= 48
+  }
+
+  // Find hero event: Live first, then upcoming within 48 hours
+  let heroEvent: typeof events[0] | null = null
+  if (events && events.length > 0) {
+    // Priority 1: Live event
+    heroEvent = events.find(e => e.status === 'live') || null
+    
+    // Priority 2: Upcoming event within 48 hours
+    if (!heroEvent) {
+      heroEvent = events.find(e => e.status === 'draft' && isWithin48Hours(e.event_date)) || null
+    }
+  }
+
+  // Fetch song count for hero event
+  let songCount = 0
+  if (heroEvent) {
+    const { count } = await supabase
+      .from('event_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', heroEvent.id)
+    songCount = count || 0
+  }
+
   return (
     <AppPageWrapper className="relative text-white">
       <MissionControlBackground />
@@ -51,6 +83,9 @@ export default async function DashboardPage() {
               Create New Event
             </Link>
           </div>
+
+          {/* Smart HUD - Dashboard Hero */}
+          <DashboardHero event={heroEvent} songCount={songCount} />
 
           {/* Events Grid */}
           {error ? (
