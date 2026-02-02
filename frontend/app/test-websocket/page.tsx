@@ -1,5 +1,6 @@
 import { WebSocketTest } from '@/components/WebSocketTest';
 import { LatencyMonitor } from '@/components/dev/LatencyMonitor';
+import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
 
 /**
  * Public WebSocket Test Page
@@ -8,7 +9,8 @@ import { LatencyMonitor } from '@/components/dev/LatencyMonitor';
  */
 export default function WebSocketTestPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      <main className="mx-auto max-w-4xl px-6 py-10">
       <div className="mx-auto max-w-4xl px-6 py-10">
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">WebSocket Protocol Test</h1>
@@ -19,7 +21,8 @@ export default function WebSocketTestPage() {
         <WebSocketTest />
       </div>
       <LatencyMonitor />
-    </main>
+      </main>
+    </AppPageWrapper>
   );
 }
 

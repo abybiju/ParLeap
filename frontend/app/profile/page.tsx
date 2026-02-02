@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { LogOut, User, Mail, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -81,7 +82,8 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      <div>
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/10 bg-white/5 backdrop-blur">
         <div className="container mx-auto px-6 py-4">
@@ -235,6 +237,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </AppPageWrapper>
   );
 }

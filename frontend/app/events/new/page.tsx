@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { EventForm } from '@/components/events/EventForm';
+import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
 
 export default async function NewEventPage() {
   const supabase = createClient();
@@ -15,8 +16,8 @@ export default async function NewEventPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <div className="mx-auto max-w-5xl px-6 py-10 space-y-8">
+    <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      <main className="mx-auto max-w-5xl px-6 py-10 space-y-8">
         {/* Back to Dashboard Button */}
         <Link
           href="/dashboard"
@@ -28,6 +29,7 @@ export default async function NewEventPage() {
 
         <EventForm mode="create" />
       </div>
-    </main>
+      </main>
+    </AppPageWrapper>
   );
 }
