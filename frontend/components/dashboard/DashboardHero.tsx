@@ -64,18 +64,16 @@ export function DashboardHero({ event, songCount = 0 }: DashboardHeroProps) {
               <h2 className="text-2xl font-bold text-white">{event.name} is LIVE</h2>
             </div>
           </div>
-          {/* Crystal White Button */}
+          {/* Brand Gradient Pill Button */}
           <Link
             href={`/live/${event.id}`}
-            className="relative group overflow-hidden px-8 py-3 rounded-full
-              bg-white text-red-600 font-bold tracking-wider uppercase text-sm
-              shadow-[0_0_20px_rgba(255,255,255,0.3)]
-              hover:shadow-[0_0_40px_rgba(255,255,255,0.6)]
-              hover:scale-105 transition-all duration-300"
+            className="px-8 py-3 rounded-full
+              bg-gradient-to-r from-[#FF8C42] to-[#FF3C38] text-white font-bold tracking-wider uppercase text-sm
+              shadow-lg shadow-orange-500/25 ring-1 ring-white/10
+              hover:opacity-95 hover:scale-105 hover:shadow-orange-500/45
+              transition-all duration-300"
           >
-            {/* Shine effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-            <span className="relative z-10">RESUME CONTROL</span>
+            RESUME CONTROL
           </Link>
         </div>
       </div>
