@@ -9,7 +9,7 @@ interface AppPageWrapperProps {
  * AppPageWrapper Component
  * 
  * Provides consistent spacing for application pages to account for the fixed header.
- * Adds pt-24 (6rem) padding-top to prevent content from being hidden behind the header.
+ * Adds pt-16 (4rem) padding-top to prevent content from being hidden behind the DashboardHeader.
  * 
  * Usage:
  * ```tsx
@@ -20,7 +20,7 @@ interface AppPageWrapperProps {
  */
 export function AppPageWrapper({ children, className }: AppPageWrapperProps) {
   return (
-    <div className={cn("min-h-screen pt-24", className)}>
+    <div className={cn("min-h-screen pt-16", className)}>
       {children}
     </div>
   )
