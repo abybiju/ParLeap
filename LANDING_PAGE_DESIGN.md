@@ -1,6 +1,6 @@
 # Landing Page Design Documentation
 
-**Last Updated:** January 28, 2026
+**Last Updated:** February 1, 2026
 
 ## Overview
 
@@ -106,9 +106,14 @@ The ParLeap landing page features a modern, Superlist-inspired design with a "De
 
 ### Images
 - `/public/logo.png` - Main logo (transparent background, gradient design)
+- `/public/favicon.png` - Browser tab favicon (500x500, from logo)
 - `/public/hero-logo.png` - Hero section logo
 - `/public/logo-mask.png` - CSS mask for video logo
 - `/public/assets/archive/ui-mockup-placeholder.png` - 3D mockup image (archived for future use)
+
+### Metadata
+- `/public/manifest.json` - PWA manifest with theme colors and icons
+- `layout.tsx` - SEO metadata (OpenGraph, Twitter cards, favicon config)
 
 ### Videos
 - `/public/gradient.mp4` - Gradient video for liquid logo effect
@@ -121,6 +126,8 @@ The ParLeap landing page features a modern, Superlist-inspired design with a "De
 4. **Typewriter Effect**: Engaging hero subheadline
 5. **3D Effects**: Perspective transforms on mockup
 6. **Smooth Animations**: Framer Motion throughout
+7. **SEO & Favicon**: ParLeap logo shows in browser tabs and search results
+8. **PWA Support**: Installable as mobile app with brand theme
 
 ## File Structure
 
@@ -128,7 +135,7 @@ The ParLeap landing page features a modern, Superlist-inspired design with a "De
 frontend/
 ├── app/
 │   ├── page.tsx (Main landing page)
-│   ├── layout.tsx (Root layout with Header)
+│   ├── layout.tsx (Root layout with Header, SEO metadata)
 │   └── globals.css (Theme styles)
 ├── components/
 │   ├── landing/
@@ -149,6 +156,8 @@ frontend/
 │       └── TypewriterText.tsx
 └── public/
     ├── logo.png
+    ├── favicon.png
+    ├── manifest.json
     ├── hero-logo.png
     ├── logo-mask.png
     ├── gradient.mp4
