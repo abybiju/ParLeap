@@ -185,7 +185,7 @@ export function DashboardHeader() {
                   <p className="text-sm text-slate-400">No notifications</p>
                 </div>
               ) : (
-                <div className="py-1">
+                <div className="py-1 pr-2">
                   {notifications.map((notification) => (
                     <div key={notification.id}>
                       <DropdownMenuItem
