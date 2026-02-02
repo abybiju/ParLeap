@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SongsPageClient } from './SongsPageClient';
 import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
+import { MissionControlBackground } from '@/components/layout/MissionControlBackground';
 
 export const metadata = {
   title: 'Song Library | ParLeap',
@@ -36,29 +37,25 @@ export default async function SongsPage() {
   const songs = await getSongs();
 
   return (
-    <AppPageWrapper className="bg-background">
-      <div>
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-6 py-4">
+    <AppPageWrapper className="relative text-white">
+      <MissionControlBackground />
+      <main className="mx-auto max-w-7xl px-6 py-10">
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Song Library</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Mission Control</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">Song Library</h1>
+              <p className="text-sm text-slate-400">
                 Manage your songs and lyrics
               </p>
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        <Suspense fallback={<SongsLoadingSkeleton />}>
-          <SongsPageClient initialSongs={songs} />
-        </Suspense>
+          <Suspense fallback={<SongsLoadingSkeleton />}>
+            <SongsPageClient initialSongs={songs} />
+          </Suspense>
+        </div>
       </main>
-      </div>
     </AppPageWrapper>
   );
 }
@@ -66,11 +63,11 @@ export default async function SongsPage() {
 function SongsLoadingSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="h-10 w-64 bg-muted animate-pulse rounded-md" />
-      <div className="rounded-lg border border-border/50 overflow-hidden">
-        <div className="h-12 bg-muted/30" />
+      <div className="h-10 w-64 bg-white/5 animate-pulse rounded-md" />
+      <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] overflow-hidden backdrop-blur-xl">
+        <div className="h-12 bg-white/[0.03]" />
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-16 border-t border-border/30 bg-muted/10" />
+          <div key={i} className="h-16 border-t border-white/10 bg-white/5" />
         ))}
       </div>
     </div>

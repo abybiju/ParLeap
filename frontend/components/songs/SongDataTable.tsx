@@ -66,25 +66,25 @@ export function SongDataTable({
       {/* Search Input */}
       <div className="flex items-center gap-2">
         <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Search songs..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-9"
+            className="pl-9 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-400 focus-visible:ring-indigo-500/60"
           />
         </div>
         <HumButton />
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-border/50 overflow-hidden">
+      <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] overflow-hidden backdrop-blur-xl">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="hover:bg-transparent">
+              <TableRow key={headerGroup.id} className="hover:bg-transparent border-white/10">
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="bg-muted/30">
+                  <TableHead key={header.id} className="bg-white/[0.03] text-slate-300">
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -103,10 +103,10 @@ export function SongDataTable({
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
                   onClick={() => onRowClick?.(row.original)}
-                  className={onRowClick ? 'cursor-pointer' : ''}
+                  className={`${onRowClick ? 'cursor-pointer' : ''} border-white/10 hover:bg-white/5 transition-colors`}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="text-white">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -119,7 +119,7 @@ export function SongDataTable({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-24 text-center text-slate-400"
                 >
                   {globalFilter 
                     ? 'No songs found matching your search.' 
@@ -132,7 +132,7 @@ export function SongDataTable({
       </div>
 
       {/* Results count */}
-      <div className="text-sm text-muted-foreground">
+      <div className="text-sm text-slate-400">
         {table.getFilteredRowModel().rows.length} of {songs.length} song{songs.length !== 1 ? 's' : ''}
       </div>
     </div>

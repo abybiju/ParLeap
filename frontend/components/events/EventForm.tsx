@@ -114,7 +114,7 @@ export function EventForm({ mode, event }: EventFormProps) {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Sunday Service"
-            className="mt-2"
+            className="mt-2 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-400 focus-visible:ring-indigo-500/60"
           />
         </div>
         <div>
