@@ -29,7 +29,7 @@ export default async function DashboardPage() {
     }>>()
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-24">
       <div className="mx-auto max-w-5xl px-6 py-10">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 shadow-xl shadow-slate-900/40 backdrop-blur">
           <div className="flex items-center justify-between mb-6">
