@@ -4,7 +4,7 @@ Real-time AI-powered presentation orchestration platform.
 
 ## 🟢 Current Status
 
-**Last Updated:** January 25, 2026
+**Last Updated:** February 3, 2026
 
 ### Live Deployments
 - **Frontend**: [www.parleap.com](https://www.parleap.com) (Vercel)
@@ -28,6 +28,19 @@ Real-time AI-powered presentation orchestration platform.
 - ✅ **Songs Library**: Notion-style CRUD interface with stanza-aware editor
 
 ### Recent Updates
+
+**February 3, 2026**
+- ✅ **Profile Settings (Sidebar Layout)**: New `/dashboard/profile` settings page with General / Account / Security / Billing tabs
+  - Back-to-dashboard navigation link
+  - Mission Control styling + consistent card layout
+- ✅ **Avatar System (Presets + Device Upload)**:
+  - Preset emoji avatars + preset image avatars (`frontend/public/avatars/presets/*`)
+  - Device upload to Supabase Storage bucket `avatars`
+  - Avatar saved to `profiles.avatar` (as `preset:*` id or public URL)
+  - Dashboard header avatar now updates to reflect latest saved avatar
+- ✅ **UI Polish**:
+  - Fixed invisible outline-button text (e.g. Cancel / Reset Password)
+  - Added subtle orange hover glow on Profile cards
 
 **January 29, 2026**
 - ✅ **Custom Holographic Timestamp Date-Time Picker**: Premium date/time picker component

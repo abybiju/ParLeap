@@ -10,6 +10,18 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### February 3, 2026 - Profile Settings + Avatar System ✅
+- ✅ **Profile Settings Page**: Created `/dashboard/profile` with sidebar tabs (General / Account / Security / Billing)
+  - Added “Back to Dashboard” navigation
+  - Consistent Mission Control card layout
+- ✅ **Avatar System**:
+  - Preset emoji avatars + preset image avatars (`frontend/public/avatars/presets/*`)
+  - Device upload to Supabase Storage bucket `avatars`
+  - Saved to `profiles.avatar` (preset ID or public URL)
+  - Dashboard header avatar reflects latest saved profile state
+- ✅ **Operational Docs**:
+  - Added `AVATAR_MIGRATION_SETUP.md` with Supabase migration + schema cache reload steps
+
 ### January 25, 2026 - Testing & QA Infrastructure Complete ✅
 - ✅ **Testing Framework Setup**: Complete testing infrastructure implemented
   - ✅ Jest configured for backend (unit & integration tests)
