@@ -165,7 +165,7 @@ export interface SongChangedMessage {
 }
 
 /**
- * SONG_SUGGESTION - AI detected a possible song switch (medium confidence 60-85%)
+ * SONG_SUGGESTION - AI detected a possible song switch (low confidence <50%)
  * Sent when matcher finds better match in different song but not confident enough to auto-switch
  */
 export interface SongSuggestionMessage {
