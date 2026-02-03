@@ -383,6 +383,7 @@ async function handleStartSession(
   // Send current display update (synced to existing session if available)
   if (currentSong && currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
     const currentSlide = currentSong.slides[currentSlideIndex];
+    console.log(`[WS] Sending slide ${currentSlideIndex}: ${currentSlide.lines.length} lines - "${currentSlide.slideText.substring(0, 50)}..."`);
     const displayUpdate: DisplayUpdateMessage = {
       type: 'DISPLAY_UPDATE',
       payload: {

@@ -150,17 +150,17 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
   return (
     <div className="h-[calc(100vh-6rem)] flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
       {/* Header Bar */}
-      <header className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 backdrop-blur">
+      <header className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 backdrop-blur min-h-[4rem]">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">{eventName}</h1>
           <ConnectionStatus />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* PHASE 2: Auto-Follow Toggle */}
           <button
             onClick={toggleAutoFollow}
             className={cn(
-              'px-3 py-1 rounded-full text-xs font-medium border transition-all',
+              'px-3 py-1 rounded-full text-xs font-medium border transition-all whitespace-nowrap',
               'hover:scale-105 active:scale-95',
               isAutoFollowing
                 ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50'
@@ -183,7 +183,7 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
           
           <span
             className={cn(
-              'px-3 py-1 rounded-full text-xs font-medium border',
+              'px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap',
               state === 'connected'
                 ? 'bg-green-500/20 text-green-400 border-green-500/50'
                 : state === 'connecting'
@@ -195,7 +195,7 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
           </span>
           <button
             onClick={handleStopSession}
-            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition"
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition whitespace-nowrap flex-shrink-0"
           >
             Stop Session
           </button>

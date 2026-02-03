@@ -80,14 +80,14 @@ function detectStanzaBreaks(lyrics: string, nonEmptyLineIndices: number[]): numb
     if (line.length === 0) {
       // Blank line - this is a stanza break
       // The previous non-empty line should be marked as a break point
-      if (nonEmptyIndex > 0 && nonEmptyIndex <= nonEmptyLineIndices.length) {
+      if (nonEmptyIndex > 0 && nonEmptyIndex - 1 < nonEmptyLineIndices.length) {
         const prevLineIndex = nonEmptyLineIndices[nonEmptyIndex - 1];
         if (!breaks.includes(prevLineIndex)) {
           breaks.push(prevLineIndex);
         }
       }
     } else {
-      // Non-empty line
+      // Non-empty line - increment counter
       nonEmptyIndex++;
     }
   }
