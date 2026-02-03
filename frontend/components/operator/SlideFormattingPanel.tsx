@@ -7,7 +7,7 @@ import { updateSongSlideConfig } from '@/app/songs/actions';
 import { updateEventItemSlideConfig } from '@/app/events/actions';
 
 // Simple auto-format helper (matches backend logic)
-function autoFormatSlides(lyrics: string, linesPerSlide: number = 4) {
+function autoFormatSlides(_lyrics: string, linesPerSlide: number = 4) {
   return {
     linesPerSlide,
     respectStanzaBreaks: true,

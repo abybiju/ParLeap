@@ -192,7 +192,7 @@ export function compileSlides(
  * Applies sensible defaults: respect stanzas, group by linesPerSlide
  */
 export function autoFormatSlides(
-  lyrics: string,
+  _lyrics: string,
   linesPerSlide: number = 4
 ): Required<SlideConfig> {
   return {

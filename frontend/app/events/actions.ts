@@ -253,3 +253,32 @@ export async function reorderEventItems(eventId: string, orderedItemIds: string[
   revalidatePath(`/events/${eventId}`);
   return { success: true };
 }
+
+export async function updateEventItemSlideConfig(
+  eventId: string,
+  eventItemId: string,
+  slideConfigOverride: { linesPerSlide?: number; respectStanzaBreaks?: boolean; manualBreaks?: number[] }
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) {
+    return { success: false, error };
+  }
+
+  const ownership = await ensureEventOwnership(supabase, user.id, eventId);
+  if (ownership.error) {
+    return { success: false, error: ownership.error };
+  }
+
+  const { error: updateError } = await (supabase
+    .from('event_items') as ReturnType<typeof supabase.from>)
+    .update({ slide_config_override: slideConfigOverride as Record<string, unknown> })
+    .eq('id', eventItemId)
+    .eq('event_id', eventId);
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  return { success: true, id: eventItemId };
+}
