@@ -333,7 +333,7 @@ export function findBestMatchAcrossAllSongs(
 
   // OPTIMIZATION: If current song has good confidence, don't check others
   // This is the 90% case - singer is on the right song
-  const SONG_SWITCH_MIN_CONFIDENCE = 0.85; // Higher threshold for song switches
+  const SONG_SWITCH_MIN_CONFIDENCE = 0.50; // LOWERED: Auto-switch at 50%+ (user requested)
   const CURRENT_SONG_LOW_CONFIDENCE = 0.6; // Only check others if current < 60%
 
   if (result.currentSongMatch.confidence >= CURRENT_SONG_LOW_CONFIDENCE) {
@@ -393,7 +393,7 @@ export function findBestMatchAcrossAllSongs(
     }
   }
 
-  // Only suggest song switch if confidence is HIGH (85%+) to prevent false positives
+  // Only suggest song switch if confidence is reasonable (50%+) - debouncing prevents false positives
   if (bestOtherSongScore >= SONG_SWITCH_MIN_CONFIDENCE) {
     const suggestedSong = allSongs[bestOtherSongIndex];
     result.suggestedSongSwitch = {
@@ -411,7 +411,7 @@ export function findBestMatchAcrossAllSongs(
       );
     }
   } else if (bestOtherSongScore >= 0.6) {
-    // Medium confidence (60-85%) - suggest but don't auto-switch
+    // Any reasonable confidence (50%+) - auto-switch after debouncing
     const suggestedSong = allSongs[bestOtherSongIndex];
     result.suggestedSongSwitch = {
       songId: suggestedSong.id,

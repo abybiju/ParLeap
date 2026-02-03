@@ -522,9 +522,10 @@ function handleTranscriptionResult(
             console.log(`[WS] 🔁 Song switch suggestion sustained (${session.suggestedSongSwitch.matchCount}/${SONG_SWITCH_DEBOUNCE_MATCHES}): "${suggestion.songTitle}"`);
 
             // DEBOUNCING: Only switch after N consecutive matches (prevents false positives)
+            // LOWERED THRESHOLD: Auto-switch at 50%+ confidence (user requested immediate switching)
             if (session.suggestedSongSwitch.matchCount >= SONG_SWITCH_DEBOUNCE_MATCHES && 
-                suggestion.confidence >= 0.85) {
-              // AUTO-SWITCH: High confidence + sustained match
+                suggestion.confidence >= 0.50) {
+              // AUTO-SWITCH: Reasonable confidence + sustained match
               console.log(`[WS] 🎵 AUTO-SWITCHING to song "${suggestion.songTitle}" (sustained ${session.suggestedSongSwitch.matchCount} matches @ ${(suggestion.confidence * 100).toFixed(1)}%)`);
               
               // Perform the song switch
@@ -567,8 +568,8 @@ function handleTranscriptionResult(
               };
               broadcastToEvent(session.eventId, displayMsg);
               return; // Exit early after song switch
-            } else if (suggestion.confidence >= 0.6 && suggestion.confidence < 0.85) {
-              // SUGGEST: Medium confidence - notify operator but don't auto-switch
+            } else if (suggestion.confidence < 0.50) {
+              // SUGGEST: Low confidence - notify operator but don't auto-switch
               const suggestionMsg: import('../types/websocket').SongSuggestionMessage = {
                 type: 'SONG_SUGGESTION',
                 payload: {
@@ -593,8 +594,8 @@ function handleTranscriptionResult(
             };
             console.log(`[WS] 🎵 New song switch suggestion: "${suggestion.songTitle}" @ ${(suggestion.confidence * 100).toFixed(1)}% (1/${SONG_SWITCH_DEBOUNCE_MATCHES})`);
 
-            // Send suggestion toast for medium confidence
-            if (suggestion.confidence >= 0.6 && suggestion.confidence < 0.85) {
+            // Send suggestion toast for low confidence (below auto-switch threshold)
+            if (suggestion.confidence < 0.50) {
               const suggestionMsg: import('../types/websocket').SongSuggestionMessage = {
                 type: 'SONG_SUGGESTION',
                 payload: {
