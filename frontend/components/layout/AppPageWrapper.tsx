@@ -20,7 +20,7 @@ interface AppPageWrapperProps {
  */
 export function AppPageWrapper({ children, className }: AppPageWrapperProps) {
   return (
-    <div className={cn("min-h-screen w-full bg-[#050505] pt-16", className)}>
+    <div className={cn("min-h-screen pt-16", className)}>
       {children}
     </div>
   )
