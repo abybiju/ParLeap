@@ -30,6 +30,18 @@ Real-time AI-powered presentation orchestration platform.
 ### Recent Updates
 
 **January 29, 2026**
+- ✅ **Custom Holographic Timestamp Date-Time Picker**: Premium date/time picker component
+  - Custom date grid with full day names (Monday-Sunday)
+  - Split view layout (date picker + time picker)
+  - Month/year navigation with dropdown views
+  - Auto-time feature with Target icon (⌖)
+  - Orange brand colors throughout (gradients, borders, focus states)
+  - Mission Control aesthetic with deep black glass background
+- ✅ **Premium Notification Hover Effects**: Micro-interaction feedback for notifications
+  - Luminous hover background (`bg-white/5`) with inner glow shadow
+  - Sliding orange bar marker on left edge (slides in on hover)
+  - Text brightening effect (`group-hover:text-gray-300`) for message text
+  - Smooth transitions (200-300ms) matching Linear/Raycast aesthetic
 - ✅ **Hum-to-Search UI Components**: Visual interface for humming feature
   - Circular microphone button (`HumButton`) with idle/listening states
   - Pulsing ring animation when listening (red icon with `animate-ping`)
