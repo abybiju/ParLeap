@@ -134,7 +134,7 @@ export function DashboardHeader() {
     <header className="fixed top-0 w-full z-50 h-16 border-b border-white/10 bg-black/50 backdrop-blur-xl">
       <div className="flex items-center justify-between px-6 h-full">
         {/* Left Side: Logo */}
-        <Link href="/dashboard" className="flex items-center hover:opacity-80 transition-opacity flex-shrink-0">
+        <Link href="/" className="flex items-center hover:opacity-80 transition-opacity flex-shrink-0">
           <div className="relative w-10 h-10">
             <Image
               src="/logo.png"
