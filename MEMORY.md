@@ -1,5 +1,51 @@
 # ParLeap AI - Memory Log
 
+## Session: February 2, 2026 - Landing Page Gradient Restoration & Reference State ⚠️
+
+### Critical Lesson: Landing Page Protection
+**This is the day we messed up our landing page and we don't do it again.**
+
+**Established Reference State:**
+- Landing page style from February 2, 2026 is the **DEFINITIVE REFERENCE**
+- **Rule:** Landing page should NOT change without explicit user approval and verification
+- Created `LANDING_PAGE_REFERENCE_FEB_2_2026.md` as permanent reference document
+
+### What We Accomplished
+1. **Restored Landing Page Gradient** ✅
+   - Brown-to-blue fade gradient: `linear-gradient(to bottom, #1a0f0a 0%, #1a0f0a 30%, #0f0a1a 60%, #0a0f1a 80%, #000a1a 100%)`
+   - Extended brown/orange mix further down (to 30%)
+   - Made bottom blue darker (`#000a1a`)
+   - Smooth transitions with intermediate color stops
+
+2. **Restored Mouse Follow Spline** ✅
+   - Using `kzdIEyudaZu1oiNQ` (mouse follow effect, NOT robot)
+   - Only visible in hero section
+
+3. **LyricsWall Restoration** ✅
+   - Removed orange effect overlay
+   - Restored to original state (inherits body gradient)
+
+### Key Configuration (DO NOT CHANGE)
+- **Gradient:** Brown (`#1a0f0a`) at top → Dark blue (`#000a1a`) at bottom
+- **Spline:** Mouse follow effect (`kzdIEyudaZu1oiNQ`)
+- **LyricsWall:** No separate background, inherits body gradient
+- **Main container:** Simple `min-h-screen` class
+
+### Important Rules Established
+- ❌ **NEVER** change landing page without asking user first
+- ❌ **NEVER** modify gradients, Spline, or backgrounds without approval
+- ✅ **ALWAYS** reference `LANDING_PAGE_REFERENCE_FEB_2_2026.md` when restoring
+- ✅ **ALWAYS** verify with user before committing landing page changes
+
+### Git Status
+- ✅ Committed: Enhanced gradient with extended brown mix
+- ⏳ Push pending: Network issues
+
+### Documentation Created
+- `LANDING_PAGE_REFERENCE_FEB_2_2026.md` - Permanent reference document with exact configuration
+
+---
+
 ## Session: January 29, 2026 - Premium UI Components & Custom Date Picker ✅
 
 ### What We Accomplished
