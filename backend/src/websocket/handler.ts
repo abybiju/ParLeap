@@ -238,12 +238,16 @@ async function handleStartSession(
   const eventData = await fetchEventData(eventId);
   
   if (!eventData) {
+    console.error(`[WS] Failed to fetch event data for ${eventId}`);
     sendError(ws, 'EVENT_NOT_FOUND', `Event ${eventId} not found or no setlist configured`, { eventId });
     return;
   }
 
+  console.log(`[WS] Fetched event "${eventData.name}" with ${eventData.songs.length} songs`);
+
   if (eventData.songs.length === 0) {
-    sendError(ws, 'EMPTY_SETLIST', 'Event has no songs in setlist', { eventId });
+    console.warn(`[WS] Event ${eventId} has no songs in setlist`);
+    sendError(ws, 'EMPTY_SETLIST', 'Event has no songs in setlist. Please add songs to the event before starting a session.', { eventId });
     return;
   }
 
@@ -348,6 +352,20 @@ async function handleStartSession(
   sessions.set(ws, session);
 
   // Send session started confirmation with full setlist for caching
+  const setlistPayload = session.songs.map((song) => ({
+    id: song.id,
+    title: song.title,
+    artist: song.artist,
+    lines: song.lines, // For backward compatibility and matching
+    slides: song.slides?.map(slide => ({
+      lines: slide.lines,
+      slideText: slide.slideText,
+    })),
+    lineToSlideIndex: song.lineToSlideIndex,
+  }));
+
+  console.log(`[WS] Sending SESSION_STARTED with ${setlistPayload.length} songs in setlist`);
+
   const response: SessionStartedMessage = {
     type: 'SESSION_STARTED',
     payload: {
@@ -357,17 +375,7 @@ async function handleStartSession(
       totalSongs: session.songs.length,
       currentSongIndex,
       currentSlideIndex,
-      setlist: session.songs.map((song) => ({
-        id: song.id,
-        title: song.title,
-        artist: song.artist,
-        lines: song.lines, // For backward compatibility and matching
-        slides: song.slides?.map(slide => ({
-          lines: slide.lines,
-          slideText: slide.slideText,
-        })),
-        lineToSlideIndex: song.lineToSlideIndex,
-      })),
+      setlist: setlistPayload,
     },
     timing: createTiming(receivedAt, processingStart),
   };

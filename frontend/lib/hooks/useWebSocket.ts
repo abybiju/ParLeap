@@ -53,21 +53,26 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
       setLastMessage(message);
 
       // Cache setlist when session starts
-      if (isSessionStartedMessage(message) && message.payload.setlist) {
-        slideCache.cacheSetlist(
-          message.payload.eventId,
-          message.payload.eventName,
-          message.payload.setlist.map((song) => ({
-            id: song.id,
-            title: song.title,
-            artist: song.artist,
-            lines: song.lines,
-            slides: song.slides,
-            lineToSlideIndex: song.lineToSlideIndex,
-          }))
-        );
-        // Preload initial slides
-        slideCache.preloadNextSlides(message.payload.currentSongIndex, message.payload.currentSlideIndex);
+      if (isSessionStartedMessage(message)) {
+        console.log(`[useWebSocket] Received SESSION_STARTED: ${message.payload.totalSongs} songs, setlist:`, message.payload.setlist?.length ?? 0);
+        if (message.payload.setlist && message.payload.setlist.length > 0) {
+          slideCache.cacheSetlist(
+            message.payload.eventId,
+            message.payload.eventName,
+            message.payload.setlist.map((song) => ({
+              id: song.id,
+              title: song.title,
+              artist: song.artist,
+              lines: song.lines,
+              slides: song.slides,
+              lineToSlideIndex: song.lineToSlideIndex,
+            }))
+          );
+          // Preload initial slides
+          slideCache.preloadNextSlides(message.payload.currentSongIndex, message.payload.currentSlideIndex);
+        } else {
+          console.warn(`[useWebSocket] SESSION_STARTED received but setlist is empty or missing`);
+        }
       }
 
       // Preload next slides when display updates
