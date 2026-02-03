@@ -13,15 +13,20 @@ export function HeroSection() {
       {/* Spacer for fixed header */}
       <div className="absolute top-0 left-0 right-0 h-24" />
       {/* Spline Background Layer - Mouse Follow Effect (only in hero section) */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0 bg-[#050505]">
         <SplineViewer
           url="https://prod.spline.design/kzdIEyudaZu1oiNQ/scene.splinecode"
           className="w-full h-full"
         />
-        {/* Old Brand Gradient: Light beige/off-white at top transitioning to dark reddish-black */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#F5F5F0] via-[#8B5A5A] to-[#2A1A1A] pointer-events-none" />
+        {/* Deep Space Sunrise: Radial gradient from top-center (orange → red → transparent) */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(circle at top center, rgba(255, 140, 0, 0.15), rgba(255, 69, 0, 0.1), transparent 70%)'
+          }}
+        />
         {/* Bottom fade: Smoothly transitions to the next section */}
-        <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-[#2A1A1A]/60 to-[#1A0A0A] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-black/40 to-black pointer-events-none" />
       </div>
 
       <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center mt-8 relative z-10">

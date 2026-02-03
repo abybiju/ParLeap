@@ -6,7 +6,7 @@ import { Instagram, Linkedin, Youtube } from 'lucide-react'
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/5 py-12 px-4">
+    <footer className="border-t border-white/5 py-12 px-4 bg-[#050505]">
       <div className="container mx-auto">
         {/* Main Footer Content */}
         <div className="grid md:grid-cols-3 gap-8 mb-8">

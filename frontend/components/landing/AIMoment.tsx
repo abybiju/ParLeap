@@ -5,8 +5,8 @@ import { WaveformAnimation } from './WaveformAnimation'
 
 export function AIMoment() {
   return (
-    <section id="ai-moment" className="py-20 px-4">
-      <div className="container mx-auto">
+    <section id="ai-moment" className="py-20 px-4 bg-[#050505] relative">
+      <div className="container mx-auto relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left: Text */}
           <motion.div

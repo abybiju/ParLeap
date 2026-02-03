@@ -16,7 +16,7 @@ export function FeatureMarquee() {
   const singleSetWidth = features.length * 200 + (features.length - 1) * 32 // Approximate width
 
   return (
-    <section className="py-12 px-4 overflow-hidden bg-black/20">
+    <section className="py-12 px-4 overflow-hidden bg-[#050505]">
       <div className="container mx-auto">
         <motion.div
           className="flex gap-8"
