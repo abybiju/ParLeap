@@ -87,7 +87,7 @@ export function GeneralSection() {
 
   return (
     <>
-      <div className="bg-[#0A0A0A] border border-white/10 rounded-xl p-8">
+      <div className="bg-[#0A0A0A] border border-white/10 rounded-xl p-8 transition-all duration-300 hover:border-orange-500/30 hover:bg-white/[0.02] hover:shadow-[0_0_40px_-20px_rgba(234,88,12,0.35)]">
         <div>
           <h2 className="text-xl font-semibold text-white">Public Profile</h2>
           <p className="text-sm text-gray-400 mt-1">This will be displayed on your profile</p>
@@ -98,7 +98,7 @@ export function GeneralSection() {
         {/* Avatar Row */}
         <div className="flex items-center gap-4 mb-6">
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-xl font-semibold text-white shadow-md overflow-hidden">
-            {avatarDisplay.type === 'url' || avatarDisplay.type === 'preset-image' ? (
+            {avatarDisplay.type === 'preset-image' ? (
               <Image
                 src={avatarDisplay.value}
                 alt="Avatar"
@@ -106,8 +106,12 @@ export function GeneralSection() {
                 height={64}
                 className="w-full h-full object-cover"
               />
-            ) : avatarDisplay.type === 'emoji' ? (
-              <span>{avatarDisplay.value}</span>
+            ) : avatarDisplay.type === 'url' ? (
+              <img
+                src={avatarDisplay.value}
+                alt="Avatar"
+                className="w-full h-full object-cover"
+              />
             ) : (
               <span>{avatarDisplay.value}</span>
             )}
@@ -174,7 +178,7 @@ export function GeneralSection() {
               variant="outline"
               onClick={handleCancel}
               disabled={isSaving}
-              className="border-white/10 text-white hover:bg-white/10"
+              className="border-white/10 bg-transparent text-white hover:bg-white/10 hover:text-white"
             >
               Cancel
             </Button>

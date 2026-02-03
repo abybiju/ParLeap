@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import {
@@ -79,7 +79,7 @@ export function AvatarSelector({
     }
   }, [open, currentAvatar])
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -265,11 +265,10 @@ export function AvatarSelector({
               {previewUrl && (
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-32 h-32 rounded-full overflow-hidden bg-white/5 border-2 border-white/10">
-                    <Image
+                    {/* Use <img> for blob: previews (next/image doesn't support blob URLs reliably) */}
+                    <img
                       src={previewUrl}
                       alt="Preview"
-                      width={128}
-                      height={128}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -294,11 +293,10 @@ export function AvatarSelector({
               {selectedAvatar && selectedAvatar.startsWith('http') && !previewUrl && (
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-32 h-32 rounded-full overflow-hidden bg-white/5 border-2 border-orange-500">
-                    <Image
+                    {/* Use <img> for external URLs unless next/image remotePatterns are configured */}
+                    <img
                       src={selectedAvatar}
                       alt="Current avatar"
-                      width={128}
-                      height={128}
                       className="w-full h-full object-cover"
                     />
                   </div>

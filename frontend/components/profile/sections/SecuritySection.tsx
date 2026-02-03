@@ -9,7 +9,7 @@ export function SecuritySection() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
 
   return (
-    <div className="bg-[#0A0A0A] border border-white/10 rounded-xl p-8">
+    <div className="bg-[#0A0A0A] border border-white/10 rounded-xl p-8 transition-all duration-300 hover:border-orange-500/30 hover:bg-white/[0.02] hover:shadow-[0_0_40px_-20px_rgba(234,88,12,0.35)]">
       <div className="flex items-center gap-2 mb-2">
         <ShieldCheck className="w-5 h-5 text-green-500" />
         <h2 className="text-xl font-semibold text-white">Security</h2>
