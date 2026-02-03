@@ -447,3 +447,39 @@ frontend/tailwind.config.ts               (new animations)
 
 **Last Updated:** January 27, 2026  
 **Status:** Ready for next phase work
+
+---
+
+## Session: February 3, 2026 - Profile Settings + Avatar Upload (Presets + Device) ✅
+
+### What We Accomplished
+1. **Profile Settings page (Sidebar layout)** ✅
+   - Route: `/dashboard/profile`
+   - Tabs: General / Account / Security / Billing
+   - Added “Back to Dashboard” navigation link
+
+2. **Avatar system (saved to `profiles.avatar`)** ✅
+   - Presets:
+     - Emoji presets (e.g. `rocket`, `planet`)
+     - Image presets saved as `preset:*` IDs (assets in `frontend/public/avatars/presets/`)
+   - Device upload:
+     - Upload to Supabase Storage bucket `avatars`
+     - Store resulting public URL in `profiles.avatar`
+
+3. **Dashboard header reflects latest avatar** ✅
+   - `DashboardHeader` now renders preset image / emoji / uploaded URL instead of always initials.
+
+4. **Mission Control UI polish** ✅
+   - Fixed invisible outline-button text (“Cancel”, “Reset Password”)
+   - Added subtle orange hover glow on Profile cards
+
+### Operational Notes (Supabase)
+- If you see: `Could not find the 'avatar' column of 'profiles' in the schema cache`:
+  - Ensure `public.profiles.avatar` column exists (migration 004)
+  - Reload PostgREST schema cache (SQL fallback: `select pg_notify('pgrst', 'reload schema');`)
+- Device uploads require Storage bucket `avatars` + policies (migration 005).
+
+### Lessons Learned
+- Vercel/CI TypeScript checks fail on unused vars/params—avoid placeholder params without `_` prefix.
+- `next/image` is not ideal for `blob:` previews and external avatar URLs without remotePatterns—use `<img>` for those.
+
