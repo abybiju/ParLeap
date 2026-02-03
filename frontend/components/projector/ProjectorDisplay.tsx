@@ -183,6 +183,15 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
 
   // Use slideLines if available, otherwise fall back to slideText or lineText
   const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
+  
+  // Debug logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[ProjectorDisplay] Slide ${slideIndex}: ${displayLines.length} lines`, {
+      slideLines: slideLines?.length,
+      slideText: slideText?.substring(0, 50),
+      displayLines: displayLines.length,
+    });
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden p-8">
