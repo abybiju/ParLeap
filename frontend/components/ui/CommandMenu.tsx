@@ -325,12 +325,12 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               value={rawInput}
               onValueChange={setRawInput}
               autoFocus
-              className={`h-14 text-lg border-0 border-b border-white/10 bg-transparent text-white placeholder:text-gray-500 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:shadow-[0_0_0_2px_rgba(255,140,0,0.25)] ${
+              className={`h-14 text-lg border-0 border-b border-white/10 bg-transparent text-white placeholder:text-gray-500 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ${
                 commandContext !== 'ALL' ? 'pl-24' : ''
               }`}
             />
           </div>
-          <CommandList className="max-h-[400px] overflow-y-auto p-2">
+          <CommandList className="max-h-[400px] overflow-y-auto p-2 pr-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-white/20">
             <CommandEmpty className="py-6 text-center text-sm text-gray-400">
               {loading ? 'Loading...' : 'No results found.'}
             </CommandEmpty>
