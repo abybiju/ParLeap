@@ -40,7 +40,7 @@ export function SongPreviewCards({ lyrics, className = '' }: SongPreviewCardsPro
             <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
               Slide {index + 1}
             </span>
-            <Badge variant="secondary" className="text-xs bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
+            <Badge variant="secondary" className="text-xs bg-orange-500/20 text-orange-400 border-orange-500/30">
               {stanza.length} {stanza.length === 1 ? 'line' : 'lines'}
             </Badge>
           </div>

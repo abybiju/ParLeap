@@ -145,8 +145,8 @@ export function SongEditorForm({
     <div className={mode === 'page' ? 'space-y-6' : ''}>
       {/* Draft recovery prompt */}
       {showDraftPrompt && (
-        <div className="px-6 py-3 bg-muted/50 border-b border-border/50 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
+        <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between">
+          <span className="text-sm text-gray-400">
             You have an unsaved draft. Would you like to restore it?
           </span>
           <div className="flex gap-2">
@@ -170,41 +170,42 @@ export function SongEditorForm({
 
       <form onSubmit={onSubmit} className={mode === 'page' ? 'space-y-6' : 'flex flex-col flex-1 overflow-hidden'}>
         {/* Metadata fields */}
-        <div className={mode === 'page' ? 'space-y-4' : 'px-6 py-4 space-y-4 border-b border-border/50'}>
+        <div className={mode === 'page' ? 'space-y-4' : 'px-6 py-4 space-y-4 border-b border-white/10'}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <label htmlFor="title" className="text-sm font-medium">
-                Title <span className="text-destructive">*</span>
+              <label htmlFor="title" className="text-sm font-medium text-white">
+                Title <span className="text-orange-500">*</span>
               </label>
               <Input
                 id="title"
                 placeholder="Amazing Grace"
                 {...register('title')}
-                className={errors.title ? 'border-destructive' : ''}
+                className={`bg-white/5 border-white/10 text-white placeholder:text-gray-500 ${errors.title ? 'border-orange-500' : ''}`}
               />
               {errors.title && (
-                <p className="text-xs text-destructive">{errors.title.message}</p>
+                <p className="text-xs text-orange-500">{errors.title.message}</p>
               )}
             </div>
             <div className="space-y-2">
-              <label htmlFor="artist" className="text-sm font-medium">
+              <label htmlFor="artist" className="text-sm font-medium text-white">
                 Artist
               </label>
               <Input
                 id="artist"
                 placeholder="John Newton"
                 {...register('artist')}
+                className="bg-white/5 border-white/10 text-white placeholder:text-gray-500"
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="ccli_number" className="text-sm font-medium">
+              <label htmlFor="ccli_number" className="text-sm font-medium text-white">
                 CCLI #
               </label>
               <Input
                 id="ccli_number"
                 placeholder="1234567"
                 {...register('ccli_number')}
-                className="font-mono"
+                className="font-mono bg-white/5 border-white/10 text-white placeholder:text-gray-500"
               />
             </div>
           </div>
@@ -213,17 +214,17 @@ export function SongEditorForm({
         {/* Split view: Lyrics input | Preview */}
         <div className={mode === 'page' ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'flex-1 grid grid-cols-1 md:grid-cols-2 gap-0 overflow-hidden'}>
           {/* Left: Raw lyrics input */}
-          <div className={mode === 'page' ? 'space-y-2' : 'flex flex-col border-r border-border/50 overflow-hidden'}>
+          <div className={mode === 'page' ? 'space-y-2' : 'flex flex-col border-r border-white/10 overflow-hidden'}>
             {mode === 'modal' && (
-              <div className="px-4 py-2 border-b border-border/30 bg-muted/20">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="px-4 py-2 border-b border-white/10 bg-white/5">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Lyrics
                 </span>
               </div>
             )}
             {mode === 'page' && (
-              <label htmlFor="lyrics" className="text-sm font-medium">
-                Lyrics <span className="text-destructive">*</span>
+              <label htmlFor="lyrics" className="text-sm font-medium text-white">
+                Lyrics <span className="text-orange-500">*</span>
               </label>
             )}
             <div className={mode === 'page' ? '' : 'flex-1 p-4 overflow-hidden'}>
@@ -241,12 +242,12 @@ And grace my fears relieved
 How precious did that grace appear
 The hour I first believed"
                 {...register('lyrics')}
-                className={`${mode === 'page' ? 'min-h-[400px]' : 'h-full'} resize-none font-mono text-sm leading-relaxed ${
-                  errors.lyrics ? 'border-destructive' : ''
+                className={`${mode === 'page' ? 'min-h-[400px]' : 'h-full'} resize-none font-mono text-sm leading-relaxed bg-white/5 border-white/10 text-white placeholder:text-gray-500 ${
+                  errors.lyrics ? 'border-orange-500' : ''
                 }`}
               />
               {errors.lyrics && (
-                <p className="text-xs text-destructive mt-2">{errors.lyrics.message}</p>
+                <p className="text-xs text-orange-500 mt-2">{errors.lyrics.message}</p>
               )}
             </div>
           </div>
@@ -254,14 +255,14 @@ The hour I first believed"
           {/* Right: Live preview */}
           <div className={mode === 'page' ? 'space-y-2' : 'flex flex-col overflow-hidden'}>
             {mode === 'modal' && (
-              <div className="px-4 py-2 border-b border-border/30 bg-muted/20">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="px-4 py-2 border-b border-white/10 bg-white/5">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Slide Preview
                 </span>
               </div>
             )}
             {mode === 'page' && (
-              <label className="text-sm font-medium">
+              <label className="text-sm font-medium text-white">
                 Slide Preview
               </label>
             )}
@@ -272,8 +273,8 @@ The hour I first believed"
         </div>
 
         {/* Footer */}
-        <div className={mode === 'page' ? 'flex items-center justify-between pt-6 border-t' : 'px-6 py-4 border-t border-border/50 flex items-center justify-between bg-background'}>
-          <span className="text-xs text-muted-foreground">
+        <div className={mode === 'page' ? 'flex items-center justify-between pt-6 border-t' : 'px-6 py-4 border-t border-white/10 flex items-center justify-between bg-[#0A0A0A]'}>
+          <span className="text-xs text-gray-400">
             {isDirty ? 'Draft auto-saved' : ''}
           </span>
           <div className="flex gap-3">
