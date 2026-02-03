@@ -51,7 +51,7 @@ export async function uploadAvatarToStorage(
   const filename = `${userId}/${timestamp}-${random}.${extension}`
 
   // Upload to Supabase Storage
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from('avatars')
     .upload(filename, file, {
       cacheControl: '3600',
