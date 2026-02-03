@@ -65,9 +65,16 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const recordingRef = useRef(false);
   const pausedRef = useRef(false);
   const pcmChunkCountRef = useRef(0); // Track PCM chunks sent for debugging
+  const sessionActiveRef = useRef(options.sessionActive === true); // Use ref for current value
   const wsClient = getWebSocketClient();
   const usePcm = options.usePcm === true;
   const sessionActive = options.sessionActive === true;
+  
+  // Update ref when sessionActive changes
+  useEffect(() => {
+    sessionActiveRef.current = sessionActive === true;
+    console.log(`[AudioCapture] sessionActive changed to: ${sessionActive}`);
+  }, [sessionActive]);
 
   // Runtime validation: Log warning if PCM mode is enabled but environment suggests wrong provider
   useEffect(() => {
@@ -268,10 +275,17 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
 
   const sendPcmChunk = useCallback(
     (pcmData: Int16Array, captureTime: number) => {
+      // Use ref to get current sessionActive value (always up-to-date)
+      const isSessionActive = sessionActiveRef.current;
+      
       // Only send if session is active and WebSocket is connected
-      if (!sessionActive || !wsClient.isConnected()) {
+      if (!isSessionActive || !wsClient.isConnected()) {
         // Don't queue if session is not active - just drop the chunk
-        if (!sessionActive) {
+        if (!isSessionActive) {
+          // Log first few dropped chunks to help debug
+          if (pcmChunkCountRef.current < 3) {
+            console.warn(`[AudioCapture] ⚠️  Dropping audio chunk: sessionActive=false (session not active yet)`);
+          }
           return; // Silently drop chunks when session is not active
         }
         // Queue only if WebSocket is disconnected but session is active
@@ -282,7 +296,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
           encoding: 'pcm_s16le',
         };
         chunkQueueRef.current.push({ data: base64Audio, format });
-        console.warn('[AudioCapture] WebSocket not connected, queuing audio chunk');
+        console.warn('[AudioCapture] ⚠️  WebSocket not connected, queuing audio chunk');
         return;
       }
 
@@ -325,6 +339,14 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
       if (!recordingRef.current || pausedRef.current) {
         return;
       }
+      
+      // Debug: Log first few audio processing events
+      const processCount = (processor.onaudioprocess as any).__processCount || 0;
+      (processor.onaudioprocess as any).__processCount = processCount + 1;
+      if (processCount < 3) {
+        console.log(`[AudioCapture] 🎤 Processing audio chunk #${processCount + 1}, sessionActive=${sessionActiveRef.current}, isConnected=${wsClient.isConnected()}`);
+      }
+      
       const input = event.inputBuffer.getChannelData(0);
       // Pre-allocate Int16Array for optimal performance
       const pcm = new Int16Array(input.length);
@@ -347,7 +369,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     audioContext.resume().catch((error) => {
       console.warn('AudioContext resume failed:', error);
     });
-  }, [ensureAudioContext, sendPcmChunk]);
+  }, [ensureAudioContext, sendPcmChunk, sessionActive, wsClient]);
 
   /**
    * Send audio chunk to WebSocket
