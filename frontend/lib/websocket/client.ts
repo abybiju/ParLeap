@@ -104,15 +104,18 @@ class WebSocketClient {
         try {
           const message = JSON.parse(event.data) as ServerMessage;
           
-          // Handle PONG for RTT measurement
+          // Handle PONG for RTT measurement (skip latency tracker - PONG is handled by RTT system)
           if (message.type === 'PONG' && this.pendingPingTimestamp !== null) {
             const rtt = Date.now() - this.pendingPingTimestamp;
             this.updateRTT(rtt);
             this.pendingPingTimestamp = null;
+            // Don't track PONG in latency tracker - it's handled by RTT system
+            this.handleMessage(message);
+            return;
           }
           
-          // Track latency for messages with timing metadata
-          if ('timing' in message && message.timing) {
+          // Track latency for messages with timing metadata (except PONG)
+          if ('timing' in message && message.timing && message.type !== 'PONG') {
             // Use message type as identifier (simplified - in production might use correlation IDs)
             const messageId = `${message.type}_${Date.now()}`;
             this.latencyTracker.recordReceive(messageId, message.type, message.timing);
