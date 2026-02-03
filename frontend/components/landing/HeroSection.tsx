@@ -12,10 +12,10 @@ export function HeroSection() {
     <section className="min-h-screen flex items-center justify-center px-4 py-20 pt-48 relative overflow-hidden">
       {/* Spacer for fixed header */}
       <div className="absolute top-0 left-0 right-0 h-24" />
-      {/* Spline Background Layer - Robot Design (only in hero section) */}
+      {/* Spline Background Layer - Mouse Follow Effect (only in hero section) */}
       <div className="absolute inset-0 z-0">
         <SplineViewer
-          url="https://prod.spline.design/OEL0IKUCdPbQ7Xyx/scene.splinecode"
+          url="https://prod.spline.design/kzdIEyudaZu1oiNQ/scene.splinecode"
           className="w-full h-full"
         />
         {/* Gradient Overlay: Lighter at top to merge with header, darker at bottom */}
@@ -70,7 +70,7 @@ export function HeroSection() {
           </div>
         </motion.div>
 
-        {/* Right: Empty - Robot Spline background shows through */}
+        {/* Right: Empty - Spline background shows through */}
         <div className="hidden lg:block"></div>
       </div>
     </section>
