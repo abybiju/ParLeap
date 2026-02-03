@@ -92,7 +92,7 @@ export function LivePageClient({
           
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
             <p className="text-slate-300 mb-4">
-              This event doesn't have any songs in its setlist yet. Add songs to the event before starting a live session.
+              This event doesn&apos;t have any songs in its setlist yet. Add songs to the event before starting a live session.
             </p>
             
             <div className="flex flex-col gap-3">
