@@ -20,10 +20,14 @@ export function useProfileForm() {
     }
   }, [profile, user])
 
+  // Compare avatar values (handles both preset IDs and URLs)
+  const currentAvatar = profile?.avatar || null
+  const avatarChanged = avatar !== currentAvatar
+
   const isDirty =
     displayName !== (profile?.username || user?.email?.split('@')[0] || '') ||
     username !== (profile?.username || '') ||
-    avatar !== (profile?.avatar || null)
+    avatarChanged
 
   const handleCancel = () => {
     if (profile) {

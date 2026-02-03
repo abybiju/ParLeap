@@ -58,7 +58,7 @@ export function BillingSection() {
             <div className="pt-4 border-t border-white/5">
               <Button
                 variant="outline"
-                className="w-full border-white/10 text-white hover:bg-white/10"
+                className="w-full border-white/10 bg-transparent text-white hover:bg-white/10 hover:text-white"
                 onClick={() => {
                   // Placeholder for future Stripe integration
                   console.log('Manage billing clicked')
