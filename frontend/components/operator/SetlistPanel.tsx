@@ -30,6 +30,7 @@ export function SetlistPanel() {
     if (!lastMessage) return;
 
     if (isSessionStartedMessage(lastMessage)) {
+      console.log(`[SetlistPanel] SESSION_STARTED: ${lastMessage.payload.totalSongs} songs, cached setlist:`, slideCache.setlist?.songs.length ?? 0);
       setCurrentSlideIndex(lastMessage.payload.currentSlideIndex);
       if (slideCache.setlist && slideCache.setlist.songs.length > 0) {
         setCurrentSongId(slideCache.setlist.songs[lastMessage.payload.currentSongIndex]?.id || null);
@@ -48,6 +49,12 @@ export function SetlistPanel() {
       <div className="p-4">
         <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Setlist</h3>
         <p className="text-sm text-slate-500">No songs in setlist</p>
+        {process.env.NODE_ENV === 'development' && (
+          <p className="text-xs text-slate-600 mt-2">
+            Debug: setlist={slideCache.setlist ? 'exists' : 'null'}, 
+            songs={slideCache.setlist?.songs.length ?? 0}
+          </p>
+        )}
       </div>
     );
   }
