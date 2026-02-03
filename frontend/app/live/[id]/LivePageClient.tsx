@@ -16,6 +16,7 @@ interface LivePageClientProps {
   hasSupabaseMismatch: boolean;
   frontendProjectRef: string | null;
   backendProjectRef: string | null;
+  backendConfigured: boolean;
   backendHealthError: Error | null;
 }
 
@@ -29,6 +30,7 @@ export function LivePageClient({
   hasSupabaseMismatch,
   frontendProjectRef,
   backendProjectRef,
+  backendConfigured,
   backendHealthError,
 }: LivePageClientProps) {
   // Show Supabase mismatch error
@@ -38,12 +40,13 @@ export function LivePageClient({
         <div className="max-w-2xl w-full space-y-6">
           <div className="flex items-center gap-3 text-red-400">
             <AlertTriangle className="h-6 w-6" />
-            <h1 className="text-2xl font-bold">Backend Supabase Mismatch</h1>
+            <h1 className="text-2xl font-bold">Supabase Configuration Mismatch</h1>
           </div>
           
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6 space-y-4">
             <p className="text-slate-300">
-              The frontend and backend are pointing to different Supabase projects. This will prevent live sessions from working correctly.
+              The frontend and backend are pointing to different Supabase projects (or backend Supabase is not configured). 
+              This prevents live sessions from working because the backend cannot find events that exist in the frontend database.
             </p>
             
             <div className="space-y-2">
@@ -53,15 +56,26 @@ export function LivePageClient({
               </div>
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                 <span className="text-slate-400">Backend Project:</span>
-                <span className="font-mono text-sm text-white">{backendProjectRef || 'Not configured'}</span>
+                <span className="font-mono text-sm text-white">
+                  {backendProjectRef || (backendHealthError ? 'Health check failed' : (backendConfigured ? 'Configured but no ref' : 'Not configured'))}
+                </span>
               </div>
             </div>
+            
+            {backendHealthError && (
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <p className="text-sm text-yellow-300">
+                  ⚠️ Could not verify backend configuration. Check that the backend is accessible and the health endpoint is working.
+                </p>
+              </div>
+            )}
             
             <div className="pt-4 border-t border-white/10">
               <p className="text-sm text-slate-400 mb-3">To fix this:</p>
               <ol className="list-decimal list-inside space-y-2 text-sm text-slate-300">
                 <li>Go to your backend deployment (Railway/Vercel)</li>
                 <li>Set <code className="bg-white/10 px-1 py-0.5 rounded">SUPABASE_URL</code> and <code className="bg-white/10 px-1 py-0.5 rounded">SUPABASE_SERVICE_ROLE_KEY</code> to match the frontend project</li>
+                <li>Verify the backend health endpoint returns the correct project ref</li>
                 <li>Redeploy the backend</li>
                 <li>Refresh this page</li>
               </ol>
