@@ -62,6 +62,8 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
             title: song.title,
             artist: song.artist,
             lines: song.lines,
+            slides: song.slides,
+            lineToSlideIndex: song.lineToSlideIndex,
           }))
         );
         // Preload initial slides

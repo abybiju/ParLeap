@@ -10,7 +10,12 @@ export interface CachedSong {
   id: string;
   title: string;
   artist?: string;
-  lines: string[];
+  lines: string[]; // For backward compatibility and matching
+  slides?: Array<{
+    lines: string[];
+    slideText: string;
+  }>; // Compiled multi-line slides
+  lineToSlideIndex?: number[]; // Mapping: lineIndex -> slideIndex
 }
 
 export interface CachedSetlist {
@@ -84,8 +89,11 @@ export const useSlideCache = create<SlideCacheState>((set, get) => ({
       // Start from next slide
       slideIdx++;
       
+      // Get slide count (use slides if available, otherwise lines)
+      const slideCount = song.slides?.length ?? song.lines.length;
+      
       // If we've reached the end of this song, move to next song
-      if (slideIdx >= song.lines.length) {
+      if (slideIdx >= slideCount) {
         songIdx++;
         slideIdx = 0;
         
@@ -94,12 +102,20 @@ export const useSlideCache = create<SlideCacheState>((set, get) => ({
           break;
         }
       } else {
+        // Get slide text
+        let lineText = '';
+        if (song.slides && slideIdx < song.slides.length) {
+          lineText = song.slides[slideIdx].slideText;
+        } else if (slideIdx < song.lines.length) {
+          lineText = song.lines[slideIdx];
+        }
+        
         // Add this slide to preloaded list
         preloaded.push({
           songId: song.id,
           songTitle: song.title,
           slideIndex: slideIdx,
-          lineText: song.lines[slideIdx],
+          lineText,
         });
         remaining--;
       }
@@ -115,14 +131,24 @@ export const useSlideCache = create<SlideCacheState>((set, get) => ({
     }
 
     const song = setlist.songs[songIndex];
-    if (slideIndex < 0 || slideIndex >= song.lines.length) {
+    const slideCount = song.slides?.length ?? song.lines.length;
+    
+    if (slideIndex < 0 || slideIndex >= slideCount) {
       return null;
+    }
+
+    // Get slide text
+    let lineText = '';
+    if (song.slides && slideIndex < song.slides.length) {
+      lineText = song.slides[slideIndex].slideText;
+    } else if (slideIndex < song.lines.length) {
+      lineText = song.lines[slideIndex];
     }
 
     return {
       songId: song.id,
       songTitle: song.title,
-      lineText: song.lines[slideIndex],
+      lineText,
     };
   },
 

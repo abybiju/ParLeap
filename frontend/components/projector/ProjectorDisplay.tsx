@@ -179,7 +179,10 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     );
   }
 
-  const { lineText, songTitle, slideIndex } = currentSlide.payload;
+  const { lineText, slideText, slideLines, songTitle, slideIndex } = currentSlide.payload;
+
+  // Use slideLines if available, otherwise fall back to slideText or lineText
+  const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden p-8">
@@ -195,22 +198,33 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
         </div>
       )}
 
-      {/* Main Lyrics Display - with enhanced animations */}
+      {/* Main Lyrics Display - Multi-line with enhanced animations */}
       <div className="flex-1 flex items-center justify-center w-full max-w-6xl">
-        <p
+        <div
           className={cn(
-            'text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-light leading-relaxed text-center text-white',
-            'transition-all duration-500 ease-in-out',
+            'w-full transition-all duration-500 ease-in-out',
             isTransitioning 
               ? 'opacity-0 scale-95 translate-y-4 blur-sm' 
               : 'opacity-100 scale-100 translate-y-0 blur-0'
           )}
-          style={{
-            textShadow: '0 2px 20px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.1)',
-          }}
         >
-          {lineText}
-        </p>
+          <div className="flex flex-col items-center justify-center space-y-4 md:space-y-6">
+            {displayLines.map((line, index) => (
+              <p
+                key={index}
+                className={cn(
+                  'text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-light leading-relaxed text-center text-white',
+                  'transition-all duration-300'
+                )}
+                style={{
+                  textShadow: '0 2px 20px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.1)',
+                }}
+              >
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Slide Number (Bottom, Subtle) - hidden in fullscreen */}

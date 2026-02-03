@@ -31,7 +31,10 @@ export function CurrentSlideDisplay() {
     );
   }
 
-  const { lineText, songTitle, slideIndex } = currentSlide.payload;
+  const { lineText, slideText, slideLines, songTitle, slideIndex } = currentSlide.payload;
+
+  // Use slideLines if available, otherwise fall back to slideText or lineText
+  const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
 
   return (
     <div className="flex flex-col h-full">
@@ -40,16 +43,23 @@ export function CurrentSlideDisplay() {
         <h2 className="text-xl font-semibold text-slate-300">{songTitle}</h2>
       </div>
 
-      {/* Current Slide Text */}
+      {/* Current Slide Text - Multi-line */}
       <div className="flex-1 flex items-center justify-center p-8">
-        <p
-          className={cn(
-            'text-4xl md:text-5xl lg:text-6xl font-light leading-relaxed text-center text-white',
-            'transition-all duration-500'
-          )}
-        >
-          {lineText}
-        </p>
+        <div className="w-full">
+          <div className="flex flex-col items-center justify-center space-y-3">
+            {displayLines.map((line, index) => (
+              <p
+                key={index}
+                className={cn(
+                  'text-3xl md:text-4xl lg:text-5xl font-light leading-relaxed text-center text-white',
+                  'transition-all duration-500'
+                )}
+              >
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Slide Indicator */}

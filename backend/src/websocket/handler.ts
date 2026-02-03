@@ -131,7 +131,8 @@ interface SessionState {
   eventName: string;
   songs: SongData[];
   currentSongIndex: number;
-  currentSlideIndex: number;
+  currentSlideIndex: number; // Slide index (for display)
+  currentLineIndex: number; // Line index (for matching) - tracks which line we're matching against
   rollingBuffer: string;
   isActive: boolean;
   isAutoFollowing: boolean; // Can be disabled by operator for manual control
@@ -263,10 +264,21 @@ async function handleStartSession(
   const currentSlideIndex = existingSession?.currentSlideIndex ?? 0;
   const currentSong = eventData.songs[currentSongIndex] || eventData.songs[0];
   
+  // Determine current line index from slide index (for matching)
+  // If slides exist, find the first line of the current slide
+  let currentLineIndex = currentSlideIndex;
+  if (currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
+    currentLineIndex = currentSong.slides[currentSlideIndex].startLineIndex;
+  } else if (currentSong.lineToSlideIndex && currentSong.lineToSlideIndex.length > 0) {
+    // Fallback: find first line that maps to this slide
+    currentLineIndex = currentSong.lineToSlideIndex.findIndex(slideIdx => slideIdx === currentSlideIndex);
+    if (currentLineIndex === -1) currentLineIndex = 0;
+  }
+  
   const songContext = createSongContext(
     { id: currentSong.id, sequence_order: currentSongIndex + 1 },
     currentSong,
-    currentSlideIndex
+    currentLineIndex // Use line index for matching
   );
   
   const session: SessionState = {
@@ -276,6 +288,7 @@ async function handleStartSession(
     songs: eventData.songs,
     currentSongIndex,
     currentSlideIndex,
+    currentLineIndex, // Track line index separately for matching
     rollingBuffer: existingSession?.rollingBuffer || '',
     isActive: true,
     isAutoFollowing: true, // Auto-follow enabled by default
@@ -348,7 +361,12 @@ async function handleStartSession(
         id: song.id,
         title: song.title,
         artist: song.artist,
-        lines: song.lines,
+        lines: song.lines, // For backward compatibility and matching
+        slides: song.slides?.map(slide => ({
+          lines: slide.lines,
+          slideText: slide.slideText,
+        })),
+        lineToSlideIndex: song.lineToSlideIndex,
       })),
     },
     timing: createTiming(receivedAt, processingStart),
@@ -363,12 +381,33 @@ async function handleStartSession(
   }
 
   // Send current display update (synced to existing session if available)
-  if (currentSong && currentSong.lines.length > 0 && currentSong.lines[currentSlideIndex]) {
+  if (currentSong && currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
+    const currentSlide = currentSong.slides[currentSlideIndex];
     const displayUpdate: DisplayUpdateMessage = {
       type: 'DISPLAY_UPDATE',
       payload: {
-        lineText: currentSong.lines[currentSlideIndex],
+        lineText: currentSlide.lines[0] || '', // Backward compatibility
+        slideText: currentSlide.slideText,
+        slideLines: currentSlide.lines,
         slideIndex: currentSlideIndex,
+        lineIndex: currentLineIndex,
+        songId: currentSong.id,
+        songTitle: currentSong.title,
+        isAutoAdvance: false,
+      },
+      timing: createTiming(receivedAt, processingStart),
+    };
+    send(ws, displayUpdate);
+  } else if (currentSong && currentSong.lines.length > 0 && currentLineIndex < currentSong.lines.length) {
+    // Fallback for songs without slides (backward compatibility)
+    const displayUpdate: DisplayUpdateMessage = {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: currentSong.lines[currentLineIndex],
+        slideText: currentSong.lines[currentLineIndex],
+        slideLines: [currentSong.lines[currentLineIndex]],
+        slideIndex: currentSlideIndex,
+        lineIndex: currentLineIndex,
         songId: currentSong.id,
         songTitle: currentSong.title,
         isAutoAdvance: false,
@@ -603,47 +642,78 @@ function handleTranscriptionResult(
 
       // Handle current song line matching (normal slide advance)
       if (matchResult.matchFound && matchResult.confidence >= session.matcherConfig.similarityThreshold) {
-        if (session.matcherConfig.debug) {
-          console.log(
-            `[WS] 🎯 MATCH FOUND: Line ${matchResult.currentLineIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
-          );
-          console.log(`[WS] isLineEnd: ${matchResult.isLineEnd}, nextLineIndex: ${matchResult.nextLineIndex}`);
-          console.log(`[WS] Match reason: ${matchResult.isLineEnd ? `Advancing from line ${session.songContext.currentLineIndex} to line ${matchResult.nextLineIndex}` : `Matched current line ${matchResult.currentLineIndex} (no advance)`}`);
+        const currentSong = session.songs[session.currentSongIndex];
+        const matchedLineIndex = matchResult.isLineEnd && matchResult.nextLineIndex !== undefined
+          ? matchResult.nextLineIndex
+          : matchResult.currentLineIndex;
+
+        // Convert line index to slide index
+        let newSlideIndex = session.currentSlideIndex;
+        if (currentSong.lineToSlideIndex && matchedLineIndex < currentSong.lineToSlideIndex.length) {
+          newSlideIndex = currentSong.lineToSlideIndex[matchedLineIndex];
+        } else {
+          // Fallback: assume 1:1 mapping if no slides configured
+          newSlideIndex = matchedLineIndex;
         }
 
-        // Always send DISPLAY_UPDATE with confidence when match found (even if not advancing)
-        const displayMessage: DisplayUpdateMessage = {
-          type: 'DISPLAY_UPDATE',
-          payload: {
-            lineText: matchResult.matchedText,
-            slideIndex: matchResult.isLineEnd && matchResult.nextLineIndex !== undefined 
-              ? matchResult.nextLineIndex 
-              : matchResult.currentLineIndex,
-            songId: session.songContext.id,
-            songTitle: session.songContext.title,
-            matchConfidence: matchResult.confidence,
-            isAutoAdvance: matchResult.isLineEnd || false,
-          },
-          timing: createTiming(receivedAt, processingStart),
-        };
+        if (session.matcherConfig.debug) {
+          console.log(
+            `[WS] 🎯 MATCH FOUND: Line ${matchedLineIndex} → Slide ${newSlideIndex} @ ${(matchResult.confidence * 100).toFixed(1)}% - "${matchResult.matchedText}"`
+          );
+        }
 
-        broadcastToEvent(session.eventId, displayMessage);
+        // Only broadcast DISPLAY_UPDATE when slide actually changes
+        const slideChanged = newSlideIndex !== session.currentSlideIndex;
+        
+        if (slideChanged) {
+          // Get slide data
+          let slideText = matchResult.matchedText;
+          let slideLines = [matchResult.matchedText];
+          
+          if (currentSong.slides && newSlideIndex < currentSong.slides.length) {
+            const slide = currentSong.slides[newSlideIndex];
+            slideText = slide.slideText;
+            slideLines = slide.lines;
+          }
+
+          const displayMessage: DisplayUpdateMessage = {
+            type: 'DISPLAY_UPDATE',
+            payload: {
+              lineText: slideLines[0] || '', // Backward compatibility
+              slideText,
+              slideLines,
+              slideIndex: newSlideIndex,
+              lineIndex: matchedLineIndex,
+              songId: session.songContext.id,
+              songTitle: session.songContext.title,
+              matchConfidence: matchResult.confidence,
+              isAutoAdvance: matchResult.isLineEnd || false,
+            },
+            timing: createTiming(receivedAt, processingStart),
+          };
+
+          broadcastToEvent(session.eventId, displayMessage);
+
+          // Update session state
+          session.currentSlideIndex = newSlideIndex;
+          session.currentLineIndex = matchedLineIndex;
+          session.songContext.currentLineIndex = matchedLineIndex;
+          
+          if (session.matcherConfig.debug) {
+            console.log(`[WS] Auto-advanced to slide ${newSlideIndex} (line ${matchedLineIndex})`);
+          }
+        } else {
+          // Slide didn't change, just update line index for matching
+          session.currentLineIndex = matchedLineIndex;
+          session.songContext.currentLineIndex = matchedLineIndex;
+          
+          if (session.matcherConfig.debug) {
+            console.log(`[WS] Matched line ${matchedLineIndex} within current slide ${session.currentSlideIndex} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
+          }
+        }
 
         // Trim buffer after strong match to reduce noise for next lines
         session.rollingBuffer = matchResult.matchedText;
-
-        // Only update slide index if actually advancing
-        if (matchResult.isLineEnd && matchResult.nextLineIndex !== undefined) {
-          session.currentSlideIndex = matchResult.nextLineIndex;
-          session.songContext.currentLineIndex = matchResult.nextLineIndex;
-          if (session.matcherConfig.debug) {
-            console.log(`[WS] Auto-advanced to slide ${matchResult.nextLineIndex}`);
-          }
-        } else {
-          if (session.matcherConfig.debug) {
-            console.log(`[WS] Matched current line ${matchResult.currentLineIndex} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
-          }
-        }
       }
     }
   }
@@ -739,9 +809,15 @@ function handleManualOverride(
   let newSlideIndex = session.currentSlideIndex;
   let newSongIndex = session.currentSongIndex;
 
+  // Helper to get slide count for a song
+  const getSlideCount = (song: SongData): number => {
+    return song.slides?.length ?? song.lines.length;
+  };
+
   switch (action) {
-    case 'NEXT_SLIDE':
-      if (session.currentSlideIndex < currentSong.lines.length - 1) {
+    case 'NEXT_SLIDE': {
+      const slideCount = getSlideCount(currentSong);
+      if (session.currentSlideIndex < slideCount - 1) {
         newSlideIndex = session.currentSlideIndex + 1;
       } else if (session.currentSongIndex < session.songs.length - 1) {
         // Move to next song
@@ -749,16 +825,19 @@ function handleManualOverride(
         newSlideIndex = 0;
       }
       break;
+    }
 
-    case 'PREV_SLIDE':
+    case 'PREV_SLIDE': {
       if (session.currentSlideIndex > 0) {
         newSlideIndex = session.currentSlideIndex - 1;
       } else if (session.currentSongIndex > 0) {
         // Move to previous song
         newSongIndex = session.currentSongIndex - 1;
-        newSlideIndex = session.songs[newSongIndex].lines.length - 1;
+        const prevSong = session.songs[newSongIndex];
+        newSlideIndex = getSlideCount(prevSong) - 1;
       }
       break;
+    }
 
     case 'GO_TO_SLIDE':
       if (slideIndex !== undefined) {
@@ -769,7 +848,8 @@ function handleManualOverride(
           }
         }
         const targetSong = session.songs[newSongIndex];
-        if (slideIndex >= 0 && slideIndex < targetSong.lines.length) {
+        const slideCount = getSlideCount(targetSong);
+        if (slideIndex >= 0 && slideIndex < slideCount) {
           newSlideIndex = slideIndex;
         }
       }
@@ -795,23 +875,37 @@ function handleManualOverride(
     session.suggestedSongSwitch = undefined;
   }
 
+  const targetSong = session.songs[newSongIndex];
+
+  // Determine line index from slide index
+  let newLineIndex = 0;
+  if (targetSong.slides && newSlideIndex < targetSong.slides.length) {
+    newLineIndex = targetSong.slides[newSlideIndex].startLineIndex;
+  } else if (targetSong.lineToSlideIndex && targetSong.lineToSlideIndex.length > 0) {
+    // Fallback: find first line that maps to this slide
+    newLineIndex = targetSong.lineToSlideIndex.findIndex(slideIdx => slideIdx === newSlideIndex);
+    if (newLineIndex === -1) newLineIndex = 0;
+  } else {
+    // Ultimate fallback: assume 1:1 mapping
+    newLineIndex = newSlideIndex;
+  }
+
   // Update session state
   session.currentSongIndex = newSongIndex;
   session.currentSlideIndex = newSlideIndex;
+  session.currentLineIndex = newLineIndex;
 
-  const targetSong = session.songs[newSongIndex];
-
-  // Update song context for matching (Phase 3)
+  // Update song context for matching
   if (songChanged) {
     session.songContext = createSongContext(
       { id: targetSong.id, sequence_order: newSongIndex + 1 },
       targetSong,
-      newSlideIndex
+      newLineIndex // Use line index for matching
     );
     session.rollingBuffer = ''; // Clear buffer on song change
   } else if (session.songContext) {
     // Update line index within same song
-    session.songContext.currentLineIndex = newSlideIndex;
+    session.songContext.currentLineIndex = newLineIndex;
   }
 
   const timing = createTiming(receivedAt, processingStart);
@@ -824,19 +918,35 @@ function handleManualOverride(
         songId: targetSong.id,
         songTitle: targetSong.title,
         songIndex: newSongIndex,
-        totalSlides: targetSong.lines.length,
+        totalSlides: targetSong.slides?.length ?? targetSong.lines.length,
       },
       timing,
     };
     send(ws, songChangedMessage);
   }
 
-  // Send display update
+  // Send display update with slide data
+  let slideText = '';
+  let slideLines: string[] = [];
+  
+  if (targetSong.slides && newSlideIndex < targetSong.slides.length) {
+    const slide = targetSong.slides[newSlideIndex];
+    slideText = slide.slideText;
+    slideLines = slide.lines;
+  } else {
+    // Fallback for songs without slides
+    slideText = targetSong.lines[newLineIndex] || '';
+    slideLines = [slideText];
+  }
+
   const displayUpdate: DisplayUpdateMessage = {
     type: 'DISPLAY_UPDATE',
     payload: {
-      lineText: targetSong.lines[newSlideIndex],
+      lineText: slideLines[0] || '', // Backward compatibility
+      slideText,
+      slideLines,
       slideIndex: newSlideIndex,
+      lineIndex: newLineIndex,
       songId: targetSong.id,
       songTitle: targetSong.title,
       isAutoAdvance: false,
