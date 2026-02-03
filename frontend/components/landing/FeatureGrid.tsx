@@ -6,8 +6,8 @@ import { Zap, MousePointerClick } from 'lucide-react'
 
 export function FeatureGrid() {
   return (
-    <section className="py-20 px-4 bg-[#050505] relative">
-      <div className="container mx-auto relative z-10">
+    <section className="py-20 px-4">
+      <div className="container mx-auto">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
