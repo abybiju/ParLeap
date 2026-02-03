@@ -151,6 +151,8 @@ interface SessionState {
     matchCount: number; // How many consecutive times we've seen this match
   };
   lastSongSwitchAt?: number; // Timestamp of last song switch (for cooldown)
+  // Audio chunk tracking for logging
+  audioChunkCount?: number; // Track number of audio chunks received (for diagnostic logging)
 }
 
 
@@ -713,8 +715,8 @@ async function handleAudioData(
   }
 
   // Log audio format for debugging (first few chunks only to avoid spam)
-  const chunkCount = (session as any).audioChunkCount || 0;
-  (session as any).audioChunkCount = chunkCount + 1;
+  const chunkCount = session.audioChunkCount || 0;
+  session.audioChunkCount = chunkCount + 1;
   if (chunkCount < 3) {
     console.log(`[WS] 📦 Audio chunk #${chunkCount + 1}: ${data.length} bytes (base64), format: ${format?.encoding || 'unknown'}, sampleRate: ${format?.sampleRate || 'unknown'}, channels: ${format?.channels || 'unknown'}`);
   }
