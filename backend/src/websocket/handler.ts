@@ -303,44 +303,10 @@ async function handleStartSession(
     lastSongSwitchAt: undefined,
   };
 
-  // Create STT stream if:
-  // 1. No existing session (first client), OR
-  // 2. Existing session but it doesn't have an STT stream (projector connected first)
-  // This ensures the operator view always gets STT, even if projector connects first
-  const shouldCreateSTT = sttProvider === 'elevenlabs' && !existingSessionWithSTT;
-  
-  if (shouldCreateSTT) {
-    if (!isElevenLabsConfigured) {
-      console.error('[STT] ❌ ElevenLabs selected but ELEVENLABS_API_KEY not configured');
-      sendError(ws, 'STT_ERROR', 'ElevenLabs API key not configured. Set ELEVENLABS_API_KEY in backend/.env');
-    } else {
-      console.log('[STT] 🚀 Creating ElevenLabs streaming recognition...');
-      const stream = createStreamingRecognition();
-      stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
-        const processingStart = Date.now();
-        const receivedAtNow = Date.now();
-        // Broadcast transcription to ALL sessions for this event, not just this one
-        // This allows projector views to also receive transcript updates if needed
-        handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
-      });
-      stream.on('error', (error: Error) => {
-        console.error('[STT] ❌ ElevenLabs stream error:', error);
-        sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
-      });
-      stream.on('end', () => {
-        console.log('[STT] ElevenLabs stream ended');
-      });
-      session.sttStream = stream;
-      console.log('[STT] ✅ ElevenLabs stream initialized for new session');
-      
-      // If there's an existing session without STT, share the stream with it
-      // This handles the case where projector connected first
-      if (existingSession && !existingSession.sttStream) {
-        console.log('[STT] 📡 Sharing STT stream with existing session (projector view)');
-        existingSession.sttStream = stream;
-      }
-    }
-  } else if (existingSessionWithSTT && existingSessionWithSTT.sttStream) {
+  // For ElevenLabs: Use lazy initialization - create stream only when first audio arrives
+  // This prevents connection timeout if audio capture hasn't started yet
+  // For other providers or if existing session has STT, share it
+  if (existingSessionWithSTT && existingSessionWithSTT.sttStream) {
     // Share existing STT stream with new session (operator reconnected or projector connecting after operator)
     console.log('[STT] 📡 Reusing existing STT stream from another session');
     session.sttStream = existingSessionWithSTT.sttStream;
@@ -348,6 +314,7 @@ async function handleStartSession(
     // Log warning if ElevenLabs is selected but not configured
     console.warn('[STT] ⚠️  ElevenLabs selected but ELEVENLABS_API_KEY not configured - STT will not work');
   }
+  // Note: ElevenLabs stream will be created lazily in handleAudioData when first audio chunk arrives
 
   sessions.set(ws, session);
 
@@ -749,11 +716,6 @@ async function handleAudioData(
   console.log(`[WS] Received audio chunk: ${data.length} bytes (base64), format: ${format?.encoding || 'unknown'}, sampleRate: ${format?.sampleRate || 'unknown'}`);
 
   if (sttProvider === 'elevenlabs') {
-    if (!session.sttStream) {
-      console.error('[WS] ❌ ElevenLabs stream not initialized for session');
-      sendError(ws, 'STT_ERROR', 'ElevenLabs stream not initialized. Check backend logs for STT initialization errors.');
-      return;
-    }
     if (format?.encoding !== 'pcm_s16le') {
       console.error(`[WS] ❌ Audio format mismatch: received ${format?.encoding || 'unknown'}, expected pcm_s16le`);
       console.error(`[WS] ❌ Frontend must set NEXT_PUBLIC_STT_PROVIDER=elevenlabs to send PCM format`);
@@ -763,6 +725,46 @@ async function handleAudioData(
       });
       return;
     }
+
+    // Lazy initialization: Create ElevenLabs stream on first audio chunk
+    if (!session.sttStream) {
+      if (!isElevenLabsConfigured) {
+        console.error('[STT] ❌ ElevenLabs selected but ELEVENLABS_API_KEY not configured');
+        sendError(ws, 'STT_ERROR', 'ElevenLabs API key not configured. Set ELEVENLABS_API_KEY in backend/.env');
+        return;
+      }
+      console.log('[STT] 🚀 Creating ElevenLabs streaming recognition (lazy init on first audio)...');
+      const stream = createStreamingRecognition();
+      stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
+        const processingStart = Date.now();
+        const receivedAtNow = Date.now();
+        // Broadcast transcription to ALL sessions for this event
+        handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
+      });
+      stream.on('error', (error: Error) => {
+        console.error('[STT] ❌ ElevenLabs stream error:', error);
+        sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
+      });
+      stream.on('end', () => {
+        console.log('[STT] ElevenLabs stream ended');
+        // Clear stream reference so it can be recreated if needed
+        session.sttStream = undefined;
+      });
+      session.sttStream = stream;
+      console.log('[STT] ✅ ElevenLabs stream initialized (lazy)');
+      
+      // Share stream with other sessions for this event (if any)
+      for (const [otherWs, otherSession] of sessions.entries()) {
+        if (otherSession.eventId === session.eventId && 
+            otherSession !== session && 
+            !otherSession.sttStream &&
+            otherWs.readyState === ws.OPEN) {
+          console.log('[STT] 📡 Sharing STT stream with existing session');
+          otherSession.sttStream = stream;
+        }
+      }
+    }
+
     try {
       const audioBuffer = Buffer.from(data, 'base64');
       session.sttStream.write(audioBuffer);
