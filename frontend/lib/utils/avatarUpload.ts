@@ -81,11 +81,12 @@ export async function uploadAvatarToStorage(
  */
 export async function resizeImageIfNeeded(
   file: File,
-  maxWidth: number = 512,
-  maxHeight: number = 512
+  _maxWidth: number = 512,
+  _maxHeight: number = 512
 ): Promise<File> {
   // For now, return the file as-is
   // In production, you might want to use a library like 'browser-image-compression'
   // or implement canvas-based resizing
+  // TODO: Implement actual resizing logic using _maxWidth and _maxHeight
   return file
 }
