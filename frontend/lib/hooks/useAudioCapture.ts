@@ -30,6 +30,7 @@ export interface UseAudioCaptureReturn {
 
 export interface AudioCaptureOptions {
   usePcm?: boolean;
+  sessionActive?: boolean; // Only send audio when session is active
 }
 
 /**
@@ -65,6 +66,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const pausedRef = useRef(false);
   const wsClient = getWebSocketClient();
   const usePcm = options.usePcm === true;
+  const sessionActive = options.sessionActive === true;
 
   // Check if MediaRecorder is supported
   useEffect(() => {
@@ -252,6 +254,24 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
 
   const sendPcmChunk = useCallback(
     (pcmData: Int16Array, captureTime: number) => {
+      // Only send if session is active and WebSocket is connected
+      if (!sessionActive || !wsClient.isConnected()) {
+        // Don't queue if session is not active - just drop the chunk
+        if (!sessionActive) {
+          return; // Silently drop chunks when session is not active
+        }
+        // Queue only if WebSocket is disconnected but session is active
+        const base64Audio = encodePcmToBase64(pcmData);
+        const format = {
+          sampleRate: 16000,
+          channels: 1,
+          encoding: 'pcm_s16le',
+        };
+        chunkQueueRef.current.push({ data: base64Audio, format });
+        console.warn('WebSocket not connected, queuing audio chunk');
+        return;
+      }
+
       const base64Audio = encodePcmToBase64(pcmData);
       const format = {
         sampleRate: 16000,
@@ -266,14 +286,9 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         },
       };
 
-      if (wsClient.isConnected()) {
-        wsClient.send(message, captureTime);
-      } else {
-        chunkQueueRef.current.push({ data: base64Audio, format });
-        console.warn('WebSocket not connected, queuing audio chunk');
-      }
+      wsClient.send(message, captureTime);
     },
-    [encodePcmToBase64, wsClient]
+    [encodePcmToBase64, wsClient, sessionActive]
   );
 
   const startPcmProcessing = useCallback((stream: MediaStream) => {
@@ -313,6 +328,11 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
    */
   const sendAudioChunk = useCallback(
     (chunk: Blob, captureTime: number) => {
+      // Only send if session is active
+      if (!sessionActive) {
+        return; // Silently drop chunks when session is not active
+      }
+
       // Convert blob to Base64
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -333,7 +353,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
           },
         };
 
-        // Send via WebSocket if connected, otherwise queue
+        // Send via WebSocket if connected, otherwise queue (only if session is active)
         if (wsClient.isConnected()) {
           wsClient.send(message, captureTime);
         } else {
@@ -344,16 +364,17 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
       };
       reader.readAsDataURL(chunk);
     },
-    [wsClient]
+    [wsClient, sessionActive]
   );
 
   /**
-   * Process queued chunks when WebSocket reconnects
+   * Process queued chunks when WebSocket reconnects AND session is active
    */
   const isConnected = wsClient.isConnected();
 
   useEffect(() => {
-      if (isConnected && chunkQueueRef.current.length > 0) {
+    // Only flush queue if session is active and WebSocket is connected
+    if (sessionActive && isConnected && chunkQueueRef.current.length > 0) {
       console.log(`Sending ${chunkQueueRef.current.length} queued audio chunks`);
       const queuedChunks = [...chunkQueueRef.current];
       chunkQueueRef.current = [];
@@ -369,7 +390,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         wsClient.send(message);
       });
     }
-  }, [isConnected, wsClient]);
+  }, [sessionActive, isConnected, wsClient]);
 
   /**
    * Start recording
