@@ -6,7 +6,7 @@ import { Zap, ZapOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
-import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage } from '@/lib/websocket/types';
+import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage } from '@/lib/websocket/types';
 import { GhostText } from './GhostText';
 import { MatchStatus } from './MatchStatus';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -83,11 +83,79 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
     };
   }, [isConnected, eventId, startSession, sessionStarted, state]);
 
+  // Handle error messages
+  useEffect(() => {
+    if (lastMessage && isErrorMessage(lastMessage)) {
+      const error = lastMessage.payload;
+      console.error('[OperatorHUD] WebSocket error:', error.code, error.message, error.details);
+      
+      // Show user-friendly error toast
+      if (error.code === 'EMPTY_SETLIST') {
+        toast.error('Empty Setlist', {
+          description: error.message || 'Please add songs to the event before starting a session.',
+          duration: 10000,
+        });
+      } else if (error.code === 'EVENT_NOT_FOUND') {
+        toast.error('Event Not Found', {
+          description: error.message || 'The event could not be found. Please check the event ID.',
+          duration: 10000,
+        });
+      } else if (error.code === 'STT_ERROR' || error.code === 'AUDIO_FORMAT_UNSUPPORTED') {
+        // STT errors are handled by STTStatus component, just log here
+        console.warn('[OperatorHUD] STT error:', error.message);
+      } else {
+        toast.error(`Error: ${error.code}`, {
+          description: error.message || 'An error occurred. Check console for details.',
+          duration: 8000,
+        });
+      }
+    }
+  }, [lastMessage]);
+
+  // Handle error messages - show toast and prevent repeated logging
+  useEffect(() => {
+    if (lastMessage && isErrorMessage(lastMessage)) {
+      const error = lastMessage.payload;
+      
+      // Only log error once per unique error code to prevent spam
+      const errorKey = `${error.code}-${error.message}`;
+      const lastErrorKey = sessionStorage.getItem('lastErrorKey');
+      
+      if (lastErrorKey !== errorKey) {
+        console.error('[OperatorHUD] WebSocket error:', error.code, error.message, error.details);
+        sessionStorage.setItem('lastErrorKey', errorKey);
+        
+        // Clear after 5 seconds to allow same error to show again if it persists
+        setTimeout(() => {
+          sessionStorage.removeItem('lastErrorKey');
+        }, 5000);
+        
+        // Show user-friendly error toast
+        if (error.code === 'EMPTY_SETLIST') {
+          toast.error('Empty Setlist', {
+            description: error.message || 'Please add songs to the event before starting a session.',
+            duration: 10000,
+          });
+        } else if (error.code === 'EVENT_NOT_FOUND') {
+          toast.error('Event Not Found', {
+            description: error.message || 'The event could not be found. Please check the event ID.',
+            duration: 10000,
+          });
+        } else if (error.code === 'STT_ERROR' || error.code === 'AUDIO_FORMAT_UNSUPPORTED') {
+          // STT errors are handled by STTStatus component, just log here
+          console.warn('[OperatorHUD] STT error:', error.message);
+        } else {
+          toast.error(`Error: ${error.code}`, {
+            description: error.message || 'An error occurred. Check console for details.',
+            duration: 8000,
+          });
+        }
+      }
+    }
+  }, [lastMessage]);
+
   // Auto-start audio capture when session starts
   useEffect(() => {
-    if (lastMessage) {
-      console.log('[OperatorHUD] Received message:', lastMessage.type, lastMessage);
-    }
     if (lastMessage && isSessionStartedMessage(lastMessage)) {
       console.log('[OperatorHUD] Session started! Setlist:', lastMessage.payload.setlist);
       if (!audioCapture.state.isRecording && audioCapture.state.permissionState === 'granted') {
