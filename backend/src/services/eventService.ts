@@ -143,19 +143,20 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     let eventItems: EventItem[] | null = null;
     let itemsError: { code?: string; message?: string } | null = null;
     
-    // First attempt: try with slide_config (new schema)
+    // First attempt: try with slide_config and slide_config_override (new schema)
     const { data: itemsWithConfig, error: errorWithConfig } = await supabase
       .from('event_items')
       .select('sequence_order, slide_config_override, songs(id, title, artist, lyrics, slide_config)')
       .eq('event_id', eventId)
       .order('sequence_order', { ascending: true });
 
-    // If column doesn't exist (migration not run), fall back to query without slide_config
-    if (errorWithConfig && errorWithConfig.code === '42703' && errorWithConfig.message?.includes('slide_config')) {
-      console.warn('[EventService] slide_config column not found - migration 006 may not be applied. Using fallback query.');
+    // If column doesn't exist (migration not run), fall back to query without slide_config columns
+    if (errorWithConfig && errorWithConfig.code === '42703' && 
+        (errorWithConfig.message?.includes('slide_config') || errorWithConfig.message?.includes('slide_config_override'))) {
+      console.warn('[EventService] slide_config columns not found - migration 006 may not be applied. Using fallback query.');
       const { data: itemsWithoutConfig, error: errorWithoutConfig } = await supabase
         .from('event_items')
-        .select('sequence_order, slide_config_override, songs(id, title, artist, lyrics)')
+        .select('sequence_order, songs(id, title, artist, lyrics)')
         .eq('event_id', eventId)
         .order('sequence_order', { ascending: true });
       
@@ -198,9 +199,11 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         }
 
         // Merge song default config with event override
-        // slide_config may not exist if migration 006 hasn't been run
+        // slide_config and slide_config_override may not exist if migration 006 hasn't been run
         const songSlideConfig = 'slide_config' in songInfo ? songInfo.slide_config : undefined;
-        const eventOverride = (item.slide_config_override as SlideConfig | null) ?? undefined;
+        const eventOverride = 'slide_config_override' in item && item.slide_config_override 
+          ? (item.slide_config_override as SlideConfig | null) ?? undefined
+          : undefined;
         const mergedConfig = mergeSlideConfig(songSlideConfig, eventOverride);
 
         // Compile slides
