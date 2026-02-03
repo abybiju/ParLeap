@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Play } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { TypewriterText } from '@/components/ui/TypewriterText'
 import { SplineViewer } from '@/components/SplineViewer'
 
@@ -12,10 +13,10 @@ export function HeroSection() {
     <section className="min-h-screen flex items-center justify-center px-4 py-20 pt-48 relative overflow-hidden">
       {/* Spacer for fixed header */}
       <div className="absolute top-0 left-0 right-0 h-24" />
-      {/* Spline Background Layer - Mouse Follow Effect (only in hero section) */}
+      {/* Spline Background Layer - Robot Design (only in hero section) */}
       <div className="absolute inset-0 z-0">
         <SplineViewer
-          url="https://prod.spline.design/kzdIEyudaZu1oiNQ/scene.splinecode"
+          url="https://prod.spline.design/OEL0IKUCdPbQ7Xyx/scene.splinecode"
           className="w-full h-full"
         />
         {/* Gradient Overlay: Lighter at top to merge with header, darker at bottom */}
@@ -70,8 +71,38 @@ export function HeroSection() {
           </div>
         </motion.div>
 
-        {/* Right: Empty - Spline background shows through */}
-        <div className="hidden lg:block"></div>
+        {/* Right: 3D Floating Mockup */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="relative hidden lg:block perspective-1000"
+        >
+          <div 
+            className="relative rounded-2xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-md shadow-2xl transition-all duration-700 hover:scale-[1.02]"
+            style={{
+              transform: 'rotateY(-10deg) rotateX(5deg)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1.02)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'rotateY(-10deg) rotateX(5deg)'
+            }}
+          >
+            <div className="aspect-video bg-gradient-to-br from-gray-900 to-black flex items-center justify-center group relative">
+              <Image
+                src="/assets/archive/ui-mockup-placeholder.png"
+                alt="ParLeap UI Mockup"
+                width={800}
+                height={600}
+                className="w-full h-full object-contain group-hover:opacity-100 opacity-90 transition-opacity"
+                priority
+              />
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-red-500/10 pointer-events-none" />
+            </div>
+          </div>
+        </motion.div>
       </div>
     </section>
   )
