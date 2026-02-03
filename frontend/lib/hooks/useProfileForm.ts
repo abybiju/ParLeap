@@ -41,13 +41,13 @@ export function useProfileForm() {
     const supabase = createClient()
 
     try {
-      const { error } = await supabase
-        .from('profiles')
+      const { error } = await (supabase
+        .from('profiles') as ReturnType<typeof supabase.from>)
         .update({
           username: username || null,
           avatar: avatar || null,
           updated_at: new Date().toISOString(),
-        })
+        } as Record<string, unknown>)
         .eq('id', user.id)
 
       if (error) {
