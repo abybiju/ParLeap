@@ -1,38 +1,43 @@
 'use client'
 
-import { Calendar, Music, Users, HardDrive } from 'lucide-react'
+import { Calendar, Music, HardDrive } from 'lucide-react'
+import { useProfileStats } from '@/lib/hooks/useProfileStats'
 import { cn } from '@/lib/utils'
 
 interface StatsDeckProps {
   className?: string
 }
 
-// Mock stats data
-const mockStats = [
-  { label: 'EVENTS_RUN', value: '24', icon: Calendar },
-  { label: 'SONGS_ADDED', value: '156', icon: Music },
-  { label: 'TEAM_MEMBERS', value: '3', icon: Users },
-  { label: 'STORAGE_USED', value: '2.4GB', icon: HardDrive },
-]
-
 export function StatsDeck({ className }: StatsDeckProps) {
+  const { eventsRun, songsAdded, storageUsed, isLoading } = useProfileStats()
+
+  const stats = [
+    { label: 'Events Run', value: eventsRun, icon: Calendar },
+    { label: 'Songs Added', value: songsAdded, icon: Music },
+    { label: 'Storage Used', value: storageUsed, icon: HardDrive },
+  ]
+
   return (
     <div
       className={cn(
-        'backdrop-blur-xl bg-[#0A0A0A]/60 border border-white/10 rounded-2xl p-6',
+        'bg-white/5 border border-gray-200/20 rounded-xl p-8 shadow-sm',
         className
       )}
     >
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {mockStats.map((stat) => {
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {stats.map((stat) => {
           const Icon = stat.icon
           return (
             <div key={stat.label} className="text-center">
-              <Icon className="w-5 h-5 mx-auto text-gray-500 mb-2" />
-              <span className="text-3xl font-mono font-bold text-white block">{stat.value}</span>
-              <p className="text-xs font-mono text-gray-500 mt-1 uppercase tracking-wider">
-                {stat.label}
-              </p>
+              <Icon className="w-6 h-6 mx-auto text-gray-400 mb-3" />
+              {isLoading ? (
+                <div className="h-8 w-16 bg-gray-700/50 rounded animate-pulse mx-auto mb-2" />
+              ) : (
+                <span className="text-3xl font-semibold text-white block mb-1">
+                  {stat.value}
+                </span>
+              )}
+              <p className="text-sm text-gray-400">{stat.label}</p>
             </div>
           )
         })}

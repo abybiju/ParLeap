@@ -16,21 +16,19 @@ export function SecurityVault({ className }: SecurityVaultProps) {
   return (
     <div
       className={cn(
-        'backdrop-blur-xl bg-[#0A0A0A]/60 border border-white/10 rounded-2xl p-6',
+        'bg-white/5 border border-gray-200/20 rounded-xl p-6 shadow-sm',
         className
       )}
     >
       <div className="flex items-center gap-2 mb-4">
         <ShieldCheck className="w-5 h-5 text-green-500" />
-        <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">
-          SECURITY_VAULT
-        </span>
+        <span className="text-sm text-gray-400">Security</span>
       </div>
 
       <div className="space-y-4">
         <Button
           variant="outline"
-          className="w-full border-white/20 text-white hover:bg-white/10"
+          className="w-full border-gray-200/20 text-white hover:bg-white/10"
           onClick={() => {
             // Placeholder for password reset flow
             console.log('Reset password clicked')

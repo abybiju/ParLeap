@@ -28,30 +28,26 @@ export function IdentityCard({ className }: IdentityCardProps) {
   return (
     <div
       className={cn(
-        'bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl p-8 relative overflow-hidden',
+        'bg-white/5 border border-gray-200/20 rounded-xl p-8 shadow-sm',
         className
       )}
     >
-      {/* Ambient blob behind avatar */}
-      <div className="absolute -top-20 -left-20 w-60 h-60 bg-orange-500/20 rounded-full blur-3xl" />
-
-      <div className="relative flex items-center gap-6">
+      <div className="flex items-center gap-6">
         {/* Large uploadable avatar */}
         <button className="relative group">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-2xl font-semibold text-white shadow-md">
             {getUserInitials()}
           </div>
           <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <Camera className="w-6 h-6 text-white" />
+            <Camera className="w-5 h-5 text-white" />
           </div>
         </button>
 
         <div>
-          <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">USER_ID</span>
-          <h2 className="text-2xl font-bold text-white mt-1">{displayName}</h2>
+          <h2 className="text-2xl font-semibold text-white">{displayName}</h2>
           <p className="text-gray-400 mt-1">@{username}</p>
           <Badge variant="orange" className="mt-2">
-            OPERATOR
+            Operator
           </Badge>
         </div>
       </div>
@@ -59,24 +55,24 @@ export function IdentityCard({ className }: IdentityCardProps) {
       {/* Editable fields with ghost/underline inputs */}
       <div className="mt-6 space-y-4">
         <div>
-          <label className="text-xs font-mono text-gray-500 uppercase tracking-wider block mb-2">
-            DISPLAY_NAME
+          <label className="text-sm text-gray-400 block mb-2">
+            Display Name
           </label>
           <input
             type="text"
             defaultValue={displayName}
-            className="w-full bg-transparent border-b border-white/10 py-2 text-white focus:border-orange-500 outline-none transition-colors"
+            className="w-full bg-transparent border-b border-gray-200/20 py-2 text-white focus:border-gray-400 outline-none transition-colors"
             placeholder="Enter display name"
           />
         </div>
         <div>
-          <label className="text-xs font-mono text-gray-500 uppercase tracking-wider block mb-2">
-            USERNAME
+          <label className="text-sm text-gray-400 block mb-2">
+            Username
           </label>
           <input
             type="text"
             defaultValue={username}
-            className="w-full bg-transparent border-b border-white/10 py-2 text-white focus:border-orange-500 outline-none transition-colors"
+            className="w-full bg-transparent border-b border-gray-200/20 py-2 text-white focus:border-gray-400 outline-none transition-colors"
             placeholder="Enter username"
           />
         </div>

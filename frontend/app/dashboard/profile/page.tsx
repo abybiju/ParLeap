@@ -41,11 +41,9 @@ export default function ProfilePage() {
   return (
     <AppPageWrapper>
       <div className="max-w-6xl mx-auto px-6 py-10">
-        <header className="mb-8">
-          <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">
-            MISSION_CONTROL
-          </span>
-          <h1 className="text-3xl font-bold text-white mt-2">Profile</h1>
+        <header className="mb-10">
+          <h1 className="text-4xl font-semibold text-white mb-2">Profile</h1>
+          <p className="text-gray-400">Manage your account settings and preferences</p>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
