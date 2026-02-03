@@ -68,6 +68,19 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const usePcm = options.usePcm === true;
   const sessionActive = options.sessionActive === true;
 
+  // Runtime validation: Log warning if PCM mode is enabled but environment suggests wrong provider
+  useEffect(() => {
+    if (usePcm && typeof window !== 'undefined') {
+      const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
+      if (sttProvider !== 'elevenlabs') {
+        console.warn('[useAudioCapture] ⚠️  PCM mode enabled but NEXT_PUBLIC_STT_PROVIDER is not "elevenlabs"');
+        console.warn('[useAudioCapture] ⚠️  Backend expects PCM format for ElevenLabs. Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs');
+      } else {
+        console.log('[useAudioCapture] ✅ PCM mode enabled for ElevenLabs STT');
+      }
+    }
+  }, [usePcm]);
+
   // Check if MediaRecorder is supported
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -294,7 +307,9 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const startPcmProcessing = useCallback((stream: MediaStream) => {
     const audioContext = ensureAudioContext(16000);
     const source = audioContext.createMediaStreamSource(stream);
-    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    // Reduced buffer size from 4096 to 128 for low latency (8ms instead of 256ms)
+    // 128 samples / 16000 Hz = 0.008 seconds = 8ms latency
+    const processor = audioContext.createScriptProcessor(128, 1, 1);
     const gain = audioContext.createGain();
     gain.gain.value = 0;
 
@@ -303,11 +318,14 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         return;
       }
       const input = event.inputBuffer.getChannelData(0);
+      // Pre-allocate Int16Array for optimal performance
       const pcm = new Int16Array(input.length);
+      // Optimized PCM conversion: Float32 (-1.0 to 1.0) -> Int16 (-32768 to 32767)
       for (let i = 0; i < input.length; i++) {
-        const sample = Math.max(-1, Math.min(1, input[i]));
-        pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        const clamped = Math.max(-1, Math.min(1, input[i]));
+        pcm[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
       }
+      // Send immediately without batching delays
       sendPcmChunk(pcm, Date.now());
     };
 
