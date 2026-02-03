@@ -133,8 +133,8 @@ const secondHalf = content.slice(Math.ceil(content.length / 2))
 
 export function LyricWall() {
   return (
-    <section className="py-24 px-4">
-      <div className="container mx-auto">
+    <section className="py-24 px-4 bg-[#050505] relative">
+      <div className="container mx-auto relative z-10">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
