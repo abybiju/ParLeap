@@ -313,7 +313,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
                   commandContext === 'VERSE' ? 'yellow' :
                   'blue'
                 }
-                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none flex items-center gap-1.5"
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none flex items-center gap-1.5 border-0"
               >
                 {commandContext === 'SONG' && <>🎵 Songs</>}
                 {commandContext === 'VERSE' && <>📖 Scripture</>}
