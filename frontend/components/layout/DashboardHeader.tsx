@@ -252,7 +252,7 @@ export function DashboardHeader() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem asChild>
-                <Link href="/profile" className="flex items-center gap-2 cursor-pointer">
+                <Link href="/dashboard/profile" className="flex items-center gap-2 cursor-pointer">
                   <Settings className="w-4 h-4" />
                   Settings
                 </Link>
