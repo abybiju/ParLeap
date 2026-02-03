@@ -35,6 +35,15 @@ export function CurrentSlideDisplay() {
 
   // Use slideLines if available, otherwise fall back to slideText or lineText
   const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
+  
+  // Debug logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[CurrentSlideDisplay] Slide ${slideIndex}: ${displayLines.length} lines`, {
+      slideLines: slideLines?.length,
+      slideText: slideText?.substring(0, 50),
+      displayLines: displayLines.length,
+    });
+  }
 
   return (
     <div className="flex flex-col h-full">
