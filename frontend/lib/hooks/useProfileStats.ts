@@ -49,7 +49,7 @@ export function useProfileStats(): ProfileStats {
           .select('lyrics')
           .eq('user_id', user.id)
 
-        const totalBytes = songs?.reduce((acc, song) => {
+        const totalBytes = (songs as { lyrics: string }[] | null)?.reduce((acc, song) => {
           return acc + new Blob([song.lyrics]).size
         }, 0) || 0
 
