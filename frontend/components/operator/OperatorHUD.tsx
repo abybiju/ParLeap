@@ -261,14 +261,14 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
   };
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
+    <div className="min-h-screen pt-16 flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* Header Bar */}
-      <header className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 backdrop-blur min-h-[4rem]">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">{eventName}</h1>
+      <header className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-white/10 bg-white/5 backdrop-blur z-40">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-lg font-semibold truncate">{eventName}</h1>
           <ConnectionStatus />
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
           {/* PHASE 2: Auto-Follow Toggle */}
           <button
             onClick={toggleAutoFollow}
@@ -316,7 +316,7 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
       </header>
 
       {/* Three-Panel Layout */}
-      <div className="flex-1 grid grid-cols-[300px_1fr_300px] gap-4 p-4 overflow-hidden">
+      <div className="flex-1 grid grid-cols-[300px_1fr_300px] gap-4 p-4 overflow-hidden min-h-0">
         {/* Left Panel: Ghost Text + Confidence Monitor */}
         <div className="flex flex-col gap-4 overflow-y-auto">
           <div className="space-y-3">
