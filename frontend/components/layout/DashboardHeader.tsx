@@ -89,6 +89,60 @@ export function DashboardHeader() {
     return 'U'
   }
 
+  const emojiAvatarMap: Record<string, string> = {
+    rocket: '🚀',
+    planet: '🪐',
+    star: '⭐',
+    galaxy: '🌌',
+    moon: '🌙',
+    comet: '☄️',
+    satellite: '🛰️',
+    telescope: '🔭',
+  }
+
+  const presetImageMap: Record<string, string> = {
+    'preset:astronaut-helmet': '/avatars/presets/astronaut-helmet.png',
+    'preset:rocket-launch': '/avatars/presets/rocket-launch.png',
+    'preset:cosmic-energy': '/avatars/presets/cosmic-energy.png',
+    'preset:futuristic-head': '/avatars/presets/futuristic-head.png',
+    'preset:holographic-cassette': '/avatars/presets/holographic-cassette.png',
+    'preset:planet-rings': '/avatars/presets/planet-rings.png',
+    'preset:energy-sphere': '/avatars/presets/energy-sphere.png',
+    'preset:cassette-tape': '/avatars/presets/cassette-tape.png',
+    'preset:saturn-planet': '/avatars/presets/saturn-planet.png',
+    'preset:compass-hexagon': '/avatars/presets/compass-hexagon.png',
+  }
+
+  const avatarValue = profile?.avatar ?? null
+  const avatarInitials = getUserInitials()
+
+  const renderAvatar = () => {
+    if (!avatarValue) return <span>{avatarInitials}</span>
+
+    if (presetImageMap[avatarValue]) {
+      return (
+        <Image
+          src={presetImageMap[avatarValue]}
+          alt="Avatar"
+          width={32}
+          height={32}
+          className="w-full h-full object-cover"
+        />
+      )
+    }
+
+    if (emojiAvatarMap[avatarValue]) {
+      return <span className="text-base leading-none">{emojiAvatarMap[avatarValue]}</span>
+    }
+
+    if (avatarValue.startsWith('http://') || avatarValue.startsWith('https://')) {
+      // Use <img> for external URLs unless next/image remotePatterns are configured
+      return <img src={avatarValue} alt="Avatar" className="w-full h-full object-cover" />
+    }
+
+    return <span>{avatarInitials}</span>
+  }
+
   const handleSignOut = async () => {
     await signOut()
     router.push('/auth/login')
@@ -244,10 +298,10 @@ export function DashboardHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-600 text-white text-sm font-medium hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-white/20"
+                className="relative flex items-center justify-center w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-orange-500 to-red-600 text-white text-sm font-medium hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-white/20"
                 aria-label="User menu"
               >
-                {getUserInitials()}
+                {renderAvatar()}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
