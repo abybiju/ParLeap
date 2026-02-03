@@ -65,28 +65,6 @@ export function parseLyricLines(lyrics: string): string[] {
 }
 
 /**
- * Split lyrics into stanzas (groups separated by blank lines)
- * Returns array of stanzas, each stanza is an array of line indices
- */
-function findStanzas(lines: string[]): number[][] {
-  const stanzas: number[][] = [];
-  let currentStanza: number[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    // All lines are non-empty at this point, so we just group sequentially
-    // In the future, we could detect stanza breaks from the original lyrics
-    // For now, we treat all lines as one stanza unless manual breaks are specified
-    currentStanza.push(i);
-  }
-
-  if (currentStanza.length > 0) {
-    stanzas.push(currentStanza);
-  }
-
-  return stanzas;
-}
-
-/**
  * Detect stanza breaks from original lyrics text
  * Returns array of line indices where stanzas end (before the break)
  */
