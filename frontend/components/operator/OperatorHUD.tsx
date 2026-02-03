@@ -86,34 +86,46 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
   useEffect(() => {
     if (lastMessage && isSessionStartedMessage(lastMessage)) {
       console.log('[OperatorHUD] Session started! Setlist:', lastMessage.payload.setlist);
+      console.log('[OperatorHUD] Setting sessionStatus to "active"');
       setSessionStatus('active');
-      // Auto-start audio capture immediately when session starts (permission should already be granted)
-      if (!audioCapture.state.isRecording) {
-        if (audioCapture.state.permissionState === 'granted') {
-          // Start immediately - no delays
-          audioCapture.start().catch((error) => {
-            console.error('[OperatorHUD] Failed to start audio capture:', error);
-            toast.error('Audio Capture Failed', {
-              description: 'Failed to start microphone. Please check permissions.',
+      
+      // Small delay to ensure sessionStatus state update propagates before starting audio
+      // This ensures sessionActive prop is true when audio capture starts
+      setTimeout(() => {
+        console.log('[OperatorHUD] Starting audio capture, sessionStatus:', sessionStatus);
+        // Auto-start audio capture immediately when session starts (permission should already be granted)
+        if (!audioCapture.state.isRecording) {
+          if (audioCapture.state.permissionState === 'granted') {
+            // Start immediately - no delays
+            console.log('[OperatorHUD] Starting audio capture (permission already granted)');
+            audioCapture.start().catch((error) => {
+              console.error('[OperatorHUD] Failed to start audio capture:', error);
+              toast.error('Audio Capture Failed', {
+                description: 'Failed to start microphone. Please check permissions.',
+              });
             });
-          });
+          } else {
+            // Request permission and start
+            console.log('[OperatorHUD] Requesting microphone permission');
+            audioCapture.requestPermission().then((granted) => {
+              if (granted) {
+                console.log('[OperatorHUD] Permission granted, starting audio capture');
+                audioCapture.start().catch((error) => {
+                  console.error('[OperatorHUD] Failed to start audio capture after permission:', error);
+                });
+              } else {
+                toast.error('Microphone Permission Required', {
+                  description: 'Please allow microphone access to enable transcription.',
+                });
+              }
+            });
+          }
         } else {
-          // Request permission and start
-          audioCapture.requestPermission().then((granted) => {
-            if (granted) {
-              audioCapture.start().catch((error) => {
-                console.error('[OperatorHUD] Failed to start audio capture after permission:', error);
-              });
-            } else {
-              toast.error('Microphone Permission Required', {
-                description: 'Please allow microphone access to enable transcription.',
-              });
-            }
-          });
+          console.log('[OperatorHUD] Audio capture already recording');
         }
-      }
+      }, 100); // Small delay to ensure state propagation
     }
-  }, [lastMessage, audioCapture]);
+  }, [lastMessage, audioCapture, sessionStatus]);
 
   // Handle error messages - suppress NO_SESSION, show others
   useEffect(() => {
