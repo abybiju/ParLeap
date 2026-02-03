@@ -30,6 +30,45 @@ export interface EventData {
   songs: SongData[];
 }
 
+// Types for Supabase query results (with/without slide_config)
+type EventItemWithSlideConfig = {
+  sequence_order: number;
+  slide_config_override: SlideConfig | null;
+  songs: {
+    id: string;
+    title: string;
+    artist: string | null;
+    lyrics: string;
+    slide_config?: SlideConfig;
+  } | null;
+};
+
+type EventItemWithoutSlideConfig = {
+  sequence_order: number;
+  slide_config_override: SlideConfig | null;
+  songs: {
+    id: string;
+    title: string;
+    artist: string | null;
+    lyrics: string;
+  } | null;
+};
+
+type EventItem = EventItemWithSlideConfig | EventItemWithoutSlideConfig;
+
+interface SongWithSlideConfig {
+  id: string;
+  title: string;
+  lyrics: string;
+  slide_config?: SlideConfig;
+}
+
+interface SongWithoutSlideConfig {
+  id: string;
+  title: string;
+  lyrics: string;
+}
+
 // Mock data for development without Supabase
 function getMockEventData(eventId: string): EventData {
   const song1Lyrics = 'Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see';
@@ -101,8 +140,8 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
 
     // 2. Fetch event items (setlist) with song details and slide configs
     // Try with slide_config first (if migration 006 has been run)
-    let eventItems: any[] | null = null;
-    let itemsError: any = null;
+    let eventItems: EventItem[] | null = null;
+    let itemsError: { code?: string; message?: string } | null = null;
     
     // First attempt: try with slide_config (new schema)
     const { data: itemsWithConfig, error: errorWithConfig } = await supabase
@@ -120,10 +159,10 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         .eq('event_id', eventId)
         .order('sequence_order', { ascending: true });
       
-      eventItems = itemsWithoutConfig;
+      eventItems = itemsWithoutConfig as EventItem[] | null;
       itemsError = errorWithoutConfig;
     } else {
-      eventItems = itemsWithConfig;
+      eventItems = itemsWithConfig as EventItem[] | null;
       itemsError = errorWithConfig;
     }
 
@@ -160,7 +199,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
 
         // Merge song default config with event override
         // slide_config may not exist if migration 006 hasn't been run
-        const songSlideConfig = (songInfo as any).slide_config as SlideConfig | undefined;
+        const songSlideConfig = 'slide_config' in songInfo ? songInfo.slide_config : undefined;
         const eventOverride = (item.slide_config_override as SlideConfig | null) ?? undefined;
         const mergedConfig = mergeSlideConfig(songSlideConfig, eventOverride);
 
@@ -208,8 +247,8 @@ export async function fetchSongById(songId: string): Promise<SongData | null> {
 
   try {
     // Try with slide_config first (if migration 006 has been run)
-    let songData: any = null;
-    let fetchError: any = null;
+    let songData: SongWithSlideConfig | SongWithoutSlideConfig | null = null;
+    let fetchError: { code?: string; message?: string } | null = null;
     
     const { data: dataWithConfig, error: errorWithConfig } = await supabase
       .from('songs')
@@ -226,10 +265,10 @@ export async function fetchSongById(songId: string): Promise<SongData | null> {
         .eq('id', songId)
         .single();
       
-      songData = dataWithoutConfig;
+      songData = dataWithoutConfig as SongWithoutSlideConfig | null;
       fetchError = errorWithoutConfig;
     } else {
-      songData = dataWithConfig;
+      songData = dataWithConfig as SongWithSlideConfig | null;
       fetchError = errorWithConfig;
     }
 
@@ -239,7 +278,8 @@ export async function fetchSongById(songId: string): Promise<SongData | null> {
     }
 
     // Compile slides with default config (slide_config may not exist if migration not run)
-    const defaultConfig = mergeSlideConfig((songData as any).slide_config as SlideConfig | undefined, undefined);
+    const songSlideConfig = 'slide_config' in songData ? songData.slide_config : undefined;
+    const defaultConfig = mergeSlideConfig(songSlideConfig, undefined);
     const compilation = compileSlides(songData.lyrics, defaultConfig);
 
     return {
