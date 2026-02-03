@@ -554,11 +554,31 @@ function handleTranscriptionResult(
               broadcastToEvent(session.eventId, songChangedMsg);
 
               // Send initial DISPLAY_UPDATE for the new song
+              const switchedSong = session.songs[suggestion.songIndex];
+              const switchedSlideIndex = suggestion.matchedLineIndex;
+              
+              // Get full slide data (multi-line support)
+              let slideLines: string[];
+              let slideText: string;
+              
+              if (switchedSong.slides && switchedSlideIndex < switchedSong.slides.length) {
+                // Use multi-line slide data
+                const slide = switchedSong.slides[switchedSlideIndex];
+                slideLines = slide.lines;
+                slideText = slide.slideText;
+              } else {
+                // Fallback: single line (backward compatibility)
+                slideLines = [switchedSong.lines[switchedSlideIndex] || suggestion.matchedLine];
+                slideText = slideLines[0];
+              }
+              
               const displayMsg: DisplayUpdateMessage = {
                 type: 'DISPLAY_UPDATE',
                 payload: {
-                  lineText: suggestion.matchedLine,
-                  slideIndex: suggestion.matchedLineIndex,
+                  lineText: slideLines[0], // Backward compatibility
+                  slideText, // Multi-line text (lines joined with \n)
+                  slideLines, // Array of lines in the slide
+                  slideIndex: switchedSlideIndex,
                   songId: suggestion.songId,
                   songTitle: suggestion.songTitle,
                   matchConfidence: suggestion.confidence,
@@ -566,6 +586,8 @@ function handleTranscriptionResult(
                 },
                 timing: createTiming(receivedAt, processingStart),
               };
+              
+              console.log(`[WS] 📤 Sending DISPLAY_UPDATE for auto-switch: ${slideLines.length} lines - "${slideText.substring(0, 50)}..."`);
               broadcastToEvent(session.eventId, displayMsg);
               return; // Exit early after song switch
             } else if (suggestion.confidence < 0.50) {
