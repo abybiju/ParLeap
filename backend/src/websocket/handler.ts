@@ -438,7 +438,8 @@ function handleTranscriptionResult(
     timing: createTiming(receivedAt, processingStart),
   };
 
-  send(ws, transcriptMessage);
+  // Broadcast transcript to all sessions for this event (operator + projector views)
+  broadcastToEvent(session.eventId, transcriptMessage);
 
   if (shouldAttemptMatch) {
     const matchText = trimmedText.length > 0 ? trimmedText : session.lastTranscriptText;

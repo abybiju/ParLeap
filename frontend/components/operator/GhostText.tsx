@@ -88,10 +88,7 @@ export function GhostText() {
     }
   }, [lastMessage]);
 
-  // Don't render if no transcript
-  if (!transcript) {
-    return null;
-  }
+  // Always render to show "Listening..." state even when no transcript received yet
 
   const getConfidenceColor = () => {
     if (sttConfidence === null) return 'text-slate-400';

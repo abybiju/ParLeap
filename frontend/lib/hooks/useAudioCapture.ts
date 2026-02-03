@@ -64,6 +64,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   >([]);
   const recordingRef = useRef(false);
   const pausedRef = useRef(false);
+  const pcmChunkCountRef = useRef(0); // Track PCM chunks sent for debugging
   const wsClient = getWebSocketClient();
   const usePcm = options.usePcm === true;
   const sessionActive = options.sessionActive === true;
@@ -281,7 +282,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
           encoding: 'pcm_s16le',
         };
         chunkQueueRef.current.push({ data: base64Audio, format });
-        console.warn('WebSocket not connected, queuing audio chunk');
+        console.warn('[AudioCapture] WebSocket not connected, queuing audio chunk');
         return;
       }
 
@@ -298,6 +299,12 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
           format,
         },
       };
+
+      // Log first few chunks to verify audio is being sent
+      pcmChunkCountRef.current += 1;
+      if (pcmChunkCountRef.current <= 3) {
+        console.log(`[AudioCapture] ✅ Sending PCM chunk #${pcmChunkCountRef.current}: ${pcmData.length} samples (${pcmData.length * 2} bytes)`);
+      }
 
       wsClient.send(message, captureTime);
     },
