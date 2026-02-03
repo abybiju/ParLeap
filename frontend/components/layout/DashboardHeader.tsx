@@ -186,7 +186,7 @@ export function DashboardHeader() {
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-white/20">
               <div className="px-3 py-2 border-b border-white/[0.08]">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-white">Notifications</h3>
