@@ -328,10 +328,11 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const startPcmProcessing = useCallback((stream: MediaStream) => {
     const audioContext = ensureAudioContext(16000);
     const source = audioContext.createMediaStreamSource(stream);
-    // Reduced buffer size from 4096 to 256 for low latency (16ms instead of 256ms)
-    // 256 samples / 16000 Hz = 0.016 seconds = 16ms latency
+    // Buffer size: 2048 samples for balanced latency and message rate
+    // 2048 samples / 16000 Hz = 0.128 seconds = 128ms latency (~8 chunks/sec)
+    // This prevents RATE_LIMITED errors while still being much faster than original 4096
     // Note: Browser requires buffer size to be a power of two between 256 and 16384
-    const processor = audioContext.createScriptProcessor(256, 1, 1);
+    const processor = audioContext.createScriptProcessor(2048, 1, 1);
     const gain = audioContext.createGain();
     gain.gain.value = 0;
 
