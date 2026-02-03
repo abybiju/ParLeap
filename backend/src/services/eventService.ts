@@ -6,6 +6,12 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../config/supabase';
+import {
+  compileSlides,
+  mergeSlideConfig,
+  type SlideConfig,
+  type SlideCompilationResult,
+} from './slideService';
 
 export interface SongData {
   id: string;
@@ -13,6 +19,9 @@ export interface SongData {
   artist?: string;
   lyrics?: string; // Full lyrics (for display)
   lines: string[]; // Pre-split lines for matching
+  slides?: SlideCompilationResult['slides']; // Compiled slides (multi-line)
+  lineToSlideIndex?: number[]; // Mapping: lineIndex -> slideIndex
+  slideConfig?: SlideConfig; // Applied config (for reference)
 }
 
 export interface EventData {
@@ -22,42 +31,44 @@ export interface EventData {
 }
 
 // Mock data for development without Supabase
-const mockEventData: EventData = {
-  id: 'demo-event',
-  name: 'Demo Event',
-  songs: [
-    {
-      id: 'song_1',
-      title: 'Amazing Grace',
-      artist: 'John Newton',
-      lyrics: 'Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see',
-      lines: [
-        'Amazing grace how sweet the sound',
-        'That saved a wretch like me',
-        'I once was lost but now am found',
-        'Was blind but now I see',
-      ],
-    },
-    {
-      id: 'song_2',
-      title: 'How Great Thou Art',
-      artist: 'Carl Boberg',
-      lyrics: 'O Lord my God, when I in awesome wonder\nConsider all the worlds Thy hands have made\nI see the stars, I hear the rolling thunder\nThy power throughout the universe displayed',
-      lines: [
-        'O Lord my God when I in awesome wonder',
-        'Consider all the worlds thy hands have made',
-        'I see the stars I hear the rolling thunder',
-        'Thy power throughout the universe displayed',
-      ],
-    },
-  ],
-};
+function getMockEventData(eventId: string): EventData {
+  const song1Lyrics = 'Amazing grace how sweet the sound\nThat saved a wretch like me\nI once was lost but now am found\nWas blind but now I see';
+  const song2Lyrics = 'O Lord my God, when I in awesome wonder\nConsider all the worlds Thy hands have made\nI see the stars, I hear the rolling thunder\nThy power throughout the universe displayed';
+  
+  // Compile slides for mock songs
+  const defaultConfig = mergeSlideConfig(undefined, undefined);
+  const song1Compilation = compileSlides(song1Lyrics, defaultConfig);
+  const song2Compilation = compileSlides(song2Lyrics, defaultConfig);
+
+  return {
+    id: eventId,
+    name: 'Demo Event',
+    songs: [
+      {
+        id: 'song_1',
+        title: 'Amazing Grace',
+        artist: 'John Newton',
+        lyrics: song1Lyrics,
+        lines: song1Compilation.lines,
+        slides: song1Compilation.slides,
+        lineToSlideIndex: song1Compilation.lineToSlideIndex,
+        slideConfig: defaultConfig,
+      },
+      {
+        id: 'song_2',
+        title: 'How Great Thou Art',
+        artist: 'Carl Boberg',
+        lyrics: song2Lyrics,
+        lines: song2Compilation.lines,
+        slides: song2Compilation.slides,
+        lineToSlideIndex: song2Compilation.lineToSlideIndex,
+        slideConfig: defaultConfig,
+      },
+    ],
+  };
+}
 
 const fallbackToMockData = process.env.SUPABASE_FALLBACK_TO_MOCK === 'true';
-
-function getMockEventData(eventId: string): EventData {
-  return { ...mockEventData, id: eventId };
-}
 
 /**
  * Fetch event data from Supabase
@@ -88,10 +99,10 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       return null;
     }
 
-    // 2. Fetch event items (setlist) with song details
+    // 2. Fetch event items (setlist) with song details and slide configs
     const { data: eventItems, error: itemsError } = await supabase
       .from('event_items')
-      .select('sequence_order, songs(id, title, artist, lyrics)')
+      .select('sequence_order, slide_config_override, songs(id, title, artist, lyrics, slide_config)')
       .eq('event_id', eventId)
       .order('sequence_order', { ascending: true });
 
@@ -117,20 +128,31 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       };
     }
 
-    // 3. Parse lyrics into lines for each song
+    // 3. Parse lyrics into lines and compile slides for each song
     const songs = eventItems
       .map((item) => {
-        const songInfo = item.songs as unknown as (SongData & { lyrics: string }) | null;
+        const songInfo = item.songs as unknown as (SongData & { lyrics: string; slide_config?: SlideConfig }) | null;
         if (!songInfo) {
           console.warn(`[EventService] Song data is null for event item`);
           return null;
         }
 
+        // Merge song default config with event override
+        const eventOverride = (item.slide_config_override as SlideConfig | null) ?? undefined;
+        const mergedConfig = mergeSlideConfig(songInfo.slide_config, eventOverride);
+
+        // Compile slides
+        const compilation = compileSlides(songInfo.lyrics, mergedConfig);
+
         const songData: SongData = {
           id: songInfo.id,
           title: songInfo.title,
           artist: songInfo.artist || undefined,
-          lines: parseLyrics(songInfo.lyrics),
+          lyrics: songInfo.lyrics, // Keep full lyrics for reference
+          lines: compilation.lines, // Non-empty lines for matching
+          slides: compilation.slides, // Compiled multi-line slides
+          lineToSlideIndex: compilation.lineToSlideIndex, // Mapping for slide lookups
+          slideConfig: mergedConfig, // Applied config
         };
         return songData;
       })
@@ -154,6 +176,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
 /**
  * Parse lyrics into lines
  * Splits by newline and filters empty lines
+ * @deprecated Use slideService.parseLyricLines instead
  */
 function parseLyrics(lyrics: string): string[] {
   return lyrics
@@ -174,7 +197,7 @@ export async function fetchSongById(songId: string): Promise<SongData | null> {
   try {
     const { data, error } = await supabase
       .from('songs')
-      .select('id, title, lyrics')
+      .select('id, title, lyrics, slide_config')
       .eq('id', songId)
       .single();
 
@@ -183,10 +206,18 @@ export async function fetchSongById(songId: string): Promise<SongData | null> {
       return null;
     }
 
+    // Compile slides with default config (no event override)
+    const defaultConfig = mergeSlideConfig(data.slide_config as SlideConfig | undefined, undefined);
+    const compilation = compileSlides(data.lyrics, defaultConfig);
+
     return {
       id: data.id,
       title: data.title,
-      lines: parseLyrics(data.lyrics),
+      lyrics: data.lyrics,
+      lines: compilation.lines,
+      slides: compilation.slides,
+      lineToSlideIndex: compilation.lineToSlideIndex,
+      slideConfig: defaultConfig,
     };
   } catch (error) {
     console.error('[EventService] Error fetching song:', error);

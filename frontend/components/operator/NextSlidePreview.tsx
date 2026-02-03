@@ -13,7 +13,7 @@ import { isDisplayUpdateMessage, isSessionStartedMessage, type DisplayUpdateMess
 export function NextSlidePreview() {
   const { lastMessage } = useWebSocket(false);
   const slideCache = useSlideCache();
-  const [nextSlideText, setNextSlideText] = useState<string | null>(null);
+  const [nextSlideLines, setNextSlideLines] = useState<string[] | null>(null);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(0);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
 
@@ -43,37 +43,49 @@ export function NextSlidePreview() {
 
   useEffect(() => {
     if (!slideCache.setlist) {
-      setNextSlideText(null);
+      setNextSlideLines(null);
       return;
     }
 
     const currentSong = slideCache.setlist.songs[currentSongIndex];
     if (!currentSong) {
-      setNextSlideText(null);
+      setNextSlideLines(null);
       return;
     }
 
     // Check if there's a next slide in current song
-    if (currentSlideIndex < currentSong.lines.length - 1) {
-      const nextLine = currentSong.lines[currentSlideIndex + 1];
-      setNextSlideText(nextLine);
-      return;
+    const slideCount = currentSong.slides?.length ?? currentSong.lines.length;
+    if (currentSlideIndex < slideCount - 1) {
+      const nextSlideIndex = currentSlideIndex + 1;
+      if (currentSong.slides && nextSlideIndex < currentSong.slides.length) {
+        setNextSlideLines(currentSong.slides[nextSlideIndex].lines);
+        return;
+      } else if (nextSlideIndex < currentSong.lines.length) {
+        // Fallback: single line
+        setNextSlideLines([currentSong.lines[nextSlideIndex]]);
+        return;
+      }
     }
 
     // Check if there's a next song
     if (currentSongIndex < slideCache.setlist.songs.length - 1) {
       const nextSong = slideCache.setlist.songs[currentSongIndex + 1];
-      if (nextSong && nextSong.lines.length > 0) {
-        setNextSlideText(nextSong.lines[0]);
-        return;
+      if (nextSong) {
+        if (nextSong.slides && nextSong.slides.length > 0) {
+          setNextSlideLines(nextSong.slides[0].lines);
+          return;
+        } else if (nextSong.lines.length > 0) {
+          setNextSlideLines([nextSong.lines[0]]);
+          return;
+        }
       }
     }
 
     // No next slide
-    setNextSlideText(null);
+    setNextSlideLines(null);
   }, [slideCache.setlist, currentSongIndex, currentSlideIndex]);
 
-  if (!nextSlideText) {
+  if (!nextSlideLines || nextSlideLines.length === 0) {
     return (
       <div className="mt-6 p-4 rounded-lg border border-white/10 bg-white/5">
         <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Next Slide</p>
@@ -85,7 +97,13 @@ export function NextSlidePreview() {
   return (
     <div className="mt-6 p-4 rounded-lg border border-white/10 bg-white/5">
       <p className="text-xs text-slate-400 uppercase tracking-wide mb-2">Next Slide</p>
-      <p className="text-lg text-slate-300 font-light leading-relaxed">{nextSlideText}</p>
+      <div className="space-y-1">
+        {nextSlideLines.map((line, index) => (
+          <p key={index} className="text-lg text-slate-300 font-light leading-relaxed">
+            {line}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }

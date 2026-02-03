@@ -101,6 +101,31 @@ export async function updateSong(id: string, formData: FormData): Promise<Action
   return { success: true, id };
 }
 
+export async function updateSongSlideConfig(
+  songId: string,
+  slideConfig: { linesPerSlide?: number; respectStanzaBreaks?: boolean; manualBreaks?: number[] }
+): Promise<ActionResult> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return { success: false, error: 'Not authenticated' };
+  }
+
+  const { error } = await (supabase
+    .from('songs') as ReturnType<typeof supabase.from>)
+    .update({ slide_config: slideConfig as Record<string, unknown> })
+    .eq('id', songId)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath('/songs');
+  return { success: true, id: songId };
+}
+
 export async function deleteSong(id: string): Promise<ActionResult> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

@@ -72,12 +72,17 @@ export interface SessionStartedMessage {
     eventName: string;
     totalSongs: number;
     currentSongIndex: number;
-    currentSlideIndex: number;
+    currentSlideIndex: number; // Now refers to slide index (not line index)
     setlist?: Array<{
       id: string;
       title: string;
       artist?: string;
-      lines: string[];
+      lines: string[]; // For backward compatibility and matching
+      slides?: Array<{
+        lines: string[];
+        slideText: string;
+      }>; // Compiled multi-line slides
+      lineToSlideIndex?: number[]; // Mapping: lineIndex -> slideIndex
     }>;
   };
   timing?: TimingMetadata;
@@ -96,8 +101,11 @@ export interface TranscriptUpdateMessage {
 export interface DisplayUpdateMessage {
   type: 'DISPLAY_UPDATE';
   payload: {
-    lineText: string;
-    slideIndex: number;
+    lineText: string; // Backward compatibility (first line of slide)
+    slideText?: string; // Multi-line slide text (lines joined with \n)
+    slideLines?: string[]; // Array of lines in the slide
+    slideIndex: number; // Slide index (not line index)
+    lineIndex?: number; // Current line index (for debugging/telemetry)
     songId: string;
     songTitle: string;
     matchConfidence?: number;

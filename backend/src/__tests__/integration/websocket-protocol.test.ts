@@ -48,7 +48,14 @@ describe('WebSocket Protocol Integration', () => {
                       id: 'song-1',
                       title: 'Test Song 1',
                       artist: 'Test Artist',
-                      lines: ['Line 1', 'Line 2']
+                      lines: ['Line 1', 'Line 2'],
+                      slides: [
+                        {
+                          lines: ['Line 1', 'Line 2'],
+                          slideText: 'Line 1\nLine 2',
+                        },
+                      ],
+                      lineToSlideIndex: [0, 0],
                     }
                   ]
                 }
@@ -70,6 +77,8 @@ describe('WebSocket Protocol Integration', () => {
                 type: 'DISPLAY_UPDATE',
                 payload: {
                   lineText: 'Override Line',
+                  slideText: 'Override Line',
+                  slideLines: ['Override Line'],
                   slideIndex: message.payload.slideIndex || 0,
                   songId: 'song-1',
                   songTitle: 'Test Song',
