@@ -285,16 +285,8 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     onOpenChange(false)
   }
 
-  const handleNavigate = (path: string) => {
-    if (searchQuery.trim()) {
-      saveRecentSearch(searchQuery)
-    }
-    router.push(path)
-    onOpenChange(false)
-  }
-
   // Handle slash command selection from hint menu
-  const handleSetContext = (context: CommandContext, command: string) => {
+  const handleSetContext = (command: string) => {
     setRawInput(`${command} `)
   }
 
