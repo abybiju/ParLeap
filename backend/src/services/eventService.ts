@@ -143,6 +143,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
 
         // Compile slides
         const compilation = compileSlides(songInfo.lyrics, mergedConfig);
+        console.log(`[EventService] Compiled song "${songInfo.title}": ${compilation.slides.length} slides from ${compilation.lines.length} lines (config: ${mergedConfig.linesPerSlide} lines/slide)`);
 
         const songData: SongData = {
           id: songInfo.id,
