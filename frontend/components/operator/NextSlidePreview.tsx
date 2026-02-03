@@ -87,19 +87,19 @@ export function NextSlidePreview() {
 
   if (!nextSlideLines || nextSlideLines.length === 0) {
     return (
-      <div className="mt-6 p-4 rounded-lg border border-white/10 bg-white/5">
-        <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Next Slide</p>
+      <div className="mt-4 p-3 rounded-lg border border-white/10 bg-white/5">
+        <p className="text-xs text-slate-500 uppercase tracking-wide mb-1.5">Next Slide</p>
         <p className="text-sm text-slate-600 italic">End of setlist</p>
       </div>
     );
   }
 
   return (
-    <div className="mt-6 p-4 rounded-lg border border-white/10 bg-white/5">
-      <p className="text-xs text-slate-400 uppercase tracking-wide mb-2">Next Slide</p>
-      <div className="space-y-1">
+    <div className="mt-4 p-3 rounded-lg border border-white/10 bg-white/5">
+      <p className="text-xs text-slate-400 uppercase tracking-wide mb-1.5">Next Slide</p>
+      <div className="space-y-0.5">
         {nextSlideLines.map((line, index) => (
-          <p key={index} className="text-lg text-slate-300 font-light leading-relaxed">
+          <p key={index} className="text-sm text-slate-300 font-light leading-snug">
             {line}
           </p>
         ))}

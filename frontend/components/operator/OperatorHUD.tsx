@@ -341,7 +341,7 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
         </div>
 
         {/* Center Panel: Current Slide + Next Preview */}
-        <div className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <div className="flex flex-col overflow-y-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
           <CurrentSlideDisplay />
           <NextSlidePreview />
         </div>

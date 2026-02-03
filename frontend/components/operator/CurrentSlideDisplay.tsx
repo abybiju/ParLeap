@@ -46,21 +46,21 @@ export function CurrentSlideDisplay() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       {/* Song Title */}
-      <div className="mb-6 text-center">
-        <h2 className="text-xl font-semibold text-slate-300">{songTitle}</h2>
+      <div className="mb-3 text-center">
+        <h2 className="text-lg font-semibold text-slate-300">{songTitle}</h2>
       </div>
 
-      {/* Current Slide Text - Multi-line */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      {/* Current Slide Text - Multi-line (Optimized for 4-line display) */}
+      <div className="flex items-center justify-center py-4 px-4">
         <div className="w-full">
-          <div className="flex flex-col items-center justify-center space-y-3">
+          <div className="flex flex-col items-center justify-center space-y-1.5">
             {displayLines.map((line, index) => (
               <p
                 key={index}
                 className={cn(
-                  'text-3xl md:text-4xl lg:text-5xl font-light leading-relaxed text-center text-white',
+                  'text-2xl md:text-3xl font-light leading-snug text-center text-white',
                   'transition-all duration-500'
                 )}
               >
@@ -72,8 +72,8 @@ export function CurrentSlideDisplay() {
       </div>
 
       {/* Slide Indicator */}
-      <div className="mt-6 text-center">
-        <p className="text-sm text-slate-500">
+      <div className="mt-2 text-center">
+        <p className="text-xs text-slate-500">
           Slide {slideIndex + 1}
         </p>
       </div>
