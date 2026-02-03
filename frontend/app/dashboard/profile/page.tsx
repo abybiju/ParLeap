@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { AppPageWrapper } from '@/components/layout/AppPageWrapper'
@@ -51,6 +53,15 @@ export default function ProfilePage() {
   return (
     <AppPageWrapper>
       <div className="max-w-6xl mx-auto py-10 px-6">
+        {/* Back to Dashboard Navigation */}
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Link>
+
         <header className="mb-8">
           <h1 className="text-3xl font-semibold text-white mb-2">Profile Settings</h1>
           <p className="text-gray-400">Manage your account settings and preferences</p>
