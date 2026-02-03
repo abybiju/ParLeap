@@ -712,18 +712,47 @@ async function handleAudioData(
     return;
   }
 
-  // Log audio format for debugging
-  console.log(`[WS] Received audio chunk: ${data.length} bytes (base64), format: ${format?.encoding || 'unknown'}, sampleRate: ${format?.sampleRate || 'unknown'}`);
+  // Log audio format for debugging (first few chunks only to avoid spam)
+  const chunkCount = (session as any).audioChunkCount || 0;
+  (session as any).audioChunkCount = chunkCount + 1;
+  if (chunkCount < 3) {
+    console.log(`[WS] 📦 Audio chunk #${chunkCount + 1}: ${data.length} bytes (base64), format: ${format?.encoding || 'unknown'}, sampleRate: ${format?.sampleRate || 'unknown'}, channels: ${format?.channels || 'unknown'}`);
+  }
 
   if (sttProvider === 'elevenlabs') {
     if (format?.encoding !== 'pcm_s16le') {
-      console.error(`[WS] ❌ Audio format mismatch: received ${format?.encoding || 'unknown'}, expected pcm_s16le`);
-      console.error(`[WS] ❌ Frontend must set NEXT_PUBLIC_STT_PROVIDER=elevenlabs to send PCM format`);
-      sendError(ws, 'AUDIO_FORMAT_UNSUPPORTED', 'ElevenLabs requires PCM 16-bit audio. Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment.', {
-        encoding: format?.encoding,
-        expected: 'pcm_s16le',
-      });
+      const receivedFormat = format?.encoding || 'unknown';
+      const receivedSampleRate = format?.sampleRate || 'unknown';
+      const receivedChannels = format?.channels || 'unknown';
+      
+      console.error(`[WS] ❌ Audio format mismatch for ElevenLabs STT:`);
+      console.error(`[WS]    Received: encoding=${receivedFormat}, sampleRate=${receivedSampleRate}, channels=${receivedChannels}`);
+      console.error(`[WS]    Expected: encoding=pcm_s16le, sampleRate=16000, channels=1`);
+      console.error(`[WS] ❌ Fix: Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment variables`);
+      console.error(`[WS] ❌ This ensures the frontend sends PCM format instead of WebM/Opus`);
+      
+      sendError(ws, 'AUDIO_FORMAT_UNSUPPORTED', 
+        `ElevenLabs requires PCM 16-bit audio (pcm_s16le, 16kHz, mono). ` +
+        `Received: ${receivedFormat} format. ` +
+        `Fix: Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment.`, 
+        {
+          encoding: receivedFormat,
+          sampleRate: receivedSampleRate,
+          channels: receivedChannels,
+          expected: {
+            encoding: 'pcm_s16le',
+            sampleRate: 16000,
+            channels: 1,
+          },
+          fix: 'Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment variables',
+        }
+      );
       return;
+    }
+
+    // Log successful format validation for first chunk
+    if (chunkCount === 0) {
+      console.log(`[WS] ✅ Audio format validated: PCM 16-bit (${format.sampleRate}Hz, ${format.channels} channel)`);
     }
 
     // Lazy initialization: Create ElevenLabs stream on first audio chunk
@@ -767,14 +796,28 @@ async function handleAudioData(
 
     try {
       const audioBuffer = Buffer.from(data, 'base64');
+      
+      // Validate audio buffer size (should be reasonable for PCM 16-bit)
+      // 128 samples * 2 bytes = 256 bytes minimum per chunk
+      if (audioBuffer.length < 256 && chunkCount < 3) {
+        console.warn(`[WS] ⚠️  Small audio chunk detected: ${audioBuffer.length} bytes (expected >=256 for 128-sample buffer)`);
+      }
+      
       session.sttStream.write(audioBuffer);
-      // Log periodically (every 50 chunks) to avoid spam
-      if (Math.random() < 0.02) {
+      
+      // Log first few chunks, then periodically
+      if (chunkCount < 3) {
+        console.log(`[WS] ✅ Audio chunk #${chunkCount + 1} sent to ElevenLabs: ${audioBuffer.length} bytes (${(audioBuffer.length / 2).toFixed(0)} samples)`);
+      } else if (Math.random() < 0.02) {
+        // Log periodically (every ~50 chunks) to avoid spam
         console.log(`[WS] ✅ Audio chunk sent to ElevenLabs: ${audioBuffer.length} bytes`);
       }
     } catch (error) {
       console.error('[WS] ❌ Error sending audio to ElevenLabs:', error);
-      sendError(ws, 'STT_ERROR', 'Error sending audio to ElevenLabs', { error: String(error) });
+      sendError(ws, 'STT_ERROR', 'Error sending audio to ElevenLabs', { 
+        error: String(error),
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
     return;
   }

@@ -61,16 +61,56 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
     sessionActive: sessionStatus === 'active',
   });
 
+  // Environment variable validation and debug logging
+  useEffect(() => {
+    if (sttProvider === 'elevenlabs') {
+      console.log('[OperatorHUD] ✅ ElevenLabs STT enabled - PCM mode active');
+      console.log('[OperatorHUD] ✅ Audio will be sent as PCM 16-bit (pcm_s16le) format');
+    } else {
+      console.warn('[OperatorHUD] ⚠️  NEXT_PUBLIC_STT_PROVIDER is not "elevenlabs" - using WebM format');
+      console.warn('[OperatorHUD] ⚠️  Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment for PCM audio');
+    }
+  }, [sttProvider]);
+
+  // Pre-initialize audio: Request microphone permission before session starts
+  useEffect(() => {
+    // Request permission early so audio can start immediately when session starts
+    if (audioCapture.state.permissionState === 'prompt') {
+      audioCapture.requestPermission().catch((error) => {
+        console.warn('[OperatorHUD] Failed to pre-initialize microphone permission:', error);
+      });
+    }
+  }, [audioCapture]);
+
   // Handle SESSION_STARTED message
   useEffect(() => {
     if (lastMessage && isSessionStartedMessage(lastMessage)) {
       console.log('[OperatorHUD] Session started! Setlist:', lastMessage.payload.setlist);
       setSessionStatus('active');
-      // Auto-start audio capture when session starts
-      if (!audioCapture.state.isRecording && audioCapture.state.permissionState === 'granted') {
-        audioCapture.start().catch((error) => {
-          console.error('Failed to start audio capture:', error);
-        });
+      // Auto-start audio capture immediately when session starts (permission should already be granted)
+      if (!audioCapture.state.isRecording) {
+        if (audioCapture.state.permissionState === 'granted') {
+          // Start immediately - no delays
+          audioCapture.start().catch((error) => {
+            console.error('[OperatorHUD] Failed to start audio capture:', error);
+            toast.error('Audio Capture Failed', {
+              description: 'Failed to start microphone. Please check permissions.',
+            });
+          });
+        } else {
+          // Request permission and start
+          audioCapture.requestPermission().then((granted) => {
+            if (granted) {
+              audioCapture.start().catch((error) => {
+                console.error('[OperatorHUD] Failed to start audio capture after permission:', error);
+              });
+            } else {
+              toast.error('Microphone Permission Required', {
+                description: 'Please allow microphone access to enable transcription.',
+              });
+            }
+          });
+        }
       }
     }
   }, [lastMessage, audioCapture]);
