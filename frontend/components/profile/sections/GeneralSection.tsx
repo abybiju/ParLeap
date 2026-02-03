@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useProfileForm } from '@/lib/hooks/useProfileForm'
@@ -15,6 +16,19 @@ const spaceAvatars: Record<string, string> = {
   comet: '☄️',
   satellite: '🛰️',
   telescope: '🔭',
+}
+
+const presetImageMap: Record<string, string> = {
+  'preset:astronaut-helmet': '/avatars/presets/astronaut-helmet.png',
+  'preset:rocket-launch': '/avatars/presets/rocket-launch.png',
+  'preset:cosmic-energy': '/avatars/presets/cosmic-energy.png',
+  'preset:futuristic-head': '/avatars/presets/futuristic-head.png',
+  'preset:holographic-cassette': '/avatars/presets/holographic-cassette.png',
+  'preset:planet-rings': '/avatars/presets/planet-rings.png',
+  'preset:energy-sphere': '/avatars/presets/energy-sphere.png',
+  'preset:cassette-tape': '/avatars/presets/cassette-tape.png',
+  'preset:saturn-planet': '/avatars/presets/saturn-planet.png',
+  'preset:compass-hexagon': '/avatars/presets/compass-hexagon.png',
 }
 
 export function GeneralSection() {
@@ -44,7 +58,32 @@ export function GeneralSection() {
     return 'U'
   }
 
-  const displayAvatar = avatar && spaceAvatars[avatar] ? spaceAvatars[avatar] : getUserInitials()
+  // Determine what to display for avatar
+  const getAvatarDisplay = () => {
+    if (!avatar) {
+      return { type: 'initials' as const, value: getUserInitials() }
+    }
+
+    // Check if it's a preset image
+    if (presetImageMap[avatar]) {
+      return { type: 'preset-image' as const, value: presetImageMap[avatar] }
+    }
+
+    // Check if it's an emoji preset
+    if (spaceAvatars[avatar]) {
+      return { type: 'emoji' as const, value: spaceAvatars[avatar] }
+    }
+
+    // Check if it's a URL (uploaded image)
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return { type: 'url' as const, value: avatar }
+    }
+
+    // Fallback to initials
+    return { type: 'initials' as const, value: getUserInitials() }
+  }
+
+  const avatarDisplay = getAvatarDisplay()
 
   return (
     <>
@@ -58,8 +97,20 @@ export function GeneralSection() {
 
         {/* Avatar Row */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-xl font-semibold text-white shadow-md">
-            {displayAvatar}
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-xl font-semibold text-white shadow-md overflow-hidden">
+            {avatarDisplay.type === 'url' || avatarDisplay.type === 'preset-image' ? (
+              <Image
+                src={avatarDisplay.value}
+                alt="Avatar"
+                width={64}
+                height={64}
+                className="w-full h-full object-cover"
+              />
+            ) : avatarDisplay.type === 'emoji' ? (
+              <span>{avatarDisplay.value}</span>
+            ) : (
+              <span>{avatarDisplay.value}</span>
+            )}
           </div>
           <div className="flex-1">
             <h3 className="text-white font-medium">{displayName}</h3>
@@ -68,7 +119,7 @@ export function GeneralSection() {
           <Button
             variant="outline"
             onClick={() => setAvatarSelectorOpen(true)}
-            className="border-white/10 text-white hover:bg-white/10"
+            className="border-white/10 bg-transparent text-white hover:bg-white/10 hover:text-white"
           >
             Change Photo
           </Button>
