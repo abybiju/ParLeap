@@ -46,13 +46,13 @@ export function PreferencesPanel({ className }: PreferencesPanelProps) {
   return (
     <div
       className={cn(
-        'backdrop-blur-xl bg-[#0A0A0A]/60 border border-white/10 rounded-2xl p-6',
+        'bg-white/5 border border-gray-200/20 rounded-xl p-6 shadow-sm',
         className
       )}
     >
-      <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">PREFERENCES</span>
+      <span className="text-sm text-gray-400 mb-4 block">Preferences</span>
 
-      <div className="mt-4 space-y-6">
+      <div className="space-y-6">
         {/* Theme Toggle */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -75,17 +75,15 @@ export function PreferencesPanel({ className }: PreferencesPanelProps) {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Globe className="w-4 h-4 text-gray-400" />
-            <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">
-              TIMEZONE
-            </span>
+            <span className="text-sm text-gray-400">Timezone</span>
           </div>
           <select
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
-            className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-white focus:border-orange-500 outline-none transition-colors"
+            className="w-full bg-transparent border border-gray-200/20 rounded-lg px-3 py-2 text-white focus:border-gray-400 outline-none transition-colors"
           >
             {timezones.map((tz) => (
-              <option key={tz.value} value={tz.value} className="bg-[#0A0A0A]">
+              <option key={tz.value} value={tz.value} className="bg-gray-900">
                 {tz.label}
               </option>
             ))}

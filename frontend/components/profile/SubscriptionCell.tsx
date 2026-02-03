@@ -22,36 +22,36 @@ export function SubscriptionCell({ className }: SubscriptionCellProps) {
   return (
     <div
       className={cn(
-        'backdrop-blur-xl bg-[#0A0A0A]/60 rounded-2xl p-6',
-        isPro
-          ? 'border-2 border-orange-500/50 shadow-[0_0_30px_-5px_rgba(249,115,22,0.3)]'
-          : 'border border-white/10',
+        'bg-white/5 border border-gray-200/20 rounded-xl p-6 shadow-sm',
+        isPro && 'border-orange-500/30',
         className
       )}
     >
-      <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">PLAN_STATUS</span>
+      <div className="flex items-center gap-2 mb-4">
+        <Crown className="w-5 h-5 text-orange-500" />
+        <span className="text-sm text-gray-400">Plan Status</span>
+      </div>
 
-      <div className="mt-4 flex items-center gap-2">
-        <Crown className="w-6 h-6 text-orange-500" />
-        <span className="text-2xl font-bold text-white uppercase">{subscriptionTier}</span>
+      <div className="mb-4">
+        <span className="text-2xl font-semibold text-white capitalize">{subscriptionTier}</span>
       </div>
 
       {isPro && (
         <>
-          <div className="mt-4 space-y-2 text-sm">
+          <div className="mt-4 space-y-3 text-sm border-t border-gray-200/20 pt-4">
             <div className="flex justify-between">
-              <span className="font-mono text-gray-500 text-xs">RENEWAL</span>
+              <span className="text-gray-400">Renewal</span>
               <span className="text-white">{renewalDate}</span>
             </div>
             <div className="flex justify-between">
-              <span className="font-mono text-gray-500 text-xs">PAYMENT</span>
+              <span className="text-gray-400">Payment</span>
               <span className="text-white">{paymentMethod}</span>
             </div>
           </div>
 
           <Button
             variant="outline"
-            className="w-full mt-4 border-white/20 text-white hover:bg-white/10"
+            className="w-full mt-4 border-gray-200/20 text-white hover:bg-white/10"
             onClick={() => {
               // Placeholder for future Stripe integration
               console.log('Manage billing clicked')
