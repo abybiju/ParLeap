@@ -217,7 +217,7 @@ export function SongEditorForm({
           <div className={mode === 'page' ? 'space-y-2' : 'flex flex-col border-r border-white/10 overflow-hidden'}>
             {mode === 'modal' && (
               <div className="px-4 py-2 border-b border-white/10 bg-white/5">
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-medium text-white uppercase tracking-wider">
                   Lyrics
                 </span>
               </div>
@@ -256,7 +256,7 @@ The hour I first believed"
           <div className={mode === 'page' ? 'space-y-2' : 'flex flex-col overflow-hidden'}>
             {mode === 'modal' && (
               <div className="px-4 py-2 border-b border-white/10 bg-white/5">
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-medium text-white uppercase tracking-wider">
                   Slide Preview
                 </span>
               </div>
@@ -284,11 +284,12 @@ The hour I first believed"
                 variant="outline"
                 onClick={handleCancel}
                 disabled={isPending}
+                className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
               >
                 Cancel
               </Button>
             )}
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending} className="bg-orange-600 hover:bg-orange-700 text-white">
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isEditing ? 'Save Changes' : 'Create Song'}
             </Button>

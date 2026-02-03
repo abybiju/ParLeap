@@ -52,7 +52,7 @@ export function SongEditorModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 gap-0 border-white/10 bg-[#0A0A0A]/95 backdrop-blur-xl shadow-2xl text-white">
+      <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 gap-0 border-white/10 bg-[#0A0A0A]/95 backdrop-blur-xl shadow-2xl text-white [&>button]:hidden">
         <DialogHeader className="px-6 py-4 border-b border-white/10">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-semibold text-white">
