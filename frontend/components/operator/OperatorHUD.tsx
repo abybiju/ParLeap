@@ -21,6 +21,12 @@ import { cn } from '@/lib/utils';
 interface OperatorHUDProps {
   eventId: string;
   eventName: string;
+  initialSetlist?: Array<{
+    id: string;
+    title: string;
+    artist: string | null;
+    sequenceOrder: number;
+  }>;
 }
 
 /**
@@ -31,7 +37,7 @@ interface OperatorHUDProps {
  * - Center: Current Slide + Next Preview
  * - Right: Setlist
  */
-export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
+export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: OperatorHUDProps) {
   const router = useRouter();
   const {
     state,
@@ -43,79 +49,45 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
     goToSlide,
     lastMessage,
     connect,
-  } = useWebSocket(false); // Don't auto-connect - match test page pattern
+  } = useWebSocket(false); // Don't auto-connect - manual start only
 
   const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
-  const audioCapture = useAudioCapture({ usePcm: sttProvider === 'elevenlabs' });
-  const [sessionStarted, setSessionStarted] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<'idle' | 'starting' | 'active' | 'error'>('idle');
   const [isAutoFollowing, setIsAutoFollowing] = useState(true); // PHASE 2: Auto-follow toggle
 
-  // Auto-connect on mount (but don't auto-start session)
-  useEffect(() => {
-    if (state === 'disconnected') {
-      console.log('[OperatorHUD] Auto-connecting WebSocket...');
-      connect();
-    }
-  }, [state, connect]);
+  // Gate audio capture based on session status
+  const audioCapture = useAudioCapture({
+    usePcm: sttProvider === 'elevenlabs',
+    sessionActive: sessionStatus === 'active',
+  });
 
-  // Auto-start session when connected (same pattern as test page)
+  // Handle SESSION_STARTED message
   useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-    
-    if (isConnected && !sessionStarted) {
-      // Wait a bit for connection to stabilize (like test page does)
-      timer = setTimeout(() => {
-        if (isConnected) {
-          console.log('[OperatorHUD] Connection stable, starting session for event:', eventId);
-          startSession(eventId);
-          setSessionStarted(true);
-        }
-      }, 1000);
-    }
-    
-    // Reset session started flag when disconnected
-    if (state === 'disconnected') {
-      setSessionStarted(false);
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isConnected, eventId, startSession, sessionStarted, state]);
-
-  // Handle error messages
-  useEffect(() => {
-    if (lastMessage && isErrorMessage(lastMessage)) {
-      const error = lastMessage.payload;
-      console.error('[OperatorHUD] WebSocket error:', error.code, error.message, error.details);
-      
-      // Show user-friendly error toast
-      if (error.code === 'EMPTY_SETLIST') {
-        toast.error('Empty Setlist', {
-          description: error.message || 'Please add songs to the event before starting a session.',
-          duration: 10000,
-        });
-      } else if (error.code === 'EVENT_NOT_FOUND') {
-        toast.error('Event Not Found', {
-          description: error.message || 'The event could not be found. Please check the event ID.',
-          duration: 10000,
-        });
-      } else if (error.code === 'STT_ERROR' || error.code === 'AUDIO_FORMAT_UNSUPPORTED') {
-        // STT errors are handled by STTStatus component, just log here
-        console.warn('[OperatorHUD] STT error:', error.message);
-      } else {
-        toast.error(`Error: ${error.code}`, {
-          description: error.message || 'An error occurred. Check console for details.',
-          duration: 8000,
+    if (lastMessage && isSessionStartedMessage(lastMessage)) {
+      console.log('[OperatorHUD] Session started! Setlist:', lastMessage.payload.setlist);
+      setSessionStatus('active');
+      // Auto-start audio capture when session starts
+      if (!audioCapture.state.isRecording && audioCapture.state.permissionState === 'granted') {
+        audioCapture.start().catch((error) => {
+          console.error('Failed to start audio capture:', error);
         });
       }
     }
-  }, [lastMessage]);
+  }, [lastMessage, audioCapture]);
 
-  // Handle error messages - show toast and prevent repeated logging
+  // Handle error messages - suppress NO_SESSION, show others
   useEffect(() => {
     if (lastMessage && isErrorMessage(lastMessage)) {
       const error = lastMessage.payload;
+      
+      // Treat NO_SESSION as idle state (no toast spam)
+      if (error.code === 'NO_SESSION') {
+        if (sessionStatus === 'active') {
+          setSessionStatus('idle');
+        }
+        // Don't toast or log - this is expected when idle
+        return;
+      }
       
       // Only log error once per unique error code to prevent spam
       const errorKey = `${error.code}-${error.message}`;
@@ -136,11 +108,13 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
             description: error.message || 'Please add songs to the event before starting a session.',
             duration: 10000,
           });
+          setSessionStatus('error');
         } else if (error.code === 'EVENT_NOT_FOUND') {
           toast.error('Event Not Found', {
             description: error.message || 'The event could not be found. Please check the event ID.',
             duration: 10000,
           });
+          setSessionStatus('error');
         } else if (error.code === 'STT_ERROR' || error.code === 'AUDIO_FORMAT_UNSUPPORTED') {
           // STT errors are handled by STTStatus component, just log here
           console.warn('[OperatorHUD] STT error:', error.message);
@@ -149,22 +123,11 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
             description: error.message || 'An error occurred. Check console for details.',
             duration: 8000,
           });
+          setSessionStatus('error');
         }
       }
     }
-  }, [lastMessage]);
-
-  // Auto-start audio capture when session starts
-  useEffect(() => {
-    if (lastMessage && isSessionStartedMessage(lastMessage)) {
-      console.log('[OperatorHUD] Session started! Setlist:', lastMessage.payload.setlist);
-      if (!audioCapture.state.isRecording && audioCapture.state.permissionState === 'granted') {
-        audioCapture.start().catch((error) => {
-          console.error('Failed to start audio capture:', error);
-        });
-      }
-    }
-  }, [lastMessage, audioCapture]);
+  }, [lastMessage, sessionStatus]);
 
   // Auto-stop audio capture when session ends
   useEffect(() => {
@@ -172,8 +135,36 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
       if (audioCapture.state.isRecording) {
         audioCapture.stop();
       }
+      setSessionStatus('idle');
     }
   }, [lastMessage, audioCapture]);
+
+  // Manual session start handler
+  const handleStartSession = () => {
+    if (sessionStatus === 'active') {
+      return; // Already active
+    }
+
+    if (state === 'disconnected') {
+      console.log('[OperatorHUD] Connecting WebSocket...');
+      connect();
+      // Wait for connection before starting session
+      const checkConnection = setInterval(() => {
+        if (isConnected) {
+          clearInterval(checkConnection);
+          console.log('[OperatorHUD] WebSocket connected, starting session for event:', eventId);
+          setSessionStatus('starting');
+          startSession(eventId);
+        }
+      }, 100);
+      // Timeout after 5 seconds
+      setTimeout(() => clearInterval(checkConnection), 5000);
+    } else if (isConnected) {
+      console.log('[OperatorHUD] Starting session for event:', eventId);
+      setSessionStatus('starting');
+      startSession(eventId);
+    }
+  };
 
   // PHASE 2: Handle song suggestions (medium confidence 60-85%)
   useEffect(() => {
@@ -303,7 +294,7 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
 
         {/* Right Panel: Setlist */}
         <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur">
-          <SetlistPanel />
+          <SetlistPanel initialSetlist={initialSetlist} />
         </div>
       </div>
 
@@ -312,38 +303,50 @@ export function OperatorHUD({ eventId, eventName }: OperatorHUDProps) {
         <div className="flex items-center justify-center gap-4">
           <button
             onClick={prevSlide}
-            disabled={state !== 'connected'}
+            disabled={sessionStatus !== 'active'}
             className="px-8 py-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
+            title={sessionStatus !== 'active' ? 'Start session first' : 'Previous slide'}
           >
             ◀ PREV
           </button>
-          {audioCapture.state.isRecording && !audioCapture.state.isPaused ? (
-            <button
-              onClick={() => audioCapture.pause()}
-              className="px-8 py-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-lg font-medium transition min-w-[120px]"
-            >
-              PAUSE
-            </button>
-          ) : audioCapture.state.isRecording && audioCapture.state.isPaused ? (
-            <button
-              onClick={() => audioCapture.resume()}
-              className="px-8 py-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium transition min-w-[120px]"
-            >
-              RESUME
-            </button>
+          {sessionStatus === 'active' ? (
+            audioCapture.state.isRecording && !audioCapture.state.isPaused ? (
+              <button
+                onClick={() => audioCapture.pause()}
+                className="px-8 py-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-lg font-medium transition min-w-[120px]"
+              >
+                PAUSE
+              </button>
+            ) : audioCapture.state.isRecording && audioCapture.state.isPaused ? (
+              <button
+                onClick={() => audioCapture.resume()}
+                className="px-8 py-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium transition min-w-[120px]"
+              >
+                RESUME
+              </button>
+            ) : (
+              <button
+                onClick={() => audioCapture.start()}
+                disabled={audioCapture.state.permissionState !== 'granted'}
+                className="px-8 py-4 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
+              >
+                START AUDIO
+              </button>
+            )
           ) : (
             <button
-              onClick={() => audioCapture.start()}
-              disabled={audioCapture.state.permissionState !== 'granted'}
+              onClick={handleStartSession}
+              disabled={sessionStatus === 'starting'}
               className="px-8 py-4 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
             >
-              START
+              {sessionStatus === 'starting' ? 'STARTING...' : 'START SESSION'}
             </button>
           )}
           <button
             onClick={nextSlide}
-            disabled={state !== 'connected'}
+            disabled={sessionStatus !== 'active'}
             className="px-8 py-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
+            title={sessionStatus !== 'active' ? 'Start session first' : 'Next slide'}
           >
             NEXT ▶
           </button>

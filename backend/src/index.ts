@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
 import { searchByHum, SearchResult } from './services/humSearchService';
 import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
+import { isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -107,6 +108,9 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     activeSessions: getSessionCount(),
+    supabaseConfigured: isSupabaseConfigured,
+    supabaseUrlPrefix: getSupabaseUrlPrefix(),
+    supabaseProjectRef: getSupabaseProjectRef(),
   });
 });
 
