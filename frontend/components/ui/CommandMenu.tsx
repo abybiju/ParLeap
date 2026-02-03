@@ -304,7 +304,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
           className="rounded-xl"
           shouldFilter={false}
         >
-          <div className="relative">
+          <div className="relative w-full">
             {/* Context Badge */}
             {commandContext !== 'ALL' && (
               <Badge
@@ -325,8 +325,8 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               value={rawInput}
               onValueChange={setRawInput}
               autoFocus
-              className={`h-14 text-lg border-0 border-b border-white/10 bg-transparent text-white placeholder:text-gray-500 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ${
-                commandContext !== 'ALL' ? 'pl-24' : ''
+              className={`w-full h-14 text-lg border-0 border-b border-white/10 bg-transparent text-white placeholder:text-gray-500 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ${
+                commandContext !== 'ALL' ? 'pl-24 pr-4' : 'px-4'
               }`}
             />
           </div>
