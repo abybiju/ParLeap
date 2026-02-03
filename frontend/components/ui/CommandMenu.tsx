@@ -18,6 +18,7 @@ import { Music, Calendar, BookOpen, Plus, Moon, Sun, LogOut, Home, X, Clock } fr
 import { useAuthStore } from '@/lib/stores/authStore'
 import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/lib/supabase/types'
+import { Badge } from '@/components/ui/badge'
 
 type Song = Database['public']['Tables']['songs']['Row']
 type Event = Database['public']['Tables']['events']['Row']
@@ -35,15 +36,61 @@ interface CommandMenuProps {
   onOpenChange: (open: boolean) => void
 }
 
+type CommandContext = 'ALL' | 'SONG' | 'VERSE' | 'EVENT'
+
+interface ParsedInput {
+  context: CommandContext
+  query: string
+}
+
+// Parse raw input to extract command context and query
+function parseInput(rawInput: string): ParsedInput {
+  const trimmed = rawInput.trim()
+  
+  if (!trimmed) {
+    return { context: 'ALL', query: '' }
+  }
+  
+  // Check for slash commands
+  // Match /song or /s (must be followed by space or end of string)
+  if (trimmed.match(/^\/s(ong)?(\s|$)/)) {
+    const query = trimmed.replace(/^\/s(ong)?\s*/, '').trim()
+    return { context: 'SONG', query }
+  }
+  
+  // Match /verse or /v (must be followed by space or end of string)
+  if (trimmed.match(/^\/v(erse)?(\s|$)/)) {
+    const query = trimmed.replace(/^\/v(erse)?\s*/, '').trim()
+    return { context: 'VERSE', query }
+  }
+  
+  // Match /event or /e (must be followed by space or end of string)
+  if (trimmed.match(/^\/e(vent)?(\s|$)/)) {
+    const query = trimmed.replace(/^\/e(vent)?\s*/, '').trim()
+    return { context: 'EVENT', query }
+  }
+  
+  // If input is exactly '/', return empty query but keep it for hint menu
+  if (trimmed === '/') {
+    return { context: 'ALL', query: '' }
+  }
+  
+  // Default: no command, search all
+  return { context: 'ALL', query: trimmed }
+}
+
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const router = useRouter()
   const { signOut } = useAuthStore()
   const [songs, setSongs] = useState<Song[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(false)
-  const [search, setSearch] = useState('')
+  const [rawInput, setRawInput] = useState('')
   const [isDark, setIsDark] = useState(false)
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([])
+  
+  // Parse input to get context and query
+  const { context: commandContext, query: searchQuery } = parseInput(rawInput)
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -102,7 +149,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
 
   // Restore a recent search query
   const restoreRecentSearch = (query: string) => {
-    setSearch(query)
+    setRawInput(query)
     // Focus will be handled by cmdk
   }
 
@@ -144,8 +191,8 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
 
   // Filter songs by search query (title, artist, or lyrics)
   const filteredSongs = songs.filter((song) => {
-    if (!search) return true
-    const query = search.toLowerCase()
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
     return (
       song.title?.toLowerCase().includes(query) ||
       song.artist?.toLowerCase().includes(query) ||
@@ -155,13 +202,13 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
 
   // Filter events by search query
   const filteredEvents = events.filter((event) => {
-    if (!search) return true
-    const query = search.toLowerCase()
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
     return event.name?.toLowerCase().includes(query)
   })
 
   // Check if search looks like a Bible reference (e.g., "John 3:16", "Psalm 23")
-  const isBibleReference = /^[a-z]+\s*\d+[:\d]*$/i.test(search.trim())
+  const isBibleReference = /^[a-z]+\s*\d+[:\d]*$/i.test(searchQuery.trim())
 
   // Mock scripture items
   const scriptureItems = [
@@ -172,30 +219,30 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   ]
 
   const filteredScripture = scriptureItems.filter((item) => {
-    if (!search) return true
-    const query = search.toLowerCase()
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
     return item.label.toLowerCase().includes(query) || item.reference.toLowerCase().includes(query)
   })
 
   const handleSongSelect = (songId: string) => {
-    if (search.trim()) {
-      saveRecentSearch(search)
+    if (searchQuery.trim()) {
+      saveRecentSearch(searchQuery)
     }
     router.push(`/dashboard/songs/${songId}`)
     onOpenChange(false)
   }
 
   const handleEventSelect = (eventId: string) => {
-    if (search.trim()) {
-      saveRecentSearch(search)
+    if (searchQuery.trim()) {
+      saveRecentSearch(searchQuery)
     }
     router.push(`/events/${eventId}`)
     onOpenChange(false)
   }
 
   const handleCreateEvent = () => {
-    if (search.trim()) {
-      saveRecentSearch(search)
+    if (searchQuery.trim()) {
+      saveRecentSearch(searchQuery)
     }
     router.push('/events/new')
     onOpenChange(false)
@@ -222,26 +269,39 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   }
 
   const handleNavigate = (path: string) => {
-    if (search.trim()) {
-      saveRecentSearch(search)
+    if (searchQuery.trim()) {
+      saveRecentSearch(searchQuery)
     }
     router.push(path)
     onOpenChange(false)
   }
 
   const handleScriptureSelect = (reference: string) => {
-    if (search.trim()) {
-      saveRecentSearch(search)
+    if (searchQuery.trim()) {
+      saveRecentSearch(searchQuery)
     }
     // Future: Navigate to Bible Reader
     console.log('Navigate to scripture:', reference)
     onOpenChange(false)
   }
 
+  const handleNavigate = (path: string) => {
+    if (searchQuery.trim()) {
+      saveRecentSearch(searchQuery)
+    }
+    router.push(path)
+    onOpenChange(false)
+  }
+
+  // Handle slash command selection from hint menu
+  const handleSetContext = (context: CommandContext, command: string) => {
+    setRawInput(`${command} `)
+  }
+
   // Reset search when closing
   useEffect(() => {
     if (!open) {
-      setSearch('')
+      setRawInput('')
     }
   }, [open])
 
@@ -252,20 +312,66 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
           className="rounded-xl"
           shouldFilter={false}
         >
-          <CommandInput
-            placeholder="Type a command or search..."
-            value={search}
-            onValueChange={setSearch}
-            autoFocus
-            className="h-14 text-lg border-0 border-b border-white/10 bg-transparent text-white placeholder:text-gray-500 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:shadow-[0_0_0_2px_rgba(255,140,0,0.25)]"
-          />
+          <div className="relative">
+            {/* Context Badge */}
+            {commandContext !== 'ALL' && (
+              <Badge
+                variant={
+                  commandContext === 'SONG' ? 'orange' :
+                  commandContext === 'VERSE' ? 'yellow' :
+                  'blue'
+                }
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none flex items-center gap-1.5"
+              >
+                {commandContext === 'SONG' && <>🎵 Songs</>}
+                {commandContext === 'VERSE' && <>📖 Scripture</>}
+                {commandContext === 'EVENT' && <>📅 Events</>}
+              </Badge>
+            )}
+            <CommandInput
+              placeholder="Search songs, events, or commands..."
+              value={rawInput}
+              onValueChange={setRawInput}
+              autoFocus
+              className={`h-14 text-lg border-0 border-b border-white/10 bg-transparent text-white placeholder:text-gray-500 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:shadow-[0_0_0_2px_rgba(255,140,0,0.25)] ${
+                commandContext !== 'ALL' ? 'pl-24' : ''
+              }`}
+            />
+          </div>
           <CommandList className="max-h-[400px] overflow-y-auto p-2">
             <CommandEmpty className="py-6 text-center text-sm text-gray-400">
               {loading ? 'Loading...' : 'No results found.'}
             </CommandEmpty>
 
+            {/* GROUP 0: Slash Hint Menu */}
+            {rawInput.trim() === '/' && (
+              <CommandGroup heading="Filter Commands">
+                <CommandItem
+                  onSelect={() => handleSetContext('/song')}
+                  className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-orange-500/10 data-[selected=true]:text-orange-500 data-[selected=true]:border-l-2 data-[selected=true]:border-orange-500"
+                >
+                  <Music className="mr-2 h-4 w-4" />
+                  <span>Filter by Song</span>
+                </CommandItem>
+                <CommandItem
+                  onSelect={() => handleSetContext('/verse')}
+                  className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-yellow-500/10 data-[selected=true]:text-yellow-500 data-[selected=true]:border-l-2 data-[selected=true]:border-yellow-500"
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  <span>Filter by Verse</span>
+                </CommandItem>
+                <CommandItem
+                  onSelect={() => handleSetContext('/event')}
+                  className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-blue-500/10 data-[selected=true]:text-blue-500 data-[selected=true]:border-l-2 data-[selected=true]:border-blue-500"
+                >
+                  <Calendar className="mr-2 h-4 w-4" />
+                  <span>Filter by Event</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+
             {/* GROUP 1: Recent Searches */}
-            {!search && recentSearches.length > 0 && (
+            {!rawInput && recentSearches.length > 0 && (
               <CommandGroup heading="Recent">
                 {recentSearches.map((recent) => (
                   <CommandItem
@@ -294,7 +400,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
             )}
 
             {/* GROUP 2: Suggestions (context-aware quick actions) */}
-            {!search && (
+            {!rawInput && (
               <CommandGroup heading="Suggestions">
                 <CommandItem
                   onSelect={() => handleNavigate('/dashboard')}
@@ -321,7 +427,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
             )}
 
             {/* GROUP 3: Songs */}
-            {filteredSongs.length > 0 && (
+            {(commandContext === 'ALL' || commandContext === 'SONG') && filteredSongs.length > 0 && (
               <CommandGroup heading="Songs">
                 {filteredSongs.slice(0, 10).map((song) => (
                   <CommandItem
@@ -342,7 +448,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
             )}
 
             {/* GROUP 4: Scripture */}
-            {(filteredScripture.length > 0 || isBibleReference) && (
+            {(commandContext === 'ALL' || commandContext === 'VERSE') && (filteredScripture.length > 0 || isBibleReference) && (
               <CommandGroup heading="Scripture">
                 {filteredScripture.map((item) => (
                   <CommandItem
@@ -354,20 +460,20 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
                     <span>{item.label}</span>
                   </CommandItem>
                 ))}
-                {isBibleReference && !filteredScripture.some((s) => s.reference.toLowerCase() === search.trim().toLowerCase()) && (
+                {isBibleReference && !filteredScripture.some((s) => s.reference.toLowerCase() === searchQuery.trim().toLowerCase()) && (
                   <CommandItem
-                    onSelect={() => handleScriptureSelect(search.trim())}
+                    onSelect={() => handleScriptureSelect(searchQuery.trim())}
                     className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-orange-500/10 data-[selected=true]:text-orange-500 data-[selected=true]:border-l-2 data-[selected=true]:border-orange-500"
                   >
                     <BookOpen className="mr-2 h-4 w-4 text-yellow-500" />
-                    <span>Open {search.trim()}</span>
+                    <span>Open {searchQuery.trim()}</span>
                   </CommandItem>
                 )}
               </CommandGroup>
             )}
 
             {/* GROUP 5: Events */}
-            {filteredEvents.length > 0 && (
+            {(commandContext === 'ALL' || commandContext === 'EVENT') && filteredEvents.length > 0 && (
               <CommandGroup heading="Events">
                 {filteredEvents.slice(0, 10).map((event) => (
                   <CommandItem
