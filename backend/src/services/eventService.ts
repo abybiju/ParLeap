@@ -174,18 +174,6 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
 }
 
 /**
- * Parse lyrics into lines
- * Splits by newline and filters empty lines
- * @deprecated Use slideService.parseLyricLines instead
- */
-function parseLyrics(lyrics: string): string[] {
-  return lyrics
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-}
-
-/**
  * Fetch a single song by ID
  */
 export async function fetchSongById(songId: string): Promise<SongData | null> {
