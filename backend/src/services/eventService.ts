@@ -100,11 +100,32 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     }
 
     // 2. Fetch event items (setlist) with song details and slide configs
-    const { data: eventItems, error: itemsError } = await supabase
+    // Try with slide_config first (if migration 006 has been run)
+    let eventItems: any[] | null = null;
+    let itemsError: any = null;
+    
+    // First attempt: try with slide_config (new schema)
+    const { data: itemsWithConfig, error: errorWithConfig } = await supabase
       .from('event_items')
       .select('sequence_order, slide_config_override, songs(id, title, artist, lyrics, slide_config)')
       .eq('event_id', eventId)
       .order('sequence_order', { ascending: true });
+
+    // If column doesn't exist (migration not run), fall back to query without slide_config
+    if (errorWithConfig && errorWithConfig.code === '42703' && errorWithConfig.message?.includes('slide_config')) {
+      console.warn('[EventService] slide_config column not found - migration 006 may not be applied. Using fallback query.');
+      const { data: itemsWithoutConfig, error: errorWithoutConfig } = await supabase
+        .from('event_items')
+        .select('sequence_order, slide_config_override, songs(id, title, artist, lyrics)')
+        .eq('event_id', eventId)
+        .order('sequence_order', { ascending: true });
+      
+      eventItems = itemsWithoutConfig;
+      itemsError = errorWithoutConfig;
+    } else {
+      eventItems = itemsWithConfig;
+      itemsError = errorWithConfig;
+    }
 
     if (itemsError) {
       console.error(`[EventService] Failed to fetch event items for ${eventId}:`, itemsError);
@@ -138,8 +159,10 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         }
 
         // Merge song default config with event override
+        // slide_config may not exist if migration 006 hasn't been run
+        const songSlideConfig = (songInfo as any).slide_config as SlideConfig | undefined;
         const eventOverride = (item.slide_config_override as SlideConfig | null) ?? undefined;
-        const mergedConfig = mergeSlideConfig(songInfo.slide_config, eventOverride);
+        const mergedConfig = mergeSlideConfig(songSlideConfig, eventOverride);
 
         // Compile slides
         const compilation = compileSlides(songInfo.lyrics, mergedConfig);
@@ -184,25 +207,45 @@ export async function fetchSongById(songId: string): Promise<SongData | null> {
   }
 
   try {
-    const { data, error } = await supabase
+    // Try with slide_config first (if migration 006 has been run)
+    let songData: any = null;
+    let fetchError: any = null;
+    
+    const { data: dataWithConfig, error: errorWithConfig } = await supabase
       .from('songs')
       .select('id, title, lyrics, slide_config')
       .eq('id', songId)
       .single();
 
-    if (error || !data) {
-      console.error(`[EventService] Failed to fetch song ${songId}:`, error);
+    // If column doesn't exist (migration not run), fall back to query without slide_config
+    if (errorWithConfig && errorWithConfig.code === '42703' && errorWithConfig.message?.includes('slide_config')) {
+      console.warn('[EventService] slide_config column not found - migration 006 may not be applied. Using fallback query.');
+      const { data: dataWithoutConfig, error: errorWithoutConfig } = await supabase
+        .from('songs')
+        .select('id, title, lyrics')
+        .eq('id', songId)
+        .single();
+      
+      songData = dataWithoutConfig;
+      fetchError = errorWithoutConfig;
+    } else {
+      songData = dataWithConfig;
+      fetchError = errorWithConfig;
+    }
+
+    if (fetchError || !songData) {
+      console.error(`[EventService] Failed to fetch song ${songId}:`, fetchError);
       return null;
     }
 
-    // Compile slides with default config (no event override)
-    const defaultConfig = mergeSlideConfig(data.slide_config as SlideConfig | undefined, undefined);
-    const compilation = compileSlides(data.lyrics, defaultConfig);
+    // Compile slides with default config (slide_config may not exist if migration not run)
+    const defaultConfig = mergeSlideConfig((songData as any).slide_config as SlideConfig | undefined, undefined);
+    const compilation = compileSlides(songData.lyrics, defaultConfig);
 
     return {
-      id: data.id,
-      title: data.title,
-      lyrics: data.lyrics,
+      id: songData.id,
+      title: songData.title,
+      lyrics: songData.lyrics,
       lines: compilation.lines,
       slides: compilation.slides,
       lineToSlideIndex: compilation.lineToSlideIndex,
