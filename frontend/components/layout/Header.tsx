@@ -17,7 +17,7 @@ export function Header() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="fixed top-0 w-full z-50 bg-[#2A2A2A] border-b border-white/10"
+        className="fixed top-0 w-full z-50 backdrop-blur-md bg-black/25 border-b border-white/10"
       >
         <div className="container mx-auto px-4">
           <nav className="flex items-center h-24 py-4">

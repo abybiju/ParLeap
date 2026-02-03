@@ -13,18 +13,13 @@ export function HeroSection() {
       {/* Spacer for fixed header */}
       <div className="absolute top-0 left-0 right-0 h-24" />
       {/* Spline Background Layer - Mouse Follow Effect (only in hero section) */}
-      <div className="absolute inset-0 z-0 bg-[#050505]">
+      <div className="absolute inset-0 z-0">
         <SplineViewer
           url="https://prod.spline.design/kzdIEyudaZu1oiNQ/scene.splinecode"
           className="w-full h-full"
         />
-        {/* Deep Space Sunrise: Radial gradient from top-center (orange → red → transparent) */}
-        <div 
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(circle at top center, rgba(255, 140, 0, 0.15), rgba(255, 69, 0, 0.1), transparent 70%)'
-          }}
-        />
+        {/* Gradient Overlay: Lighter at top to merge with header, darker at bottom */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/90 pointer-events-none" />
         {/* Bottom fade: Smoothly transitions to the next section */}
         <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-black/40 to-black pointer-events-none" />
       </div>
