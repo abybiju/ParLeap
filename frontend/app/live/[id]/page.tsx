@@ -123,7 +123,16 @@ export default async function LivePage({ params }: LivePageProps) {
   // Check for Supabase project mismatch
   const frontendProjectRef = getFrontendSupabaseProjectRef()
   const backendProjectRef = backendHealth?.supabaseProjectRef ?? null
-  const hasMismatch = Boolean(frontendProjectRef && backendProjectRef && frontendProjectRef !== backendProjectRef)
+  const backendConfigured = backendHealth?.supabaseConfigured ?? false
+  
+  // Mismatch if:
+  // 1. Both refs exist and differ, OR
+  // 2. Frontend has ref but backend doesn't (backend not configured or health check failed)
+  const hasMismatch = Boolean(
+    (frontendProjectRef && backendProjectRef && frontendProjectRef !== backendProjectRef) ||
+    (frontendProjectRef && !backendConfigured) ||
+    (frontendProjectRef && !backendProjectRef && !healthError) // Backend configured but no ref (suspicious)
+  )
 
   return (
     <LivePageClient
@@ -133,6 +142,7 @@ export default async function LivePage({ params }: LivePageProps) {
       hasSupabaseMismatch={hasMismatch}
       frontendProjectRef={frontendProjectRef}
       backendProjectRef={backendProjectRef}
+      backendConfigured={backendConfigured}
       backendHealthError={healthError}
     />
   )

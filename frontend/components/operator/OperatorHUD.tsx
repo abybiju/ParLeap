@@ -110,11 +110,13 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
           });
           setSessionStatus('error');
         } else if (error.code === 'EVENT_NOT_FOUND') {
+          // This usually indicates a Supabase environment mismatch
           toast.error('Event Not Found', {
-            description: error.message || 'The event could not be found. Please check the event ID.',
-            duration: 10000,
+            description: error.message || 'The event could not be found. This may indicate a Supabase configuration mismatch between frontend and backend. Check that both are using the same Supabase project.',
+            duration: 15000,
           });
           setSessionStatus('error');
+          console.error('[OperatorHUD] EVENT_NOT_FOUND - This usually means backend Supabase project differs from frontend. Check backend environment variables.');
         } else if (error.code === 'STT_ERROR' || error.code === 'AUDIO_FORMAT_UNSUPPORTED') {
           // STT errors are handled by STTStatus component, just log here
           console.warn('[OperatorHUD] STT error:', error.message);
