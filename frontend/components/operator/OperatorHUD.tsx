@@ -260,12 +260,37 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
     router.push('/dashboard');
   };
 
+  const sessionLabel =
+    sessionStatus === 'active'
+      ? 'Live'
+      : sessionStatus === 'starting'
+      ? 'Starting'
+      : sessionStatus === 'error'
+      ? 'Error'
+      : 'Idle';
+
   return (
-    <div className="min-h-screen pt-16 flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      {/* Header Bar */}
+    <div className="min-h-screen pt-16 flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+      {/* Command Bar */}
       <header className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-white/10 bg-white/5 backdrop-blur z-40">
         <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-lg font-semibold truncate">{eventName}</h1>
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={cn(
+                'px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap',
+                sessionStatus === 'active'
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                  : sessionStatus === 'starting'
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                  : sessionStatus === 'error'
+                  ? 'bg-red-500/15 text-red-300 border-red-500/40'
+                  : 'bg-slate-500/15 text-slate-300 border-slate-500/40'
+              )}
+            >
+              Session: {sessionLabel}
+            </span>
+            <h1 className="text-lg font-semibold truncate">{eventName}</h1>
+          </div>
           <ConnectionStatus />
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
@@ -293,14 +318,13 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
               </>
             )}
           </button>
-          
           <span
             className={cn(
               'px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap',
               state === 'connected'
-                ? 'bg-green-500/20 text-green-400 border-green-500/50'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
                 : state === 'connecting'
-                ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50'
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
                 : 'bg-slate-500/20 text-slate-400 border-slate-500/50'
             )}
           >
@@ -316,94 +340,105 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
       </header>
 
       {/* Three-Panel Layout */}
-      <div className="flex-1 grid grid-cols-[300px_1fr_300px] gap-4 p-4 overflow-hidden min-h-0">
-        {/* Left Panel: Ghost Text + Confidence Monitor */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
-          <div className="space-y-3">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide px-2">
-              Live Transcription
+      <div className="flex-1 grid grid-cols-[320px_1fr_320px] gap-4 p-4 overflow-hidden min-h-0">
+        {/* Left Panel: Signal Stack */}
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
+          <div className="px-4 pt-4">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+              Signal Stack
             </h2>
-            <GhostText />
-            <MatchStatus />
           </div>
+          <div className="px-4 py-4 space-y-4 overflow-y-auto">
+            <div className="space-y-3">
+              <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                Live Transcription
+              </h3>
+              <GhostText />
+              <MatchStatus />
+            </div>
 
-          <div className="mt-4 space-y-3">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide px-2">
-              Audio Status
-            </h2>
-            <MicrophoneStatus
-              state={audioCapture.state}
-              requestPermission={audioCapture.requestPermission}
-            />
-            <AudioLevelMeter state={audioCapture.state} />
-            <STTStatus />
+            <div className="pt-2 border-t border-white/10 space-y-3">
+              <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                Audio System
+              </h3>
+              <MicrophoneStatus
+                state={audioCapture.state}
+                requestPermission={audioCapture.requestPermission}
+              />
+              <AudioLevelMeter state={audioCapture.state} />
+              <STTStatus />
+            </div>
           </div>
         </div>
 
-        {/* Center Panel: Current Slide + Next Preview */}
-        <div className="flex flex-col overflow-y-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
-          <CurrentSlideDisplay />
-          <NextSlidePreview />
+        {/* Center Panel: Live Display */}
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 via-white/5 to-white/5 backdrop-blur">
+          <div className="flex-1 p-4 overflow-y-auto">
+            <CurrentSlideDisplay />
+          </div>
+          <div className="px-4 pb-4">
+            <NextSlidePreview />
+          </div>
+
+          {/* Command Dock */}
+          <div className="flex-shrink-0 border-t border-white/10 bg-white/5 px-4 py-3">
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={prevSlide}
+                disabled={sessionStatus !== 'active'}
+                className="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
+                title={sessionStatus !== 'active' ? 'Start session first' : 'Previous slide'}
+              >
+                ◀ PREV
+              </button>
+              {sessionStatus === 'active' ? (
+                audioCapture.state.isRecording && !audioCapture.state.isPaused ? (
+                  <button
+                    onClick={() => audioCapture.pause()}
+                    className="px-6 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-base font-medium transition min-w-[110px]"
+                  >
+                    PAUSE
+                  </button>
+                ) : audioCapture.state.isRecording && audioCapture.state.isPaused ? (
+                  <button
+                    onClick={() => audioCapture.resume()}
+                    className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-base font-medium transition min-w-[110px]"
+                  >
+                    RESUME
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => audioCapture.start()}
+                    disabled={audioCapture.state.permissionState !== 'granted'}
+                    className="px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
+                  >
+                    START AUDIO
+                  </button>
+                )
+              ) : (
+                <button
+                  onClick={handleStartSession}
+                  disabled={sessionStatus === 'starting'}
+                  className="px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
+                >
+                  {sessionStatus === 'starting' ? 'STARTING...' : 'START SESSION'}
+                </button>
+              )}
+              <button
+                onClick={nextSlide}
+                disabled={sessionStatus !== 'active'}
+                className="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
+                title={sessionStatus !== 'active' ? 'Start session first' : 'Next slide'}
+              >
+                NEXT ▶
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Right Panel: Setlist */}
-        <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
           <SetlistPanel initialSetlist={initialSetlist} />
-        </div>
-      </div>
-
-      {/* Controls Bar */}
-      <div className="flex-shrink-0 border-t border-white/10 bg-white/5 backdrop-blur px-6 py-4">
-        <div className="flex items-center justify-center gap-4">
-          <button
-            onClick={prevSlide}
-            disabled={sessionStatus !== 'active'}
-            className="px-8 py-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
-            title={sessionStatus !== 'active' ? 'Start session first' : 'Previous slide'}
-          >
-            ◀ PREV
-          </button>
-          {sessionStatus === 'active' ? (
-            audioCapture.state.isRecording && !audioCapture.state.isPaused ? (
-              <button
-                onClick={() => audioCapture.pause()}
-                className="px-8 py-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-lg font-medium transition min-w-[120px]"
-              >
-                PAUSE
-              </button>
-            ) : audioCapture.state.isRecording && audioCapture.state.isPaused ? (
-              <button
-                onClick={() => audioCapture.resume()}
-                className="px-8 py-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium transition min-w-[120px]"
-              >
-                RESUME
-              </button>
-            ) : (
-              <button
-                onClick={() => audioCapture.start()}
-                disabled={audioCapture.state.permissionState !== 'granted'}
-                className="px-8 py-4 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
-              >
-                START AUDIO
-              </button>
-            )
-          ) : (
-            <button
-              onClick={handleStartSession}
-              disabled={sessionStatus === 'starting'}
-              className="px-8 py-4 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
-            >
-              {sessionStatus === 'starting' ? 'STARTING...' : 'START SESSION'}
-            </button>
-          )}
-          <button
-            onClick={nextSlide}
-            disabled={sessionStatus !== 'active'}
-            className="px-8 py-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-lg font-medium transition min-w-[120px]"
-            title={sessionStatus !== 'active' ? 'Start session first' : 'Next slide'}
-          >
-            NEXT ▶
-          </button>
         </div>
       </div>
     </div>
