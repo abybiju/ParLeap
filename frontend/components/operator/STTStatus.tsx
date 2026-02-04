@@ -11,7 +11,11 @@ import { cn } from '@/lib/utils';
  * Shows the current STT provider and transcription status
  * Helps diagnose why voice matching might not be working
  */
-export function STTStatus() {
+interface STTStatusProps {
+  audioActive?: boolean;
+}
+
+export function STTStatus({ audioActive = false }: STTStatusProps) {
   const { lastMessage } = useWebSocket(false);
   const [hasReceivedTranscript, setHasReceivedTranscript] = useState(false);
   const [lastTranscriptTime, setLastTranscriptTime] = useState<number | null>(null);
@@ -58,7 +62,7 @@ export function STTStatus() {
       if (hasReceivedTranscript) {
         return 'Inactive (No recent transcripts)';
       }
-      return 'Waiting for transcription...';
+      return audioActive ? 'Audio streaming (No transcripts)' : 'Waiting for transcription...';
     }
     if (isSttActive) {
       return 'Active';
@@ -66,7 +70,7 @@ export function STTStatus() {
     if (hasReceivedTranscript) {
       return 'Inactive (No recent transcripts)';
     }
-    return 'Waiting for transcription...';
+    return audioActive ? 'Audio streaming (No transcripts)' : 'Waiting for transcription...';
   };
 
   return (

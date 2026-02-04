@@ -79,6 +79,7 @@ const END_TRIGGER_PERCENTAGE = 0.40; // Last 40% of words trigger advance (adapt
 const END_TRIGGER_THRESHOLD = 0.58; // Lower threshold for end trigger sensitivity
 const END_TRIGGER_SECONDARY_THRESHOLD = 0.52; // Secondary threshold when next-line is also rising
 const NEXT_LINE_SUPPORT_THRESHOLD = 0.60; // Require a reasonable next-line confidence for hybrid trigger
+const END_TRIGGER_MATCH_GATE = 0.68; // Allow end-trigger even if full-line confidence is lower
 // Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**
@@ -310,7 +311,7 @@ export function findBestMatch(
     return result;
   }
 
-  // Check if match meets threshold
+  // Check if match meets threshold (or allow end-trigger at a lower gate)
   if (bestScore >= config.similarityThreshold) {
     result.matchFound = true;
     result.currentLineIndex = bestLineIndex;
@@ -393,6 +394,48 @@ export function findBestMatch(
           `[MATCHER] isLineEnd=true because bestLineIndex (${bestLineIndex}) > currentLineIndex (${songContext.currentLineIndex}) - transition detected`
         );
       }
+    }
+  } else if (bestLineIndex === songContext.currentLineIndex) {
+    // Allow end-trigger to advance even if overall confidence is lower
+    const currentLine = songContext.lines[songContext.currentLineIndex];
+    const endTriggerInfo = getAdaptiveEndTrigger(currentLine);
+    const normalizedEndTrigger = normalizeText(endTriggerInfo.triggerText);
+    const endMatchScore = compareTwoStrings(normalizedEndBuffer, normalizedEndTrigger);
+
+    let nextLineConfidence = 0;
+    const nextLineIndex = songContext.currentLineIndex + 1;
+    if (nextLineIndex < songContext.lines.length) {
+      const nextLine = songContext.lines[nextLineIndex];
+      const normalizedNextLine = normalizeText(nextLine);
+      const nextFullSimilarity = compareTwoStrings(normalizedBuffer, normalizedNextLine);
+      const nextEndSimilarity = compareTwoStrings(normalizedEndBuffer, normalizedNextLine);
+      nextLineConfidence = Math.min(1.0, Math.max(nextFullSimilarity, nextEndSimilarity * 1.2));
+    }
+
+    const endTriggerStrong = endMatchScore >= END_TRIGGER_THRESHOLD;
+    const endTriggerSupported =
+      endMatchScore >= END_TRIGGER_SECONDARY_THRESHOLD &&
+      nextLineConfidence >= NEXT_LINE_SUPPORT_THRESHOLD;
+
+    if ((endTriggerStrong || endTriggerSupported) && bestScore >= END_TRIGGER_MATCH_GATE) {
+      result.matchFound = true;
+      result.currentLineIndex = bestLineIndex;
+      result.confidence = bestScore;
+      result.matchedText = matchedLineText;
+      result.wasForwardProgress = true;
+      result.isLineEnd = true;
+      result.nextLineIndex = songContext.currentLineIndex + 1;
+      result.advanceReason = 'end-words';
+      result.endTriggerScore = endMatchScore;
+      result.nextLineConfidence = nextLineConfidence;
+
+      if (config.debug) {
+        console.log(
+          `[MATCHER] 🎯 END-TRIGGER OVERRIDE: line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (end match ${(endMatchScore * 100).toFixed(1)}%)`
+        );
+      }
+    } else if (config.debug) {
+      console.log(`[MATCHER] ❌ No match (best: ${(bestScore * 100).toFixed(1)}%)`);
     }
   } else {
     if (config.debug) {

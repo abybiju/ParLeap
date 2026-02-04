@@ -366,7 +366,7 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
                 requestPermission={audioCapture.requestPermission}
               />
               <AudioLevelMeter state={audioCapture.state} />
-              <STTStatus />
+              <STTStatus audioActive={audioCapture.state.isRecording && !audioCapture.state.isPaused} />
             </div>
           </div>
         </div>
