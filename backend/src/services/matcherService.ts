@@ -72,7 +72,7 @@ const DEFAULT_CONFIG: MatcherConfig = {
 
 // End-of-line detection configuration
 const END_TRIGGER_WORD_COUNT = 5; // Last N words trigger advance
-const END_TRIGGER_THRESHOLD = 0.85; // 85% confidence required
+const END_TRIGGER_THRESHOLD = 0.65; // 65% confidence required (lowered for better sensitivity)
 
 /**
  * Normalize text for matching:
