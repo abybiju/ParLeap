@@ -70,6 +70,10 @@ const DEFAULT_CONFIG: MatcherConfig = {
   debug: false,
 };
 
+// End-of-line detection configuration
+const END_TRIGGER_WORD_COUNT = 5; // Last N words trigger advance
+const END_TRIGGER_THRESHOLD = 0.85; // 85% confidence required
+
 /**
  * Normalize text for matching:
  * - Lowercase
@@ -82,6 +86,16 @@ function normalizeText(text: string): string {
     .trim()
     .replace(/[^\w\s']/g, '') // Keep apostrophes for contractions like "it's"
     .replace(/\s+/g, ' ');
+}
+
+/**
+ * Extract the last N words from a line for end-of-line detection
+ * Used to detect when singer has reached the end of current line
+ */
+function extractEndWords(text: string, wordCount: number): string {
+  const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+  const endWords = words.slice(-Math.min(wordCount, words.length));
+  return endWords.join(' ');
 }
 
 /**
@@ -215,23 +229,49 @@ export function findBestMatch(
 
     // Determine if we should auto-advance
     if (bestLineIndex === songContext.currentLineIndex) {
-      // Still on current line
-      result.isLineEnd = false;
+      // Still on current line - check if we've reached the END of this line
+      const currentLine = songContext.lines[songContext.currentLineIndex];
+      const endTrigger = extractEndWords(currentLine, END_TRIGGER_WORD_COUNT);
+      const normalizedEndTrigger = normalizeText(endTrigger);
+      
+      // Check if buffer contains the end trigger words (last 5 words of current line)
+      const endMatchScore = compareTwoStrings(normalizedEndBuffer, normalizedEndTrigger);
+      
       if (config.debug) {
         console.log(
-          `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (current line, no advance)`
+          `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (current line)`
         );
         console.log(
-          `[MATCHER] isLineEnd=false because bestLineIndex (${bestLineIndex}) equals currentLineIndex (${songContext.currentLineIndex})`
+          `[MATCHER] 🎯 Checking end-of-line: "${endTrigger}" → ${(endMatchScore * 100).toFixed(1)}% match`
         );
       }
+      
+      if (endMatchScore >= END_TRIGGER_THRESHOLD) {
+        // We've reached the END of this line - advance immediately!
+        result.isLineEnd = true;
+        result.nextLineIndex = songContext.currentLineIndex + 1;
+        
+        if (config.debug) {
+          console.log(
+            `[MATCHER] 🎯 END-OF-LINE DETECTED: "${endTrigger}" @ ${(endMatchScore * 100).toFixed(1)}% - advancing to next line (${result.nextLineIndex})`
+          );
+        }
+      } else {
+        // Still singing this line, not at the end yet
+        result.isLineEnd = false;
+        if (config.debug) {
+          console.log(
+            `[MATCHER] Still on current line (end match: ${(endMatchScore * 100).toFixed(1)}% < ${(END_TRIGGER_THRESHOLD * 100).toFixed(0)}%)`
+          );
+        }
+      }
     } else {
-      // Moved to next line(s)
+      // Moved to next line(s) - original logic: next line already detected
       result.isLineEnd = true;
       result.nextLineIndex = bestLineIndex;
       if (config.debug) {
         console.log(
-          `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (advancing from ${songContext.currentLineIndex})`
+          `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (next-line detected, advancing from ${songContext.currentLineIndex})`
         );
         console.log(
           `[MATCHER] isLineEnd=true because bestLineIndex (${bestLineIndex}) > currentLineIndex (${songContext.currentLineIndex}) - transition detected`
