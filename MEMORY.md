@@ -52,6 +52,8 @@
 - Debouncing: 2 sustained matches required
 - Cooldown: 3 seconds between song switches
 - Current song checked first (optimization)
+- **End-of-line detection**: Last 40% of words trigger advance (65% confidence)
+- **Forward-only constraint**: Never allows backward progression (prevents repeated lyrics backtracking)
 
 **Display Layout**:
 - Main slide: `text-3xl` font, `space-y-1.5` line spacing, 4 lines
@@ -98,11 +100,28 @@
 4. **Multi-line data**: All DISPLAY_UPDATE messages must include full slide arrays
 5. **Ref closures**: Use `useRef` for callbacks that need current state
 
+### Latest Session: End-of-Line Detection & Forward-Only Constraint
+
+**End-of-Line Detection** (Commits `501a554`, `1e9d504`, `a392b8b`):
+- Detects last 40% of words in current line
+- Advances immediately when 65%+ confidence match found
+- Adapts to line length (short lines trigger faster)
+- Reduces perceived latency by ~500-1000ms
+
+**Forward-Only Constraint** (Commit `5603869`):
+- Prevents backward jumps when lyrics repeat across stanzas
+- Example: "He will make a way for me" appears at end of multiple stanzas
+- System now stays forward or advances, never jumps back
+- Manual PREV button still works (bypasses constraint)
+
+**Testing**: Verified with "God will make a way" song (repeated stanza endings)
+
 ### Next Session TODO
 - Monitor ElevenLabs connection stability in production
 - Test with songs of varying lengths (17+ slides)
 - Verify end-to-end latency <300ms
 - Consider AudioWorklet migration (ScriptProcessor deprecated)
+- Consider making end-of-line percentage configurable per-song
 
 ---
 
