@@ -25,6 +25,9 @@ export interface MatchResult {
   matchedText: string;
   nextLineIndex?: number;
   isLineEnd?: boolean;
+  advanceReason?: 'end-words' | 'next-line';
+  endTriggerScore?: number;
+  nextLineConfidence?: number;
   wasForwardProgress?: boolean; // Track if this advances forward (prevents backward jumps with repeated lyrics)
 }
 
@@ -73,7 +76,9 @@ const DEFAULT_CONFIG: MatcherConfig = {
 
 // End-of-line detection configuration
 const END_TRIGGER_PERCENTAGE = 0.40; // Last 40% of words trigger advance (adapts to line length)
-const END_TRIGGER_THRESHOLD = 0.65; // 65% confidence required (lowered for better sensitivity)
+const END_TRIGGER_THRESHOLD = 0.58; // Lower threshold for end trigger sensitivity
+const END_TRIGGER_SECONDARY_THRESHOLD = 0.52; // Secondary threshold when next-line is also rising
+const NEXT_LINE_SUPPORT_THRESHOLD = 0.60; // Require a reasonable next-line confidence for hybrid trigger
 // Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**
@@ -111,6 +116,56 @@ function extractEndWords(text: string, wordCountOrPercentage: number): string {
   
   const endWords = words.slice(-Math.min(numWords, words.length));
   return endWords.join(' ');
+}
+
+/**
+ * Adaptive end-of-line trigger extraction
+ * Short lines use fixed counts, longer lines use percentage
+ */
+function getAdaptiveEndTrigger(text: string): {
+  triggerText: string;
+  triggerWords: number;
+  totalWords: number;
+  mode: 'short' | 'medium' | 'percentage';
+} {
+  const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+  const totalWords = words.length;
+
+  if (totalWords <= 6) {
+    return {
+      triggerText: extractEndWords(text, 3),
+      triggerWords: Math.min(3, totalWords),
+      totalWords,
+      mode: 'short',
+    };
+  }
+
+  if (totalWords <= 9) {
+    return {
+      triggerText: extractEndWords(text, 4),
+      triggerWords: Math.min(4, totalWords),
+      totalWords,
+      mode: 'medium',
+    };
+  }
+
+  if (totalWords <= 12) {
+    return {
+      triggerText: extractEndWords(text, 5),
+      triggerWords: Math.min(5, totalWords),
+      totalWords,
+      mode: 'medium',
+    };
+  }
+
+  const triggerText = extractEndWords(text, END_TRIGGER_PERCENTAGE);
+  const triggerWords = triggerText.trim().split(/\s+/).filter(w => w.length > 0).length;
+  return {
+    triggerText,
+    triggerWords,
+    totalWords,
+    mode: 'percentage',
+  };
 }
 
 /**
@@ -267,31 +322,53 @@ export function findBestMatch(
     if (bestLineIndex === songContext.currentLineIndex) {
       // Still on current line - check if we've reached the END of this line
       const currentLine = songContext.lines[songContext.currentLineIndex];
-      const endTrigger = extractEndWords(currentLine, END_TRIGGER_PERCENTAGE);
-      const normalizedEndTrigger = normalizeText(endTrigger);
+      const endTriggerInfo = getAdaptiveEndTrigger(currentLine);
+      const normalizedEndTrigger = normalizeText(endTriggerInfo.triggerText);
       
       // Check if buffer contains the end trigger words (last 40% of current line)
       const endMatchScore = compareTwoStrings(normalizedEndBuffer, normalizedEndTrigger);
+      result.endTriggerScore = endMatchScore;
+
+      // Hybrid trigger: also consider next-line confidence
+      let nextLineConfidence = 0;
+      const nextLineIndex = songContext.currentLineIndex + 1;
+      if (nextLineIndex < songContext.lines.length) {
+        const nextLine = songContext.lines[nextLineIndex];
+        const normalizedNextLine = normalizeText(nextLine);
+        const nextFullSimilarity = compareTwoStrings(normalizedBuffer, normalizedNextLine);
+        const nextEndSimilarity = compareTwoStrings(normalizedEndBuffer, normalizedNextLine);
+        nextLineConfidence = Math.min(1.0, Math.max(nextFullSimilarity, nextEndSimilarity * 1.2));
+        result.nextLineConfidence = nextLineConfidence;
+      }
+
+      const endTriggerStrong = endMatchScore >= END_TRIGGER_THRESHOLD;
+      const endTriggerSupported =
+        endMatchScore >= END_TRIGGER_SECONDARY_THRESHOLD &&
+        nextLineConfidence >= NEXT_LINE_SUPPORT_THRESHOLD;
       
       if (config.debug) {
-        const lineWords = currentLine.trim().split(/\s+/).filter(w => w.length > 0);
-        const triggerWords = endTrigger.trim().split(/\s+/).filter(w => w.length > 0);
         console.log(
           `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (current line)`
         );
         console.log(
-          `[MATCHER] 🎯 Checking end-of-line: "${endTrigger}" (${triggerWords.length}/${lineWords.length} words = ${(END_TRIGGER_PERCENTAGE * 100).toFixed(0)}%) → ${(endMatchScore * 100).toFixed(1)}% match`
+          `[MATCHER] 🎯 End-of-line (${endTriggerInfo.mode}): "${endTriggerInfo.triggerText}" (${endTriggerInfo.triggerWords}/${endTriggerInfo.totalWords} words) → ${(endMatchScore * 100).toFixed(1)}%`
         );
+        if (nextLineConfidence > 0) {
+          console.log(
+            `[MATCHER] 🔁 Next-line confidence: ${(nextLineConfidence * 100).toFixed(1)}%`
+          );
+        }
       }
       
-      if (endMatchScore >= END_TRIGGER_THRESHOLD) {
+      if (endTriggerStrong || endTriggerSupported) {
         // We've reached the END of this line - advance immediately!
         result.isLineEnd = true;
         result.nextLineIndex = songContext.currentLineIndex + 1;
+        result.advanceReason = 'end-words';
         
         if (config.debug) {
           console.log(
-            `[MATCHER] 🎯 END-OF-LINE DETECTED: "${endTrigger}" @ ${(endMatchScore * 100).toFixed(1)}% - advancing to next line (${result.nextLineIndex})`
+            `[MATCHER] 🎯 END-OF-LINE DETECTED: "${endTriggerInfo.triggerText}" @ ${(endMatchScore * 100).toFixed(1)}% - advancing to next line (${result.nextLineIndex})`
           );
         }
       } else {
@@ -307,6 +384,7 @@ export function findBestMatch(
       // Moved to next line(s) - original logic: next line already detected
       result.isLineEnd = true;
       result.nextLineIndex = bestLineIndex;
+      result.advanceReason = 'next-line';
       if (config.debug) {
         console.log(
           `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (next-line detected, advancing from ${songContext.currentLineIndex})`
@@ -515,4 +593,3 @@ export function findBestMatchAcrossAllSongs(
 
   return result;
 }
-

@@ -151,6 +151,12 @@ interface SessionState {
     matchCount: number; // How many consecutive times we've seen this match
   };
   lastSongSwitchAt?: number; // Timestamp of last song switch (for cooldown)
+  // End-trigger debouncing for slide advance
+  endTriggerHit?: {
+    lineIndex: number;
+    lastHitAt: number;
+    hitCount: number;
+  };
   // Audio chunk tracking for logging
   audioChunkCount?: number; // Track number of audio chunks received (for diagnostic logging)
 }
@@ -644,8 +650,48 @@ function handleTranscriptionResult(
 
       // Handle current song line matching (normal slide advance)
       if (matchResult.matchFound && matchResult.confidence >= session.matcherConfig.similarityThreshold) {
+        // END-TRIGGER DEBOUNCE: Require consecutive end-word hits within a short window
+        const END_TRIGGER_DEBOUNCE_WINDOW_MS = 1800;
+        const END_TRIGGER_DEBOUNCE_MATCHES = 2;
+        let isLineEndConfirmed = matchResult.isLineEnd ?? false;
+
+        if (matchResult.isLineEnd && matchResult.advanceReason === 'end-words' && matchResult.nextLineIndex !== undefined) {
+          const now = Date.now();
+          const lineIndex = matchResult.currentLineIndex;
+          const lastHit = session.endTriggerHit;
+
+          if (lastHit && lastHit.lineIndex === lineIndex && now - lastHit.lastHitAt <= END_TRIGGER_DEBOUNCE_WINDOW_MS) {
+            lastHit.hitCount += 1;
+            lastHit.lastHitAt = now;
+            session.endTriggerHit = lastHit;
+          } else {
+            session.endTriggerHit = {
+              lineIndex,
+              lastHitAt: now,
+              hitCount: 1,
+            };
+          }
+
+          if (session.endTriggerHit.hitCount < END_TRIGGER_DEBOUNCE_MATCHES) {
+            isLineEndConfirmed = false;
+            if (session.matcherConfig.debug) {
+              console.log(
+                `[WS] ⏱️ End-trigger debounce (${session.endTriggerHit.hitCount}/${END_TRIGGER_DEBOUNCE_MATCHES}) - waiting for confirmation`
+              );
+            }
+          } else {
+            isLineEndConfirmed = true;
+            if (session.matcherConfig.debug) {
+              console.log('[WS] ✅ End-trigger confirmed - advancing');
+            }
+            session.endTriggerHit = undefined;
+          }
+        } else {
+          session.endTriggerHit = undefined;
+        }
+
         const currentSong = session.songs[session.currentSongIndex];
-        const matchedLineIndex = matchResult.isLineEnd && matchResult.nextLineIndex !== undefined
+        const matchedLineIndex = isLineEndConfirmed && matchResult.nextLineIndex !== undefined
           ? matchResult.nextLineIndex
           : matchResult.currentLineIndex;
 
@@ -705,7 +751,7 @@ function handleTranscriptionResult(
               songId: session.songContext.id,
               songTitle: session.songContext.title,
               matchConfidence: matchResult.confidence,
-              isAutoAdvance: matchResult.isLineEnd || false,
+              isAutoAdvance: isLineEndConfirmed || false,
             },
             timing: createTiming(receivedAt, processingStart),
           };
@@ -732,6 +778,8 @@ function handleTranscriptionResult(
 
         // Trim buffer after strong match to reduce noise for next lines
         session.rollingBuffer = matchResult.matchedText;
+      } else if (session.endTriggerHit) {
+        session.endTriggerHit = undefined;
       }
     }
   }
@@ -1189,4 +1237,3 @@ export function handleClose(ws: WebSocket): void {
 export function getSessionCount(): number {
   return sessions.size;
 }
-
