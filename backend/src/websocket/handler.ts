@@ -142,6 +142,9 @@ interface SessionState {
   lastMatchConfidence?: number;
   sttStream?: ReturnType<typeof createStreamingRecognition>;
   lastTranscriptText?: string;
+  lastTranscriptAt?: number;
+  lastAudioChunkAt?: number;
+  lastSttRestartAt?: number;
   // Debouncing for song switches (prevents false positives)
   suggestedSongSwitch?: {
     songId: string;
@@ -197,6 +200,44 @@ function broadcastToEvent(eventId: string, message: ServerMessage): void {
   if (sentCount > 0) {
     console.log(`[WS] Broadcasted ${message.type} to ${sentCount} client(s) for event ${eventId}`);
   }
+}
+
+// ============================================
+// STT Stream Helpers
+// ============================================
+
+function initElevenLabsStream(session: SessionState, ws: WebSocket): void {
+  const stream = createStreamingRecognition();
+  stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
+    const processingStart = Date.now();
+    const receivedAtNow = Date.now();
+    handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
+  });
+  stream.on('error', (error: Error) => {
+    console.error('[STT] ❌ ElevenLabs stream error:', error);
+    sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
+  });
+  stream.on('end', () => {
+    console.log('[STT] ElevenLabs stream ended');
+    // Clear stream reference so it can be recreated if needed
+    session.sttStream = undefined;
+  });
+  session.sttStream = stream;
+  console.log('[STT] ✅ ElevenLabs stream initialized');
+}
+
+function restartElevenLabsStream(session: SessionState, ws: WebSocket, reason: string): void {
+  if (session.sttStream) {
+    try {
+      session.sttStream.end();
+    } catch (error) {
+      console.warn('[STT] ⚠️ Failed to end ElevenLabs stream cleanly:', error);
+    }
+  }
+  session.sttStream = undefined;
+  session.lastSttRestartAt = Date.now();
+  console.warn(`[STT] 🔄 Restarting ElevenLabs stream (${reason})`);
+  initElevenLabsStream(session, ws);
 }
 
 // ============================================
@@ -446,6 +487,7 @@ function handleTranscriptionResult(
 
   // Broadcast transcript to all sessions for this event (operator + projector views)
   broadcastToEvent(session.eventId, transcriptMessage);
+  session.lastTranscriptAt = Date.now();
 
   if (shouldAttemptMatch) {
     const matchText = trimmedText.length > 0 ? trimmedText : session.lastTranscriptText;
@@ -649,7 +691,9 @@ function handleTranscriptionResult(
         }
 
       // Handle current song line matching (normal slide advance)
-      if (matchResult.matchFound && matchResult.confidence >= session.matcherConfig.similarityThreshold) {
+      const isEndTriggerMatch =
+        matchResult.advanceReason === 'end-words' && matchResult.endTriggerScore !== undefined;
+      if (matchResult.matchFound && (matchResult.confidence >= session.matcherConfig.similarityThreshold || isEndTriggerMatch)) {
         // END-TRIGGER DEBOUNCE: Require consecutive end-word hits within a short window
         const END_TRIGGER_DEBOUNCE_WINDOW_MS = 1800;
         const END_TRIGGER_DEBOUNCE_MATCHES = 2;
@@ -802,6 +846,8 @@ async function handleAudioData(
     return;
   }
 
+  session.lastAudioChunkAt = Date.now();
+
   // Log audio format for debugging (first few chunks only to avoid spam)
   const chunkCount = session.audioChunkCount || 0;
   session.audioChunkCount = chunkCount + 1;
@@ -810,6 +856,16 @@ async function handleAudioData(
   }
 
   if (sttProvider === 'elevenlabs') {
+    // Watchdog: Restart ElevenLabs stream if audio is flowing but transcripts have stopped
+    const STT_STALE_MS = 10000;
+    const STT_RESTART_COOLDOWN_MS = 15000;
+    if (session.lastTranscriptAt && Date.now() - session.lastTranscriptAt > STT_STALE_MS) {
+      const lastRestart = session.lastSttRestartAt ?? 0;
+      if (Date.now() - lastRestart > STT_RESTART_COOLDOWN_MS) {
+        restartElevenLabsStream(session, ws, 'stale transcripts');
+      }
+    }
+
     if (format?.encoding !== 'pcm_s16le') {
       const receivedFormat = format?.encoding || 'unknown';
       const receivedSampleRate = format?.sampleRate || 'unknown';
@@ -853,24 +909,7 @@ async function handleAudioData(
         return;
       }
       console.log('[STT] 🚀 Creating ElevenLabs streaming recognition (lazy init on first audio)...');
-      const stream = createStreamingRecognition();
-      stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
-        const processingStart = Date.now();
-        const receivedAtNow = Date.now();
-        // Broadcast transcription to ALL sessions for this event
-        handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
-      });
-      stream.on('error', (error: Error) => {
-        console.error('[STT] ❌ ElevenLabs stream error:', error);
-        sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
-      });
-      stream.on('end', () => {
-        console.log('[STT] ElevenLabs stream ended');
-        // Clear stream reference so it can be recreated if needed
-        session.sttStream = undefined;
-      });
-      session.sttStream = stream;
-      console.log('[STT] ✅ ElevenLabs stream initialized (lazy)');
+      initElevenLabsStream(session, ws);
       
       // Share stream with other sessions for this event (if any)
       for (const [otherWs, otherSession] of sessions.entries()) {
