@@ -608,3 +608,11 @@ frontend/tailwind.config.ts               (new animations)
 - Vercel/CI TypeScript checks fail on unused vars/params—avoid placeholder params without `_` prefix.
 - `next/image` is not ideal for `blob:` previews and external avatar URLs without remotePatterns—use `<img>` for those.
 
+
+## February 4, 2026 - Operator HUD + STT Reliability
+- Operator HUD redesigned into a broadcast control room layout with a unified signal stack, hero display surface, and docked command controls.
+- Controls modernized (glass gradients, chevrons, pulsing Start Session) for premium operator feel.
+- End-of-line auto-advance improved: adaptive end-words, hybrid next-line support, and debounce for stability.
+- Added ElevenLabs STT watchdog to auto-restart the stream if transcripts go stale while audio continues.
+- STT UI now distinguishes "Audio streaming (No transcripts)" from true idle state.
+- Type-check run clean after ElevenLabs stream guard fix.
