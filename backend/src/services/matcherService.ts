@@ -71,8 +71,9 @@ const DEFAULT_CONFIG: MatcherConfig = {
 };
 
 // End-of-line detection configuration
-const END_TRIGGER_WORD_COUNT = 5; // Last N words trigger advance
+const END_TRIGGER_PERCENTAGE = 0.40; // Last 40% of words trigger advance (adapts to line length)
 const END_TRIGGER_THRESHOLD = 0.65; // 65% confidence required (lowered for better sensitivity)
+// Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**
  * Normalize text for matching:
@@ -90,11 +91,24 @@ function normalizeText(text: string): string {
 
 /**
  * Extract the last N words from a line for end-of-line detection
+ * Can use either fixed word count or percentage of line length
  * Used to detect when singer has reached the end of current line
  */
-function extractEndWords(text: string, wordCount: number): string {
+function extractEndWords(text: string, wordCountOrPercentage: number): string {
   const words = text.trim().split(/\s+/).filter(w => w.length > 0);
-  const endWords = words.slice(-Math.min(wordCount, words.length));
+  
+  // If value is between 0 and 1, treat as percentage
+  // Otherwise treat as fixed word count
+  let numWords: number;
+  if (wordCountOrPercentage > 0 && wordCountOrPercentage < 1) {
+    // Percentage mode: extract last X% of words (minimum 3 words)
+    numWords = Math.max(3, Math.ceil(words.length * wordCountOrPercentage));
+  } else {
+    // Fixed count mode
+    numWords = Math.floor(wordCountOrPercentage);
+  }
+  
+  const endWords = words.slice(-Math.min(numWords, words.length));
   return endWords.join(' ');
 }
 
@@ -231,18 +245,20 @@ export function findBestMatch(
     if (bestLineIndex === songContext.currentLineIndex) {
       // Still on current line - check if we've reached the END of this line
       const currentLine = songContext.lines[songContext.currentLineIndex];
-      const endTrigger = extractEndWords(currentLine, END_TRIGGER_WORD_COUNT);
+      const endTrigger = extractEndWords(currentLine, END_TRIGGER_PERCENTAGE);
       const normalizedEndTrigger = normalizeText(endTrigger);
       
-      // Check if buffer contains the end trigger words (last 5 words of current line)
+      // Check if buffer contains the end trigger words (last 40% of current line)
       const endMatchScore = compareTwoStrings(normalizedEndBuffer, normalizedEndTrigger);
       
       if (config.debug) {
+        const lineWords = currentLine.trim().split(/\s+/).filter(w => w.length > 0);
+        const triggerWords = endTrigger.trim().split(/\s+/).filter(w => w.length > 0);
         console.log(
           `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (current line)`
         );
         console.log(
-          `[MATCHER] 🎯 Checking end-of-line: "${endTrigger}" → ${(endMatchScore * 100).toFixed(1)}% match`
+          `[MATCHER] 🎯 Checking end-of-line: "${endTrigger}" (${triggerWords.length}/${lineWords.length} words = ${(END_TRIGGER_PERCENTAGE * 100).toFixed(0)}%) → ${(endMatchScore * 100).toFixed(1)}% match`
         );
       }
       
