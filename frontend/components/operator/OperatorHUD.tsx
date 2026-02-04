@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, ZapOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Zap, ZapOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
@@ -381,28 +381,37 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
           </div>
 
           {/* Command Dock */}
-          <div className="flex-shrink-0 border-t border-white/10 bg-white/5 px-4 py-3">
+          <div className="relative flex-shrink-0 border-t border-white/10 bg-white/5 px-4 py-3">
+            <div className="pointer-events-none absolute inset-x-4 bottom-2 h-2 rounded-full bg-gradient-to-r from-transparent via-white/10 to-transparent blur-[8px]" />
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={prevSlide}
                 disabled={sessionStatus !== 'active'}
-                className="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
+                className={cn(
+                  'px-6 py-3 rounded-xl text-base font-semibold min-w-[110px] transition-all',
+                  'flex flex-col items-center gap-1',
+                  'border border-indigo-400/40 bg-gradient-to-b from-indigo-500/40 via-indigo-500/20 to-indigo-500/10',
+                  'shadow-[0_10px_30px_rgba(49,46,129,0.35)] hover:shadow-[0_16px_36px_rgba(49,46,129,0.45)]',
+                  'hover:translate-y-[-1px] active:translate-y-0',
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none'
+                )}
                 title={sessionStatus !== 'active' ? 'Start session first' : 'Previous slide'}
               >
-                ◀ PREV
+                <ChevronLeft className="h-5 w-5" />
+                <span className="text-xs tracking-[0.2em] uppercase">Prev</span>
               </button>
               {sessionStatus === 'active' ? (
                 audioCapture.state.isRecording && !audioCapture.state.isPaused ? (
                   <button
                     onClick={() => audioCapture.pause()}
-                    className="px-6 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-base font-medium transition min-w-[110px]"
+                    className="px-6 py-3 rounded-xl text-base font-semibold min-w-[110px] transition-all border border-amber-400/40 bg-gradient-to-b from-amber-500/50 via-amber-500/25 to-amber-500/10 shadow-[0_10px_30px_rgba(245,158,11,0.35)] hover:shadow-[0_16px_36px_rgba(245,158,11,0.45)] hover:translate-y-[-1px] active:translate-y-0"
                   >
                     PAUSE
                   </button>
                 ) : audioCapture.state.isRecording && audioCapture.state.isPaused ? (
                   <button
                     onClick={() => audioCapture.resume()}
-                    className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-base font-medium transition min-w-[110px]"
+                    className="px-6 py-3 rounded-xl text-base font-semibold min-w-[110px] transition-all border border-blue-400/40 bg-gradient-to-b from-blue-500/50 via-blue-500/25 to-blue-500/10 shadow-[0_10px_30px_rgba(59,130,246,0.35)] hover:shadow-[0_16px_36px_rgba(59,130,246,0.45)] hover:translate-y-[-1px] active:translate-y-0"
                   >
                     RESUME
                   </button>
@@ -410,27 +419,38 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
                   <button
                     onClick={() => audioCapture.start()}
                     disabled={audioCapture.state.permissionState !== 'granted'}
-                    className="px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
+                    className="px-6 py-3 rounded-xl text-base font-semibold min-w-[110px] transition-all border border-emerald-400/40 bg-gradient-to-b from-emerald-500/60 via-emerald-500/30 to-emerald-500/10 shadow-[0_10px_30px_rgba(16,185,129,0.35)] hover:shadow-[0_16px_36px_rgba(16,185,129,0.45)] hover:translate-y-[-1px] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                   >
                     START AUDIO
                   </button>
                 )
               ) : (
-                <button
-                  onClick={handleStartSession}
-                  disabled={sessionStatus === 'starting'}
-                  className="px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
-                >
-                  {sessionStatus === 'starting' ? 'STARTING...' : 'START SESSION'}
-                </button>
+                <div className="relative">
+                  <div className="pointer-events-none absolute -inset-1 rounded-2xl bg-emerald-500/30 blur-md animate-pulse" />
+                  <button
+                    onClick={handleStartSession}
+                    disabled={sessionStatus === 'starting'}
+                    className="relative px-6 py-3 rounded-xl text-base font-semibold min-w-[110px] transition-all border border-emerald-400/40 bg-gradient-to-b from-emerald-500/70 via-emerald-500/35 to-emerald-500/10 shadow-[0_10px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_18px_40px_rgba(16,185,129,0.5)] hover:translate-y-[-1px] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  >
+                    {sessionStatus === 'starting' ? 'STARTING...' : 'START SESSION'}
+                  </button>
+                </div>
               )}
               <button
                 onClick={nextSlide}
                 disabled={sessionStatus !== 'active'}
-                className="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-base font-medium transition min-w-[110px]"
+                className={cn(
+                  'px-6 py-3 rounded-xl text-base font-semibold min-w-[110px] transition-all',
+                  'flex flex-col items-center gap-1',
+                  'border border-indigo-400/40 bg-gradient-to-b from-indigo-500/40 via-indigo-500/20 to-indigo-500/10',
+                  'shadow-[0_10px_30px_rgba(49,46,129,0.35)] hover:shadow-[0_16px_36px_rgba(49,46,129,0.45)]',
+                  'hover:translate-y-[-1px] active:translate-y-0',
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none'
+                )}
                 title={sessionStatus !== 'active' ? 'Start session first' : 'Next slide'}
               >
-                NEXT ▶
+                <ChevronRight className="h-5 w-5" />
+                <span className="text-xs tracking-[0.2em] uppercase">Next</span>
               </button>
             </div>
           </div>
