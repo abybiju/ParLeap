@@ -910,6 +910,7 @@ async function handleAudioData(
       }
       console.log('[STT] 🚀 Creating ElevenLabs streaming recognition (lazy init on first audio)...');
       initElevenLabsStream(session, ws);
+      const activeStream = session.sttStream;
       
       // Share stream with other sessions for this event (if any)
       for (const [otherWs, otherSession] of sessions.entries()) {
@@ -918,7 +919,9 @@ async function handleAudioData(
             !otherSession.sttStream &&
             otherWs.readyState === ws.OPEN) {
           console.log('[STT] 📡 Sharing STT stream with existing session');
-          otherSession.sttStream = stream;
+          if (activeStream) {
+            otherSession.sttStream = activeStream;
+          }
         }
       }
     }
@@ -932,6 +935,11 @@ async function handleAudioData(
         console.warn(`[WS] ⚠️  Small audio chunk detected: ${audioBuffer.length} bytes (expected >=256 for 128-sample buffer)`);
       }
       
+      if (!session.sttStream) {
+        console.error('[STT] ❌ ElevenLabs stream not initialized');
+        sendError(ws, 'STT_ERROR', 'ElevenLabs stream not initialized');
+        return;
+      }
       session.sttStream.write(audioBuffer);
       
       // Log first few chunks, then periodically
