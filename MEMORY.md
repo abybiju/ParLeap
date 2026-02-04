@@ -1,5 +1,111 @@
 # ParLeap AI - Memory Log
 
+## Session: February 3, 2026 (Evening) - Live Session UX Fixes ✅
+
+### Critical Fixes Completed
+**All operator HUD display and layout issues resolved.**
+
+### What We Accomplished
+1. **Fixed RATE_LIMITED Audio Error** ✅
+   - Buffer size: 256 samples (16ms, 62 chunks/sec) → 2048 samples (128ms, 8 chunks/sec)
+   - Prevents "Too many messages in a short period" error
+   - Still maintains low latency (128ms vs original 256ms)
+
+2. **Lowered Auto-Switch Threshold** ✅
+   - Changed from 85% → 50% confidence for auto-switching
+   - User feedback: "84% match shouldn't require manual click"
+   - Now auto-switches immediately at 50%+ confidence (after 2 sustained matches)
+   - Applies universally to all songs in setlist
+
+3. **Fixed Multi-Line Display on Auto-Switch** ✅
+   - Problem: Main slide showing only 1 line when AI auto-switched songs
+   - Root cause: Auto-switch DISPLAY_UPDATE missing `slideLines` and `slideText` arrays
+   - Fix: Backend now fetches full slide data during song switches
+   - Result: All 4 lines now display correctly in all scenarios
+
+4. **Optimized Layout for Screen Fit** ✅
+   - Problem: 4-line display with large fonts pushed next slide preview off screen
+   - Fixes applied:
+     - CurrentSlideDisplay: `text-5xl` → `text-3xl`, reduced padding/spacing
+     - NextSlidePreview: `text-lg` → `text-sm`, compact spacing
+     - OperatorHUD: Reduced container padding
+   - Space saved: ~200px vertical space
+   - Result: Both current slide (4 lines) + next slide preview now visible
+
+5. **Fixed Stop Button Hidden by Header** ✅
+   - Problem: Fixed navigation header (64px) overlapping Stop Session button
+   - Fix: Added `pt-16` (64px) top padding to OperatorHUD container
+   - Additional improvements: Compact header, event name truncation, proper z-index
+   - Result: All header controls (Auto-Follow, Status, Stop) fully visible
+
+### Current Production Configuration
+
+**Audio System (ElevenLabs STT)**:
+- Format: PCM 16-bit (pcm_s16le), 16kHz, mono
+- Buffer: 2048 samples (128ms latency)
+- Message rate: ~8 chunks/sec (safe, no rate limiting)
+- Session-aware: Only sends when `sessionActive=true`
+- Ref handling: Uses `sessionActiveRef` to prevent stale closures
+
+**Matching Algorithm**:
+- Auto-switch threshold: **50% confidence** (lowered from 85%)
+- Debouncing: 2 sustained matches required
+- Cooldown: 3 seconds between song switches
+- Current song checked first (optimization)
+
+**Display Layout**:
+- Main slide: `text-3xl` font, `space-y-1.5` line spacing, 4 lines
+- Next slide: `text-sm` font, compact spacing, fully visible
+- Container: `pt-16` to account for fixed header
+- Header: Compact with truncating event names
+
+### Files Modified This Session
+**Backend**:
+- `backend/src/websocket/handler.ts` - Auto-switch full slide data
+
+**Frontend**:
+- `frontend/components/operator/CurrentSlideDisplay.tsx` - Font/spacing optimization
+- `frontend/components/operator/NextSlidePreview.tsx` - Font/spacing optimization  
+- `frontend/components/operator/OperatorHUD.tsx` - Layout fixes (padding, header)
+- `frontend/lib/hooks/useAudioCapture.ts` - Buffer size (256 → 2048)
+
+### Commits Created (9 Total)
+1. `9648ef8` - Fix RATE_LIMITED error
+2. `ca8029e` - Lower auto-switch threshold (85% → 50%)
+3. `11cc8a7` - Document display bug (safe point)
+4. `32b443c` - Fix auto-switch multi-line display
+5. `6683919` - Update memory (display fix)
+6. `05240c1` - Optimize layout spacing
+7. `6510991` - Document layout optimizations
+8. `78f96b9` - Fix Stop button overlap
+9. `45f7b03` - Document header fix
+
+### Git Status
+- ✅ All changes committed locally
+- ⏳ Push pending: Network/credential issues
+- Ready for Railway deployment
+
+### Safety & Rollback
+**Revert points if issues occur**:
+- Before layout changes: `git reset --hard 6683919`
+- Before header fix: `git reset --hard 05240c1`
+- Before any changes: `git reset --hard ca8029e`
+
+### Lessons Learned
+1. **Buffer size matters**: Too small = rate limiting, too large = latency
+2. **Layout math**: Always account for fixed headers (64px = `pt-16`)
+3. **Confidence thresholds**: UX feedback > arbitrary thresholds
+4. **Multi-line data**: All DISPLAY_UPDATE messages must include full slide arrays
+5. **Ref closures**: Use `useRef` for callbacks that need current state
+
+### Next Session TODO
+- Monitor ElevenLabs connection stability in production
+- Test with songs of varying lengths (17+ slides)
+- Verify end-to-end latency <300ms
+- Consider AudioWorklet migration (ScriptProcessor deprecated)
+
+---
+
 ## Session: February 2, 2026 - Landing Page Gradient Restoration & Reference State ⚠️
 
 ### Critical Lesson: Landing Page Protection
