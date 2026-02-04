@@ -667,6 +667,22 @@ function handleTranscriptionResult(
         // Only broadcast DISPLAY_UPDATE when slide actually changes
         const slideChanged = newSlideIndex !== session.currentSlideIndex;
         
+        // FORWARD-ONLY PROTECTION: Prevent backward slide jumps (repeated lyrics issue)
+        if (slideChanged && newSlideIndex < session.currentSlideIndex) {
+          console.warn(
+            `[WS] ⚠️  BLOCKED BACKWARD SLIDE: ${newSlideIndex} < ${session.currentSlideIndex} (repeated lyrics detected)`
+          );
+          console.warn(
+            `[WS] Matched line: "${matchResult.matchedText.slice(0, 50)}..." - staying on current slide to prevent confusion`
+          );
+          if (session.matcherConfig.debug) {
+            console.log(
+              `[WS] This prevents jumping back to earlier stanzas when lyrics repeat (e.g., "He will make a way for me")`
+            );
+          }
+          return; // Don't broadcast, stay on current slide
+        }
+        
         if (slideChanged) {
           // Get slide data
           let slideText = matchResult.matchedText;

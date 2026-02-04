@@ -25,6 +25,7 @@ export interface MatchResult {
   matchedText: string;
   nextLineIndex?: number;
   isLineEnd?: boolean;
+  wasForwardProgress?: boolean; // Track if this advances forward (prevents backward jumps with repeated lyrics)
 }
 
 /**
@@ -162,6 +163,7 @@ export function findBestMatch(
   if (config.debug) {
     console.log(`[MATCHER] Starting match with cleaned buffer: "${buffer}"`);
     console.log(`[MATCHER] Current line index: ${songContext.currentLineIndex}, Total lines: ${songContext.lines.length}`);
+    console.log(`[MATCHER] Forward-only mode: ENABLED (prevents repeated lyrics backtracking)`);
   }
 
   // Get recent words from buffer
@@ -188,6 +190,10 @@ export function findBestMatch(
   // Compare against all upcoming lines (current and next few)
   // This helps handle edge cases where buffer might partially match next line
   const lookAheadWindow = 3; // Look at current + next 2 lines
+  
+  if (config.debug) {
+    console.log(`[MATCHER] Search window: lines ${songContext.currentLineIndex} to ${Math.min(songContext.currentLineIndex + lookAheadWindow, songContext.lines.length - 1)}`);
+  }
   let bestScore = 0;
   let bestLineIndex = songContext.currentLineIndex;
   let matchedLineText = '';
@@ -234,12 +240,28 @@ export function findBestMatch(
     }
   }
 
+  // FORWARD-ONLY CONSTRAINT: Never allow backward progression
+  // This prevents issues with repeated lyrics (e.g., same line at end of each stanza)
+  if (bestScore >= config.similarityThreshold && bestLineIndex < songContext.currentLineIndex) {
+    if (config.debug) {
+      console.log(
+        `[MATCHER] ⚠️  REJECTED BACKWARD MATCH: Line ${bestLineIndex} < current ${songContext.currentLineIndex} - "${matchedLineText.slice(0, 40)}..."`
+      );
+      console.log(
+        `[MATCHER] This prevents jumping back to repeated lyrics from earlier stanzas`
+      );
+    }
+    // Don't set matchFound - treat as no match (prevents backward jump)
+    return result;
+  }
+
   // Check if match meets threshold
   if (bestScore >= config.similarityThreshold) {
     result.matchFound = true;
     result.currentLineIndex = bestLineIndex;
     result.confidence = bestScore;
     result.matchedText = matchedLineText;
+    result.wasForwardProgress = bestLineIndex >= songContext.currentLineIndex;
 
     // Determine if we should auto-advance
     if (bestLineIndex === songContext.currentLineIndex) {
