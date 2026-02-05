@@ -616,3 +616,8 @@ frontend/tailwind.config.ts               (new animations)
 - Added ElevenLabs STT watchdog to auto-restart the stream if transcripts go stale while audio continues.
 - STT UI now distinguishes "Audio streaming (No transcripts)" from true idle state.
 - Type-check run clean after ElevenLabs stream guard fix.
+
+## February 5, 2026 - Projector Font Selection
+- Operator HUD now offers a projector font selector (curated Google Fonts).
+- Selection persists on events (`projector_font`) and broadcasts live to projector + operator slide view.
+- Added migration 007 and updated Supabase types, WS messages, and UI wiring.
