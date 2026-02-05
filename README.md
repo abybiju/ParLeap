@@ -228,7 +228,17 @@ ts-node backend/scripts/ingest-bible.ts \
 
 Prerequisites:
 - Run migration `008_add_bible_tables.sql`
+- Run migration `009_bible_versions_select.sql` (RLS policy for authenticated reads)
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set in `backend/.env`
+
+After ingestion:
+- Ensure a default version is set so the UI can auto-select it:
+  ```sql
+  update bible_versions
+  set is_default = (abbrev = 'KJV');
+  ```
+- Event settings live on `events.bible_mode` and `events.bible_version_id`
+- Operator HUD includes a Bible toggle + version selector; backend falls back to the default version if none is set
 
 ### Deployment
 - [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md) - Latest deployment status and session summary

@@ -621,3 +621,10 @@ frontend/tailwind.config.ts               (new animations)
 - Operator HUD now offers a projector font selector (curated Google Fonts).
 - Selection persists on events (`projector_font`) and broadcasts live to projector + operator slide view.
 - Added migration 007 and updated Supabase types, WS messages, and UI wiring.
+
+## February 5, 2026 - Bible Mode MVP
+- Added Bible mode toggle + version selector in Operator HUD with persisted event settings (`bible_mode`, `bible_version_id`).
+- Ingests KJV JSON into `bible_versions`, `bible_books`, `bible_verses` with BOM-safe parser.
+- Added RLS select policy for `bible_versions` and default-version fallback if none is selected.
+- Reference parsing MVP displays verses (e.g., “Luke 2:13”) on Operator + Projector.
+- Fixed session stability during silence and resume flow after Bible mode off.
