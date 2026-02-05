@@ -629,3 +629,4 @@ frontend/tailwind.config.ts               (new animations)
 - Reference parsing MVP displays verses (e.g., “Luke 2:13”) on Operator + Projector.
 - Fixed session stability during silence and resume flow after Bible mode off.
 - Added ESV API support (on-demand fetch, no local storage) with voice-command version switching.
+- Railway env configured with `ESV_API_KEY` + `ESV_API_URL` for live ESV fetches.
