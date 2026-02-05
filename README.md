@@ -260,6 +260,9 @@ Runtime behavior:
 - Bible mode supports voice commands: “Reading from the ESV”, “In the ESV”, “Back to KJV”, “King James Version”.
 - If ESV is selected, verses are fetched live from the ESV API. KJV continues to use local DB.
 
+Railway notes:
+- Add `ESV_API_KEY` and `ESV_API_URL` to the backend service environment variables.
+
 ### Deployment
 - [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md) - Latest deployment status and session summary
 - [RAILWAY_SETUP.md](./RAILWAY_SETUP.md) - **Railway backend deployment guide** (Quick reference)
