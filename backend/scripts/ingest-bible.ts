@@ -174,6 +174,10 @@ function flattenBibleData(sourceData: SourceBook[]): VerseInput[] {
   return flatVerses;
 }
 
+function stripBom(input: string) {
+  return input.replace(/\uFEFF/g, '');
+}
+
 function fetchJsonFromUrl(url: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     https
@@ -186,7 +190,8 @@ function fetchJsonFromUrl(url: string): Promise<unknown> {
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
           try {
-            const json = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+            const raw = stripBom(Buffer.concat(chunks).toString('utf-8'));
+            const json = JSON.parse(raw);
             resolve(json);
           } catch (error) {
             reject(error);
@@ -204,8 +209,9 @@ function parseArgs() {
     if (idx === -1) return fallback;
     return args[idx + 1];
   };
+  const fileFallback = path.join(__dirname, '../bible_input/en_kjv.json');
   return {
-    file: getArg('--file', path.join(__dirname, '../bible_input/en_kjv.json')),
+    file: getArg('--file', fileFallback) || fileFallback,
     url: getArg('--url'),
     version: getArg('--version', 'King James Version'),
     abbrev: getArg('--abbrev', 'KJV'),
@@ -227,7 +233,7 @@ async function main() {
       console.error('Expected JSON array of { book, chapter, verse, text }');
       process.exit(1);
     }
-    const raw = fs.readFileSync(file, 'utf-8');
+    const raw = stripBom(fs.readFileSync(file, 'utf-8'));
     sourceData = JSON.parse(raw);
   }
 
