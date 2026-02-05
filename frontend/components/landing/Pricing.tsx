@@ -59,10 +59,10 @@ export function Pricing() {
           transition={{ duration: 0.6 }}
           className="text-4xl lg:text-5xl font-bold text-white text-center mb-16"
         >
-          Simple, transparent pricing.
+          Plans for every team.
         </motion.h2>
 
-        <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {tiers.map((tier, index) => (
             <motion.div
               key={tier.name}
@@ -120,6 +120,11 @@ export function Pricing() {
                   {tier.buttonText}
                 </Button>
               </Link>
+              <p className="mt-3 text-xs text-gray-500 text-center">
+                <Link href="/terms" className="underline hover:text-gray-300 transition-colors">
+                  Terms apply
+                </Link>
+              </p>
             </motion.div>
           ))}
         </div>
