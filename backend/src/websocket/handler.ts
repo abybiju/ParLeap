@@ -25,6 +25,7 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
+import { supabase, isSupabaseConfigured } from '../config/supabase';
 import {
   detectBibleVersionCommand,
   fetchBibleVerse,
@@ -624,6 +625,16 @@ async function handleTranscriptionResult(
         const versionId = await getBibleVersionIdByAbbrev(versionCommand);
         if (versionId) {
           session.bibleVersionId = versionId;
+          if (isSupabaseConfigured && supabase) {
+            try {
+              await supabase
+                .from('events')
+                .update({ bible_version_id: versionId, bible_mode: true })
+                .eq('id', session.eventId);
+            } catch (error) {
+              console.warn('[WS] Failed to persist bible version change:', error);
+            }
+          }
           const settingsMessage: EventSettingsUpdatedMessage = {
             type: 'EVENT_SETTINGS_UPDATED',
             payload: {
