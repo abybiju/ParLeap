@@ -4,7 +4,7 @@ import Image from 'next/image'
 
 export function LogoOrb() {
   return (
-    <section className="relative py-32 px-4 overflow-hidden">
+    <section className="relative pt-20 pb-6 px-4 overflow-hidden">
       <div className="container mx-auto">
         <div className="relative flex flex-col items-center text-center">
           {/* Ambient glow */}
@@ -12,7 +12,7 @@ export function LogoOrb() {
           <div className="absolute top-8 h-[30rem] w-[30rem] rounded-full border border-white/5 bg-white/5 blur-2xl" />
 
           {/* Orb */}
-          <div className="relative h-72 w-72 sm:h-80 sm:w-80 md:h-[22rem] md:w-[22rem] animate-[float_12s_ease-in-out_infinite]">
+          <div className="relative -mt-4 h-80 w-80 sm:h-96 sm:w-96 md:h-[26rem] md:w-[26rem] animate-[float_12s_ease-in-out_infinite]">
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500/20 via-red-500/10 to-blue-600/20 blur-2xl" />
             <div className="absolute inset-2 rounded-full border border-white/10 bg-black/30 backdrop-blur-xl" />
             <div className="absolute inset-0 rounded-full overflow-hidden">
@@ -47,7 +47,7 @@ export function LogoOrb() {
             <span className="absolute right-[45%] top-[78%] h-1 w-1 rounded-full bg-white/60 animate-pulse [animation-delay:3300ms]" />
           </div>
 
-          <div className="mt-12 max-w-2xl space-y-3">
+          <div className="mt-6 max-w-2xl space-y-3">
             <h2 className="text-3xl md:text-4xl font-semibold text-white">
               The stage is listening.
             </h2>
