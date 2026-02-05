@@ -964,12 +964,19 @@ async function handleAudioData(
 
   if (sttProvider === 'elevenlabs') {
     // Watchdog: Restart ElevenLabs stream if audio is flowing but transcripts have stopped
-    const STT_STALE_MS = 10000;
-    const STT_RESTART_COOLDOWN_MS = 15000;
+    const STT_STALE_MS = 30000;
+    const STT_RESTART_COOLDOWN_MS = 30000;
     if (session.lastTranscriptAt && Date.now() - session.lastTranscriptAt > STT_STALE_MS) {
       const lastRestart = session.lastSttRestartAt ?? 0;
       if (Date.now() - lastRestart > STT_RESTART_COOLDOWN_MS) {
-        restartElevenLabsStream(session, ws, 'stale transcripts');
+        try {
+          restartElevenLabsStream(session, ws, 'stale transcripts');
+        } catch (error) {
+          console.error('[STT] ❌ Failed to restart ElevenLabs stream:', error);
+          sendError(ws, 'STT_ERROR', 'Failed to restart ElevenLabs stream', {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
 
