@@ -630,3 +630,4 @@ frontend/tailwind.config.ts               (new animations)
 - Fixed session stability during silence and resume flow after Bible mode off.
 - Added ESV API support (on-demand fetch, no local storage) with voice-command version switching.
 - Railway env configured with `ESV_API_KEY` + `ESV_API_URL` for live ESV fetches.
+- Voice-command version changes now persist to `events` so refreshes keep the selected version.
