@@ -8,6 +8,8 @@ interface LivePageClientProps {
   eventId: string;
   eventName: string;
   projectorFont?: string | null;
+  bibleMode?: boolean;
+  bibleVersionId?: string | null;
   initialSetlist: Array<{
     id: string;
     title: string;
@@ -28,6 +30,8 @@ export function LivePageClient({
   eventId,
   eventName,
   projectorFont = null,
+  bibleMode = false,
+  bibleVersionId = null,
   initialSetlist,
   hasSupabaseMismatch,
   frontendProjectRef,
@@ -142,6 +146,8 @@ export function LivePageClient({
       eventId={eventId}
       eventName={eventName}
       initialProjectorFont={projectorFont}
+      initialBibleMode={bibleMode}
+      initialBibleVersionId={bibleVersionId}
       initialSetlist={initialSetlist}
     />
   );

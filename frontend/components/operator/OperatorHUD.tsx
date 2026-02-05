@@ -30,6 +30,8 @@ interface OperatorHUDProps {
     sequenceOrder: number;
   }>;
   initialProjectorFont?: string | null;
+  initialBibleMode?: boolean;
+  initialBibleVersionId?: string | null;
 }
 
 /**
@@ -40,7 +42,21 @@ interface OperatorHUDProps {
  * - Center: Current Slide + Next Preview
  * - Right: Setlist
  */
-export function OperatorHUD({ eventId, eventName, initialSetlist = [], initialProjectorFont = null }: OperatorHUDProps) {
+type BibleVersionOption = {
+  id: string;
+  name: string;
+  abbrev: string;
+  is_default: boolean;
+};
+
+export function OperatorHUD({
+  eventId,
+  eventName,
+  initialSetlist = [],
+  initialProjectorFont = null,
+  initialBibleMode = false,
+  initialBibleVersionId = null,
+}: OperatorHUDProps) {
   const router = useRouter();
   const {
     state,
@@ -61,6 +77,9 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [], initialPr
   const [projectorFontId, setProjectorFontId] = useState<string>(
     getProjectorFontIdOrDefault(initialProjectorFont)
   );
+  const [bibleMode, setBibleMode] = useState<boolean>(initialBibleMode);
+  const [bibleVersionId, setBibleVersionId] = useState<string | null>(initialBibleVersionId);
+  const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
 
   // Gate audio capture based on session status
   const audioCapture = useAudioCapture({
@@ -78,6 +97,42 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [], initialPr
       console.warn('[OperatorHUD] ⚠️  Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment for PCM audio');
     }
   }, [sttProvider]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBibleVersions = async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await (supabase
+          .from('bible_versions') as ReturnType<typeof supabase.from>)
+          .select('id, name, abbrev, is_default')
+          .order('is_default', { ascending: false })
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.warn('[OperatorHUD] Failed to fetch bible versions:', error);
+          return;
+        }
+
+        if (!cancelled && data) {
+          const versions = data as BibleVersionOption[];
+          setBibleVersions(versions);
+          if (!bibleVersionId && versions.length > 0) {
+            const defaultVersion = versions.find((v) => v.is_default) ?? versions[0];
+            setBibleVersionId(defaultVersion?.id ?? null);
+          }
+        }
+      } catch (error) {
+        console.warn('[OperatorHUD] Failed to load bible versions:', error);
+      }
+    };
+
+    loadBibleVersions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Pre-initialize audio: Request microphone permission before session starts
   useEffect(() => {
@@ -139,10 +194,22 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [], initialPr
     if (!lastMessage) return;
     if (isSessionStartedMessage(lastMessage)) {
       setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+      setBibleMode(lastMessage.payload.bibleMode ?? false);
+      if (lastMessage.payload.bibleVersionId !== undefined) {
+        setBibleVersionId(lastMessage.payload.bibleVersionId);
+      }
       return;
     }
     if (isEventSettingsUpdatedMessage(lastMessage)) {
-      setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+      if (lastMessage.payload.projectorFont !== undefined) {
+        setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+      }
+      if (lastMessage.payload.bibleMode !== undefined) {
+        setBibleMode(lastMessage.payload.bibleMode);
+      }
+      if (lastMessage.payload.bibleVersionId !== undefined) {
+        setBibleVersionId(lastMessage.payload.bibleVersionId);
+      }
     }
   }, [lastMessage]);
 
@@ -279,19 +346,50 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [], initialPr
     router.push('/dashboard');
   };
 
-  const handleProjectorFontChange = async (fontId: string) => {
-    setProjectorFontId(fontId);
-    updateEventSettings(fontId);
-
+  const persistEventSettings = async (updates: Record<string, unknown>) => {
     try {
       const supabase = createClient();
       await (supabase
         .from('events') as ReturnType<typeof supabase.from>)
-        .update({ projector_font: fontId } as Record<string, unknown>)
+        .update(updates)
         .eq('id', eventId);
     } catch (error) {
-      console.warn('[OperatorHUD] Failed to persist projector font setting:', error);
+      console.warn('[OperatorHUD] Failed to persist event settings:', error);
     }
+  };
+
+  const handleProjectorFontChange = async (fontId: string) => {
+    setProjectorFontId(fontId);
+    updateEventSettings({ projectorFont: fontId });
+
+    await persistEventSettings({ projector_font: fontId });
+  };
+
+  const handleBibleModeToggle = async () => {
+    const nextMode = !bibleMode;
+    let nextVersionId = bibleVersionId;
+
+    if (nextMode && !nextVersionId && bibleVersions.length > 0) {
+      const defaultVersion = bibleVersions.find((v) => v.is_default) ?? bibleVersions[0];
+      nextVersionId = defaultVersion?.id ?? null;
+      setBibleVersionId(nextVersionId);
+    }
+
+    setBibleMode(nextMode);
+    updateEventSettings({ bibleMode: nextMode, bibleVersionId: nextVersionId ?? undefined });
+    await persistEventSettings({ bible_mode: nextMode, bible_version_id: nextVersionId });
+
+    if (nextMode) {
+      toast.success('Bible mode enabled');
+    } else {
+      toast.info('Bible mode disabled');
+    }
+  };
+
+  const handleBibleVersionChange = async (versionId: string) => {
+    setBibleVersionId(versionId);
+    updateEventSettings({ bibleVersionId: versionId });
+    await persistEventSettings({ bible_version_id: versionId });
   };
 
   const projectorFontClass = getProjectorFontClass(projectorFontId);
@@ -342,6 +440,40 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [], initialPr
               {projectorFonts.map((font) => (
                 <option key={font.id} value={font.id} className="text-slate-900">
                   {font.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
+              Bible
+            </span>
+            <button
+              onClick={handleBibleModeToggle}
+              className={cn(
+                'px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors',
+                bibleMode
+                  ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                  : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+              )}
+            >
+              {bibleMode ? 'On' : 'Off'}
+            </button>
+            <select
+              value={bibleVersionId ?? ''}
+              onChange={(e) => handleBibleVersionChange(e.target.value)}
+              disabled={!bibleMode || bibleVersions.length === 0}
+              className={cn(
+                'bg-transparent text-xs focus:outline-none',
+                bibleMode ? 'text-slate-200' : 'text-slate-500'
+              )}
+            >
+              <option value="" disabled className="text-slate-900">
+                Version
+              </option>
+              {bibleVersions.map((version) => (
+                <option key={version.id} value={version.id} className="text-slate-900">
+                  {version.abbrev}
                 </option>
               ))}
             </select>
