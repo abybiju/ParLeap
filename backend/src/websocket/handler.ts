@@ -25,6 +25,7 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
+import { fetchBibleVerse, findBibleReference, wrapBibleText } from '../services/bibleService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
 import {
   findBestMatchAcrossAllSongs,
@@ -132,6 +133,8 @@ interface SessionState {
   eventId: string;
   eventName: string;
   projectorFont?: string | null;
+  bibleMode?: boolean;
+  bibleVersionId?: string | null;
   songs: SongData[];
   currentSongIndex: number;
   currentSlideIndex: number; // Slide index (for display)
@@ -148,6 +151,8 @@ interface SessionState {
   lastTranscriptAt?: number;
   lastAudioChunkAt?: number;
   lastSttRestartAt?: number;
+  lastBibleRefKey?: string;
+  lastBibleRefAt?: number;
   // Debouncing for song switches (prevents false positives)
   suggestedSongSwitch?: {
     songId: string;
@@ -214,7 +219,9 @@ function initElevenLabsStream(session: SessionState, ws: WebSocket): void {
   stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
     const processingStart = Date.now();
     const receivedAtNow = Date.now();
-    handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart);
+    void handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart).catch((error) => {
+      console.error('[WS] Error handling transcription result:', error);
+    });
   });
   stream.on('error', (error: Error) => {
     console.error('[STT] ❌ ElevenLabs stream error:', error);
@@ -341,7 +348,9 @@ async function handleStartSession(
     sessionId,
     eventId,
     eventName: eventData.name,
-    projectorFont: eventData.projectorFont ?? null,
+    projectorFont: existingSession?.projectorFont ?? eventData.projectorFont ?? null,
+    bibleMode: existingSession?.bibleMode ?? eventData.bibleMode ?? false,
+    bibleVersionId: existingSession?.bibleVersionId ?? eventData.bibleVersionId ?? null,
     songs: eventData.songs,
     currentSongIndex,
     currentSlideIndex,
@@ -393,6 +402,8 @@ async function handleStartSession(
       eventId,
       eventName: session.eventName,
       projectorFont: session.projectorFont ?? null,
+      bibleMode: session.bibleMode ?? false,
+      bibleVersionId: session.bibleVersionId ?? null,
       totalSongs: session.songs.length,
       currentSongIndex,
       currentSlideIndex,
@@ -456,7 +467,7 @@ async function handleStartSession(
  */
 function handleUpdateEventSettings(
   ws: WebSocket,
-  projectorFont: string,
+  settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null },
   receivedAt: number
 ): void {
   const processingStart = Date.now();
@@ -466,24 +477,36 @@ function handleUpdateEventSettings(
     return;
   }
 
-  session.projectorFont = projectorFont;
+  if (settings.projectorFont) {
+    session.projectorFont = settings.projectorFont;
+  }
+  if (settings.bibleMode !== undefined) {
+    session.bibleMode = settings.bibleMode;
+  }
+  if (settings.bibleVersionId !== undefined) {
+    session.bibleVersionId = settings.bibleVersionId;
+  }
 
   const settingsMessage: EventSettingsUpdatedMessage = {
     type: 'EVENT_SETTINGS_UPDATED',
-    payload: { projectorFont },
+    payload: {
+      projectorFont: session.projectorFont ?? null,
+      bibleMode: session.bibleMode ?? false,
+      bibleVersionId: session.bibleVersionId ?? null,
+    },
     timing: createTiming(receivedAt, processingStart),
   };
 
   broadcastToEvent(session.eventId, settingsMessage);
 }
 
-function handleTranscriptionResult(
+async function handleTranscriptionResult(
   ws: WebSocket,
   session: SessionState,
   transcriptionResult: { text: string; isFinal: boolean; confidence: number },
   receivedAt: number,
   processingStart: number
-): void {
+): Promise<void> {
   // Send transcript to the session that received it (usually the one with STT stream)
   // Matching will be processed for this session
   // Default to allowing partial matching to provide faster feedback
@@ -550,6 +573,53 @@ function handleTranscriptionResult(
     if (session.matcherConfig.debug) {
       console.log(`[WS] Rolling buffer updated: "${cleanedBuffer.slice(-50)}..."`);
       console.log(`[WS] Cleaned buffer for matching: "${cleanedBuffer}"`);
+    }
+
+    if (session.bibleMode) {
+      const reference =
+        findBibleReference(transcriptionResult.text) ?? findBibleReference(cleanedBuffer);
+      if (!reference) {
+        return;
+      }
+
+      if (!session.bibleVersionId) {
+        console.warn('[WS] Bible mode active but no bibleVersionId set.');
+        return;
+      }
+
+      const verse = await fetchBibleVerse(reference, session.bibleVersionId);
+      if (!verse) {
+        return;
+      }
+
+      const refKey = `${verse.book}:${verse.chapter}:${verse.verse}:${verse.versionAbbrev}`;
+      const now = Date.now();
+      if (session.lastBibleRefKey === refKey && session.lastBibleRefAt && now - session.lastBibleRefAt < 2500) {
+        return;
+      }
+
+      session.lastBibleRefKey = refKey;
+      session.lastBibleRefAt = now;
+
+      const verseLines = wrapBibleText(verse.text);
+      const verseTitle = `${verse.book} ${verse.chapter}:${verse.verse} • ${verse.versionAbbrev}`;
+
+      const displayMsg: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: verseLines[0] ?? verse.text,
+          slideText: verseLines.join('\n'),
+          slideLines: verseLines,
+          slideIndex: 0,
+          songId: `bible:${verse.book}:${verse.chapter}:${verse.verse}`,
+          songTitle: verseTitle,
+          isAutoAdvance: true,
+        },
+        timing: createTiming(receivedAt, processingStart),
+      };
+
+      broadcastToEvent(session.eventId, displayMsg);
+      return;
     }
 
     if (!session.songContext) {
@@ -995,7 +1065,7 @@ async function handleAudioData(
   try {
     const transcriptionResult = await transcribeAudioChunk(data);
     if (transcriptionResult) {
-      handleTranscriptionResult(ws, session, transcriptionResult, receivedAt, processingStart);
+      await handleTranscriptionResult(ws, session, transcriptionResult, receivedAt, processingStart);
     } else {
       console.log('[WS] No transcription result (silence or error)');
     }
@@ -1272,7 +1342,7 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
     if (isStartSessionMessage(message)) {
       await handleStartSession(ws, message.payload.eventId, receivedAt);
     } else if (isUpdateEventSettingsMessage(message)) {
-      handleUpdateEventSettings(ws, message.payload.projectorFont, receivedAt);
+      handleUpdateEventSettings(ws, message.payload, receivedAt);
     } else if (isAudioDataMessage(message)) {
       await handleAudioData(ws, message.payload.data, message.payload.format, receivedAt);
     } else if (isManualOverrideMessage(message)) {

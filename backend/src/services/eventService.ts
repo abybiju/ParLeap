@@ -29,6 +29,8 @@ export interface EventData {
   name: string;
   songs: SongData[];
   projectorFont?: string | null;
+  bibleMode?: boolean;
+  bibleVersionId?: string | null;
 }
 
 // Types for Supabase query results (with/without slide_config)
@@ -84,6 +86,8 @@ function getMockEventData(eventId: string): EventData {
     id: eventId,
     name: 'Demo Event',
     projectorFont: 'inter',
+    bibleMode: false,
+    bibleVersionId: null,
     songs: [
       {
         id: 'song_1',
@@ -127,7 +131,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     // 1. Fetch event details
     const { data: eventData, error: eventError } = await supabase
       .from('events')
-      .select('id, name, projector_font')
+      .select('id, name, projector_font, bible_mode, bible_version_id')
       .eq('id', eventId)
       .single();
 
@@ -188,6 +192,8 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         id: eventData.id,
         name: eventData.name,
         projectorFont: eventData.projector_font ?? null,
+        bibleMode: eventData.bible_mode ?? false,
+        bibleVersionId: eventData.bible_version_id ?? null,
         songs: [],
       };
     }
@@ -231,6 +237,8 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       id: eventData.id,
       name: eventData.name,
       projectorFont: eventData.projector_font ?? null,
+      bibleMode: eventData.bible_mode ?? false,
+      bibleVersionId: eventData.bible_version_id ?? null,
       songs,
     };
   } catch (error) {

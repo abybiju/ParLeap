@@ -20,7 +20,9 @@ export const StartSessionSchema = z.object({
 export const UpdateEventSettingsSchema = z.object({
   type: z.literal('UPDATE_EVENT_SETTINGS'),
   payload: z.object({
-    projectorFont: z.string().min(1),
+    projectorFont: z.string().min(1).optional(),
+    bibleMode: z.boolean().optional(),
+    bibleVersionId: z.string().uuid().nullable().optional(),
   }),
 });
 

@@ -18,7 +18,9 @@ export interface StartSessionMessage {
 export interface UpdateEventSettingsMessage {
   type: 'UPDATE_EVENT_SETTINGS';
   payload: {
-    projectorFont: string;
+    projectorFont?: string;
+    bibleMode?: boolean;
+    bibleVersionId?: string | null;
   };
 }
 
@@ -79,6 +81,8 @@ export interface SessionStartedMessage {
     eventId: string;
     eventName: string;
     projectorFont?: string | null;
+    bibleMode?: boolean;
+    bibleVersionId?: string | null;
     totalSongs: number;
     currentSongIndex: number;
     currentSlideIndex: number; // Now refers to slide index (not line index)
@@ -100,7 +104,9 @@ export interface SessionStartedMessage {
 export interface EventSettingsUpdatedMessage {
   type: 'EVENT_SETTINGS_UPDATED';
   payload: {
-    projectorFont: string;
+    projectorFont?: string | null;
+    bibleMode?: boolean;
+    bibleVersionId?: string | null;
   };
   timing?: TimingMetadata;
 }

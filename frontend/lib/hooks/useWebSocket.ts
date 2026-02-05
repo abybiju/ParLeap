@@ -15,7 +15,7 @@ export interface UseWebSocketReturn {
   isConnected: boolean;
   sendMessage: (message: ClientMessage) => void;
   startSession: (eventId: string) => void;
-  updateEventSettings: (projectorFont: string) => void;
+  updateEventSettings: (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null }) => void;
   stopSession: () => void;
   nextSlide: () => void;
   prevSlide: () => void;
@@ -123,8 +123,8 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
   );
 
   const updateEventSettings = useCallback(
-    (projectorFont: string) => {
-      client.updateEventSettings(projectorFont);
+    (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null }) => {
+      client.updateEventSettings(settings);
     },
     [client]
   );
