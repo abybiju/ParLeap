@@ -62,7 +62,7 @@ export function Pricing() {
           Plans for every team.
         </motion.h2>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-8 md:gap-10 max-w-6xl mx-auto">
           {tiers.map((tier, index) => (
             <motion.div
               key={tier.name}
