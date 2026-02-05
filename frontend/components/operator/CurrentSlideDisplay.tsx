@@ -10,7 +10,11 @@ import { cn } from '@/lib/utils';
  * 
  * Displays the current slide in large, readable text for the operator
  */
-export function CurrentSlideDisplay() {
+interface CurrentSlideDisplayProps {
+  fontClassName?: string;
+}
+
+export function CurrentSlideDisplay({ fontClassName }: CurrentSlideDisplayProps) {
   const { lastMessage } = useWebSocket(false);
   const [currentSlide, setCurrentSlide] = useState<DisplayUpdateMessage | null>(null);
 
@@ -60,7 +64,7 @@ export function CurrentSlideDisplay() {
       {/* Current Slide Text - Multi-line (Optimized for 4-line display) */}
       <div className="flex-1 flex items-center justify-center py-6 px-6">
         <div className="w-full">
-          <div className="flex flex-col items-center justify-center space-y-2">
+          <div className={cn('flex flex-col items-center justify-center space-y-2', fontClassName)}>
             {displayLines.map((line, index) => (
               <p
                 key={index}

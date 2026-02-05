@@ -9,6 +9,7 @@ import {
   type ClientMessage,
   type ServerMessage,
   type SessionStartedMessage,
+  type EventSettingsUpdatedMessage,
   type TranscriptUpdateMessage,
   type DisplayUpdateMessage,
   type SongChangedMessage,
@@ -16,6 +17,7 @@ import {
   type PongMessage,
   type TimingMetadata,
   isStartSessionMessage,
+  isUpdateEventSettingsMessage,
   isAudioDataMessage,
   isManualOverrideMessage,
   isStopSessionMessage,
@@ -129,6 +131,7 @@ interface SessionState {
   sessionId: string;
   eventId: string;
   eventName: string;
+  projectorFont?: string | null;
   songs: SongData[];
   currentSongIndex: number;
   currentSlideIndex: number; // Slide index (for display)
@@ -338,6 +341,7 @@ async function handleStartSession(
     sessionId,
     eventId,
     eventName: eventData.name,
+    projectorFont: eventData.projectorFont ?? null,
     songs: eventData.songs,
     currentSongIndex,
     currentSlideIndex,
@@ -388,6 +392,7 @@ async function handleStartSession(
       sessionId,
       eventId,
       eventName: session.eventName,
+      projectorFont: session.projectorFont ?? null,
       totalSongs: session.songs.length,
       currentSongIndex,
       currentSlideIndex,
@@ -443,6 +448,33 @@ async function handleStartSession(
   }
 
   console.log(`[WS] Session started: ${sessionId} with ${session.songs.length} songs (synced to song ${currentSongIndex}, slide ${currentSlideIndex})`);
+}
+
+/**
+ * Handle UPDATE_EVENT_SETTINGS message
+ * Broadcasts updated settings to all clients
+ */
+function handleUpdateEventSettings(
+  ws: WebSocket,
+  projectorFont: string,
+  receivedAt: number
+): void {
+  const processingStart = Date.now();
+  const session = sessions.get(ws);
+  if (!session || !session.isActive) {
+    sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
+    return;
+  }
+
+  session.projectorFont = projectorFont;
+
+  const settingsMessage: EventSettingsUpdatedMessage = {
+    type: 'EVENT_SETTINGS_UPDATED',
+    payload: { projectorFont },
+    timing: createTiming(receivedAt, processingStart),
+  };
+
+  broadcastToEvent(session.eventId, settingsMessage);
 }
 
 function handleTranscriptionResult(
@@ -1239,6 +1271,8 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
   try {
     if (isStartSessionMessage(message)) {
       await handleStartSession(ws, message.payload.eventId, receivedAt);
+    } else if (isUpdateEventSettingsMessage(message)) {
+      handleUpdateEventSettings(ws, message.payload.projectorFont, receivedAt);
     } else if (isAudioDataMessage(message)) {
       await handleAudioData(ws, message.payload.data, message.payload.format, receivedAt);
     } else if (isManualOverrideMessage(message)) {

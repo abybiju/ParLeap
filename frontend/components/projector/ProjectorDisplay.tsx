@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
-import { isDisplayUpdateMessage, isSessionStartedMessage, type DisplayUpdateMessage } from '@/lib/websocket/types';
+import { isDisplayUpdateMessage, isSessionStartedMessage, isEventSettingsUpdatedMessage, type DisplayUpdateMessage } from '@/lib/websocket/types';
+import { getProjectorFontClass, getProjectorFontIdOrDefault } from '@/lib/projectorFonts';
 import { cn } from '@/lib/utils';
 
 interface ProjectorDisplayProps {
@@ -22,6 +23,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [projectorFontId, setProjectorFontId] = useState<string>('inter');
 
   // Auto-connect on mount (but don't auto-start session)
   useEffect(() => {
@@ -66,6 +68,12 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       // Session started - wait for initial display update
       // The backend will send an initial DISPLAY_UPDATE after SESSION_STARTED
       console.log('[ProjectorDisplay] Session started, waiting for initial display update');
+      setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+      return;
+    }
+
+    if (isEventSettingsUpdatedMessage(lastMessage)) {
+      setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
       return;
     }
 
@@ -193,6 +201,8 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     });
   }
 
+  const projectorFontClass = getProjectorFontClass(projectorFontId);
+
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden p-8">
       {/* Song Title (Top) - with fade animation */}
@@ -217,7 +227,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
               : 'opacity-100 scale-100 translate-y-0 blur-0'
           )}
         >
-          <div className="flex flex-col items-center justify-center space-y-4 md:space-y-6">
+          <div className={cn('flex flex-col items-center justify-center space-y-4 md:space-y-6', projectorFontClass)}>
             {displayLines.map((line, index) => (
               <p
                 key={index}

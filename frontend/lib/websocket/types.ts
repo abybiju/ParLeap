@@ -15,6 +15,13 @@ export interface StartSessionMessage {
   };
 }
 
+export interface UpdateEventSettingsMessage {
+  type: 'UPDATE_EVENT_SETTINGS';
+  payload: {
+    projectorFont: string;
+  };
+}
+
 export interface AudioDataMessage {
   type: 'AUDIO_DATA';
   payload: {
@@ -46,6 +53,7 @@ export interface PingMessage {
 
 export type ClientMessage =
   | StartSessionMessage
+  | UpdateEventSettingsMessage
   | AudioDataMessage
   | ManualOverrideMessage
   | StopSessionMessage
@@ -70,6 +78,7 @@ export interface SessionStartedMessage {
     sessionId: string;
     eventId: string;
     eventName: string;
+    projectorFont?: string | null;
     totalSongs: number;
     currentSongIndex: number;
     currentSlideIndex: number; // Now refers to slide index (not line index)
@@ -84,6 +93,14 @@ export interface SessionStartedMessage {
       }>; // Compiled multi-line slides
       lineToSlideIndex?: number[]; // Mapping: lineIndex -> slideIndex
     }>;
+  };
+  timing?: TimingMetadata;
+}
+
+export interface EventSettingsUpdatedMessage {
+  type: 'EVENT_SETTINGS_UPDATED';
+  payload: {
+    projectorFont: string;
   };
   timing?: TimingMetadata;
 }
@@ -170,6 +187,7 @@ export interface PongMessage {
 
 export type ServerMessage =
   | SessionStartedMessage
+  | EventSettingsUpdatedMessage
   | TranscriptUpdateMessage
   | DisplayUpdateMessage
   | SongChangedMessage
@@ -193,6 +211,10 @@ export function isServerMessage(msg: unknown): msg is ServerMessage {
 
 export function isSessionStartedMessage(msg: ServerMessage): msg is SessionStartedMessage {
   return msg.type === 'SESSION_STARTED';
+}
+
+export function isEventSettingsUpdatedMessage(msg: ServerMessage): msg is EventSettingsUpdatedMessage {
+  return msg.type === 'EVENT_SETTINGS_UPDATED';
 }
 
 export function isTranscriptUpdateMessage(msg: ServerMessage): msg is TranscriptUpdateMessage {
@@ -222,4 +244,3 @@ export function isErrorMessage(msg: ServerMessage): msg is ErrorMessage {
 export function isPongMessage(msg: ServerMessage): msg is PongMessage {
   return msg.type === 'PONG';
 }
-

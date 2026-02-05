@@ -17,6 +17,13 @@ export const StartSessionSchema = z.object({
   }),
 });
 
+export const UpdateEventSettingsSchema = z.object({
+  type: z.literal('UPDATE_EVENT_SETTINGS'),
+  payload: z.object({
+    projectorFont: z.string().min(1),
+  }),
+});
+
 export const AudioDataSchema = z.object({
   type: z.literal('AUDIO_DATA'),
   payload: z.object({
@@ -53,6 +60,7 @@ export const PingSchema = z.object({
  */
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   StartSessionSchema,
+  UpdateEventSettingsSchema,
   AudioDataSchema,
   ManualOverrideSchema,
   StopSessionSchema,
@@ -64,6 +72,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
 // ============================================
 
 export type ValidatedStartSession = z.infer<typeof StartSessionSchema>;
+export type ValidatedUpdateEventSettings = z.infer<typeof UpdateEventSettingsSchema>;
 export type ValidatedAudioData = z.infer<typeof AudioDataSchema>;
 export type ValidatedManualOverride = z.infer<typeof ManualOverrideSchema>;
 export type ValidatedStopSession = z.infer<typeof StopSessionSchema>;
@@ -95,4 +104,3 @@ export function validateClientMessage(raw: unknown): ValidationResult<ValidatedC
     error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
   };
 }
-
