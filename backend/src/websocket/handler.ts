@@ -25,7 +25,14 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
-import { fetchBibleVerse, findBibleReference, getDefaultBibleVersionId, wrapBibleText } from '../services/bibleService';
+import {
+  detectBibleVersionCommand,
+  fetchBibleVerse,
+  findBibleReference,
+  getBibleVersionIdByAbbrev,
+  getDefaultBibleVersionId,
+  wrapBibleText,
+} from '../services/bibleService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
 import {
   findBestMatchAcrossAllSongs,
@@ -612,6 +619,25 @@ async function handleTranscriptionResult(
     }
 
     if (session.bibleMode) {
+      const versionCommand = detectBibleVersionCommand(transcriptionResult.text);
+      if (versionCommand) {
+        const versionId = await getBibleVersionIdByAbbrev(versionCommand);
+        if (versionId) {
+          session.bibleVersionId = versionId;
+          const settingsMessage: EventSettingsUpdatedMessage = {
+            type: 'EVENT_SETTINGS_UPDATED',
+            payload: {
+              projectorFont: session.projectorFont ?? null,
+              bibleMode: session.bibleMode ?? true,
+              bibleVersionId: session.bibleVersionId ?? null,
+            },
+            timing: createTiming(receivedAt, processingStart),
+          };
+          broadcastToEvent(session.eventId, settingsMessage);
+        }
+        return;
+      }
+
       const reference =
         findBibleReference(transcriptionResult.text) ?? findBibleReference(cleanedBuffer);
       if (!reference) {
