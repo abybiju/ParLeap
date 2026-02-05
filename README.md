@@ -216,6 +216,20 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 - [SETUP_CHECKLIST.md](./SETUP_CHECKLIST.md) - **Start here!** Step-by-step production setup checklist
 - [TECH_STACK.md](./TECH_STACK.md) - **Technology stack documentation** - Why we chose each technology
 
+### Bible Mode (KJV Ingestion)
+To ingest the KJV Bible JSON dataset into Supabase:
+
+```bash
+ts-node backend/scripts/ingest-bible.ts \
+  --url "https://raw.githubusercontent.com/thiagobodruk/bible/master/json/en_kjv.json" \
+  --version "King James Version" \
+  --abbrev KJV
+```
+
+Prerequisites:
+- Run migration `008_add_bible_tables.sql`
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set in `backend/.env`
+
 ### Deployment
 - [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md) - Latest deployment status and session summary
 - [RAILWAY_SETUP.md](./RAILWAY_SETUP.md) - **Railway backend deployment guide** (Quick reference)
@@ -332,4 +346,3 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 - Competitive advantage in church software market
 
 **See:** `CCLI_SONGSELECT_INTEGRATION.md` for detailed specification
-
