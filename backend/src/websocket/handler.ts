@@ -153,6 +153,7 @@ interface SessionState {
   lastSttRestartAt?: number;
   lastBibleRefKey?: string;
   lastBibleRefAt?: number;
+  allowBackwardUntil?: number;
   // Debouncing for song switches (prevents false positives)
   suggestedSongSwitch?: {
     songId: string;
@@ -480,6 +481,7 @@ function handleUpdateEventSettings(
   if (settings.projectorFont) {
     session.projectorFont = settings.projectorFont;
   }
+  const previousBibleMode = session.bibleMode ?? false;
   if (settings.bibleMode !== undefined) {
     session.bibleMode = settings.bibleMode;
   }
@@ -498,6 +500,40 @@ function handleUpdateEventSettings(
   };
 
   broadcastToEvent(session.eventId, settingsMessage);
+
+  if (previousBibleMode && !session.bibleMode) {
+    session.allowBackwardUntil = Date.now() + 20000;
+    const currentSong = session.songs[session.currentSongIndex];
+    if (currentSong) {
+      let slideLines: string[] = [];
+      let slideText = '';
+      if (currentSong.slides && session.currentSlideIndex < currentSong.slides.length) {
+        const slide = currentSong.slides[session.currentSlideIndex];
+        slideLines = slide.lines;
+        slideText = slide.slideText;
+      } else if (currentSong.lines[session.currentSlideIndex]) {
+        slideLines = [currentSong.lines[session.currentSlideIndex]];
+        slideText = slideLines[0];
+      }
+
+      if (slideLines.length > 0) {
+        const displayMsg: DisplayUpdateMessage = {
+          type: 'DISPLAY_UPDATE',
+          payload: {
+            lineText: slideLines[0],
+            slideText,
+            slideLines,
+            slideIndex: session.currentSlideIndex,
+            songId: currentSong.id,
+            songTitle: currentSong.title,
+            isAutoAdvance: false,
+          },
+          timing: createTiming(receivedAt, processingStart),
+        };
+        broadcastToEvent(session.eventId, displayMsg);
+      }
+    }
+  }
 }
 
 async function handleTranscriptionResult(
@@ -639,17 +675,29 @@ async function handleTranscriptionResult(
       console.log(`[WS] 🔍 Auto-following: ${session.isAutoFollowing}`);
 
       if (session.songContext) {
+        const allowBackward = session.allowBackwardUntil !== undefined && Date.now() < session.allowBackwardUntil;
+        const matcherConfig = allowBackward
+          ? {
+              ...session.matcherConfig,
+              allowBackward: true,
+              lookAheadWindow: session.songContext.lines.length,
+            }
+          : session.matcherConfig;
+
         // PHASE 1: Multi-song matching with debouncing
         const multiSongResult: MultiSongMatchResult = findBestMatchAcrossAllSongs(
           cleanedBuffer,
           session.songContext,
           session.songs,
           session.currentSongIndex,
-          session.matcherConfig
+          matcherConfig
         );
 
         const matchResult = multiSongResult.currentSongMatch;
         session.lastMatchConfidence = matchResult.confidence;
+        if (session.allowBackwardUntil && matchResult.matchFound) {
+          session.allowBackwardUntil = undefined;
+        }
 
         // Always log match result for debugging
         console.log(`[WS] 📊 Current song match: found=${matchResult.matchFound}, confidence=${(matchResult.confidence * 100).toFixed(1)}%`);

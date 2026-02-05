@@ -65,6 +65,8 @@ export interface MatcherConfig {
   minBufferLength: number; // Minimum words in buffer before matching
   bufferWindow: number; // How many recent words to consider
   debug?: boolean;
+  lookAheadWindow?: number; // Override lookahead window for matching
+  allowBackward?: boolean; // Allow backward matches (e.g., after bible mode)
 }
 
 const DEFAULT_CONFIG: MatcherConfig = {
@@ -72,6 +74,8 @@ const DEFAULT_CONFIG: MatcherConfig = {
   minBufferLength: 3, // At least 3 words before trying to match
   bufferWindow: 100, // Compare against last 100 words
   debug: false,
+  lookAheadWindow: 3,
+  allowBackward: false,
 };
 
 // End-of-line detection configuration
@@ -245,7 +249,7 @@ export function findBestMatch(
 
   // Compare against all upcoming lines (current and next few)
   // This helps handle edge cases where buffer might partially match next line
-  const lookAheadWindow = 3; // Look at current + next 2 lines
+  const lookAheadWindow = config.lookAheadWindow ?? 3; // Look at current + next N lines
   
   if (config.debug) {
     console.log(`[MATCHER] Search window: lines ${songContext.currentLineIndex} to ${Math.min(songContext.currentLineIndex + lookAheadWindow, songContext.lines.length - 1)}`);
@@ -298,7 +302,7 @@ export function findBestMatch(
 
   // FORWARD-ONLY CONSTRAINT: Never allow backward progression
   // This prevents issues with repeated lyrics (e.g., same line at end of each stanza)
-  if (bestScore >= config.similarityThreshold && bestLineIndex < songContext.currentLineIndex) {
+  if (!config.allowBackward && bestScore >= config.similarityThreshold && bestLineIndex < songContext.currentLineIndex) {
     if (config.debug) {
       console.log(
         `[MATCHER] ⚠️  REJECTED BACKWARD MATCH: Line ${bestLineIndex} < current ${songContext.currentLineIndex} - "${matchedLineText.slice(0, 40)}..."`
@@ -506,6 +510,8 @@ export function validateConfig(config: Partial<MatcherConfig>): MatcherConfig {
     minBufferLength: Math.max(1, config.minBufferLength ?? DEFAULT_CONFIG.minBufferLength),
     bufferWindow: Math.max(1, config.bufferWindow ?? DEFAULT_CONFIG.bufferWindow),
     debug: config.debug ?? DEFAULT_CONFIG.debug,
+    lookAheadWindow: Math.max(1, config.lookAheadWindow ?? DEFAULT_CONFIG.lookAheadWindow ?? 3),
+    allowBackward: config.allowBackward ?? DEFAULT_CONFIG.allowBackward,
   };
 }
 
