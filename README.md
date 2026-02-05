@@ -240,6 +240,26 @@ After ingestion:
 - Event settings live on `events.bible_mode` and `events.bible_version_id`
 - Operator HUD includes a Bible toggle + version selector; backend falls back to the default version if none is set
 
+### ESV API (On-Demand)
+To add the ESV metadata row:
+
+```sql
+-- supabase/migrations/010_add_esv_version.sql
+insert into public.bible_versions (name, abbrev, language, is_default)
+select 'English Standard Version', 'ESV', 'en', false
+where not exists (
+  select 1 from public.bible_versions where abbrev = 'ESV'
+);
+```
+
+Backend environment (no ESV text is stored locally):
+- `ESV_API_KEY` = your Crossway API token
+- `ESV_API_URL` = base ESV passage endpoint (e.g., `https://api.esv.org/v3/passage/text/`)
+
+Runtime behavior:
+- Bible mode supports voice commands: “Reading from the ESV”, “In the ESV”, “Back to KJV”, “King James Version”.
+- If ESV is selected, verses are fetched live from the ESV API. KJV continues to use local DB.
+
 ### Deployment
 - [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md) - Latest deployment status and session summary
 - [RAILWAY_SETUP.md](./RAILWAY_SETUP.md) - **Railway backend deployment guide** (Quick reference)

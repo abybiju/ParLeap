@@ -628,3 +628,4 @@ frontend/tailwind.config.ts               (new animations)
 - Added RLS select policy for `bible_versions` and default-version fallback if none is selected.
 - Reference parsing MVP displays verses (e.g., “Luke 2:13”) on Operator + Projector.
 - Fixed session stability during silence and resume flow after Bible mode off.
+- Added ESV API support (on-demand fetch, no local storage) with voice-command version switching.

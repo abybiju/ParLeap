@@ -26,6 +26,8 @@ type VersionCache = {
 let bookCache: BookCache | null = null;
 let versionCache: VersionCache | null = null;
 let defaultVersionId: string | null = null;
+const esvApiKey = process.env.ESV_API_KEY || '';
+const esvApiUrl = process.env.ESV_API_URL || '';
 
 const aliasToBookName = new Map<string, string>();
 const aliasList: string[] = [];
@@ -106,6 +108,19 @@ export function findBibleReference(input: string): BibleReference | null {
   return null;
 }
 
+export function detectBibleVersionCommand(input: string): 'ESV' | 'KJV' | null {
+  const normalized = normalizeReferenceText(input);
+  if (!normalized) return null;
+
+  if (/(?:\besv\b|english standard version|reading from the esv|in the esv)/i.test(normalized)) {
+    return 'ESV';
+  }
+  if (/(?:\bkjv\b|king james version|back to kjv|in the king james)/i.test(normalized)) {
+    return 'KJV';
+  }
+  return null;
+}
+
 async function ensureBookCache(): Promise<BookCache | null> {
   if (bookCache) return bookCache;
   if (!isSupabaseConfigured || !supabase) return null;
@@ -166,6 +181,21 @@ export async function fetchBibleVerse(
     return null;
   }
 
+  const versions = await ensureVersionCache();
+  const versionAbbrev = versions?.byId.get(versionId)?.abbrev?.toUpperCase() ?? 'BIBLE';
+
+  if (versionAbbrev === 'ESV') {
+    const esvText = await fetchEsvPassage(reference);
+    if (!esvText) return null;
+    return {
+      book: bookEntry.name,
+      chapter: reference.chapter,
+      verse: reference.verse,
+      text: esvText,
+      versionAbbrev,
+    };
+  }
+
   const { data, error } = await supabase
     .from('bible_verses')
     .select('text')
@@ -181,7 +211,6 @@ export async function fetchBibleVerse(
     return null;
   }
 
-  const versions = await ensureVersionCache();
   const abbrev = versions?.byId.get(versionId)?.abbrev ?? 'Bible';
 
   return {
@@ -212,6 +241,72 @@ export async function getDefaultBibleVersionId(): Promise<string | null> {
 
   defaultVersionId = data.id as string;
   return defaultVersionId;
+}
+
+export async function getBibleVersionIdByAbbrev(abbrev: string): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const versions = await ensureVersionCache();
+  if (!versions) return null;
+  const match = Array.from(versions.byId.values()).find(
+    (entry) => entry.abbrev.toLowerCase() === abbrev.toLowerCase()
+  );
+  return match?.id ?? null;
+}
+
+function extractEsvText(payload: unknown): string | null {
+  if (!payload) return null;
+  if (typeof payload === 'string') {
+    return payload.trim();
+  }
+  if (typeof payload === 'object') {
+    const data = payload as { passages?: string[]; passage?: string; text?: string };
+    if (Array.isArray(data.passages) && data.passages.length > 0) {
+      return data.passages.join(' ').trim();
+    }
+    if (typeof data.passage === 'string') {
+      return data.passage.trim();
+    }
+    if (typeof data.text === 'string') {
+      return data.text.trim();
+    }
+  }
+  return null;
+}
+
+async function fetchEsvPassage(reference: BibleReference): Promise<string | null> {
+  if (!esvApiKey || !esvApiUrl) {
+    console.warn('[BibleService] ESV API not configured. Set ESV_API_KEY and ESV_API_URL.');
+    return null;
+  }
+
+  const ref = `${reference.book} ${reference.chapter}:${reference.verse}`;
+  const url = new URL(esvApiUrl);
+  url.searchParams.set('q', ref);
+  url.searchParams.set('include-headings', 'false');
+  url.searchParams.set('include-verse-numbers', 'false');
+  url.searchParams.set('include-footnotes', 'false');
+  url.searchParams.set('include-passage-references', 'false');
+  url.searchParams.set('include-short-copyright', 'false');
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Token ${esvApiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    console.warn('[BibleService] ESV API error:', response.status, response.statusText);
+    return null;
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const data = (await response.json()) as unknown;
+    return extractEsvText(data);
+  }
+
+  const text = await response.text();
+  return extractEsvText(text);
 }
 
 export function wrapBibleText(text: string, maxLineLength = 48, maxLines = 4): string[] {
