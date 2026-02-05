@@ -4,9 +4,11 @@ import Image from 'next/image'
 
 export function LogoOrb() {
   return (
-    <section className="relative pt-20 pb-6 px-4 overflow-hidden">
+    <section className="relative pt-20 pb-6 px-4 overflow-hidden -mt-10">
       <div className="container mx-auto">
         <div className="relative flex flex-col items-center text-center">
+          {/* Top fade to blend with previous section */}
+          <div className="pointer-events-none absolute -top-20 left-0 right-0 h-40 bg-gradient-to-b from-slate-950 to-transparent" />
           {/* Ambient glow */}
           <div className="absolute -top-24 h-96 w-96 rounded-full bg-gradient-to-br from-orange-400/30 via-red-500/20 to-blue-500/20 blur-3xl" />
           <div className="absolute top-8 h-[30rem] w-[30rem] rounded-full border border-white/5 bg-white/5 blur-2xl" />
