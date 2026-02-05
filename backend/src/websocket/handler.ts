@@ -25,7 +25,7 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData } from '../services/eventService';
-import { fetchBibleVerse, findBibleReference, wrapBibleText } from '../services/bibleService';
+import { fetchBibleVerse, findBibleReference, getDefaultBibleVersionId, wrapBibleText } from '../services/bibleService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
 import {
   findBestMatchAcrossAllSongs,
@@ -583,8 +583,13 @@ async function handleTranscriptionResult(
       }
 
       if (!session.bibleVersionId) {
-        console.warn('[WS] Bible mode active but no bibleVersionId set.');
-        return;
+        const fallbackVersionId = await getDefaultBibleVersionId();
+        if (fallbackVersionId) {
+          session.bibleVersionId = fallbackVersionId;
+        } else {
+          console.warn('[WS] Bible mode active but no bibleVersionId set.');
+          return;
+        }
       }
 
       const verse = await fetchBibleVerse(reference, session.bibleVersionId);

@@ -134,6 +134,21 @@ export function OperatorHUD({
     };
   }, []);
 
+  useEffect(() => {
+    if (!bibleMode || bibleVersionId || bibleVersions.length === 0) {
+      return;
+    }
+
+    const defaultVersion = bibleVersions.find((v) => v.is_default) ?? bibleVersions[0];
+    if (!defaultVersion) {
+      return;
+    }
+
+    setBibleVersionId(defaultVersion.id);
+    updateEventSettings({ bibleVersionId: defaultVersion.id });
+    void persistEventSettings({ bible_version_id: defaultVersion.id });
+  }, [bibleMode, bibleVersionId, bibleVersions, updateEventSettings]);
+
   // Pre-initialize audio: Request microphone permission before session starts
   useEffect(() => {
     // Request permission early so audio can start immediately when session starts

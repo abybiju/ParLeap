@@ -25,6 +25,7 @@ type VersionCache = {
 
 let bookCache: BookCache | null = null;
 let versionCache: VersionCache | null = null;
+let defaultVersionId: string | null = null;
 
 const aliasToBookName = new Map<string, string>();
 const aliasList: string[] = [];
@@ -190,6 +191,27 @@ export async function fetchBibleVerse(
     text: data.text as string,
     versionAbbrev: abbrev,
   };
+}
+
+export async function getDefaultBibleVersionId(): Promise<string | null> {
+  if (defaultVersionId) return defaultVersionId;
+  if (!isSupabaseConfigured || !supabase) return null;
+
+  const { data, error } = await supabase
+    .from('bible_versions')
+    .select('id')
+    .order('is_default', { ascending: false })
+    .order('name', { ascending: true })
+    .limit(1)
+    .single();
+
+  if (error || !data) {
+    console.warn('[BibleService] Failed to resolve default bible version:', error);
+    return null;
+  }
+
+  defaultVersionId = data.id as string;
+  return defaultVersionId;
 }
 
 export function wrapBibleText(text: string, maxLineLength = 48, maxLines = 4): string[] {
