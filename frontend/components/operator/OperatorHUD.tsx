@@ -278,7 +278,7 @@ export function OperatorHUD({
             description: error.message || 'An error occurred. Check console for details.',
             duration: 8000,
           });
-          setSessionStatus('error');
+          // Non-fatal errors should not flip the session to error state.
         }
       }
     }

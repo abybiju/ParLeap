@@ -38,8 +38,8 @@ export function STTStatus({ audioActive = false }: STTStatusProps) {
     }
   }, [lastMessage]);
 
-  // Check if STT is working (received transcript in last 5 seconds)
-  const isSttActive = lastTranscriptTime && (Date.now() - lastTranscriptTime) < 5000;
+  // Check if STT is working (received transcript in last 20 seconds)
+  const isSttActive = lastTranscriptTime && (Date.now() - lastTranscriptTime) < 20000;
 
   const getStatusColor = () => {
     if (sttError) return 'text-red-400';
@@ -59,10 +59,13 @@ export function STTStatus({ audioActive = false }: STTStatusProps) {
       if (isSttActive) {
         return 'Active (Receiving transcripts)';
       }
+      if (audioActive) {
+        return 'Listening (Awaiting speech)';
+      }
       if (hasReceivedTranscript) {
         return 'Inactive (No recent transcripts)';
       }
-      return audioActive ? 'Audio streaming (No transcripts)' : 'Waiting for transcription...';
+      return 'Waiting for transcription...';
     }
     if (isSttActive) {
       return 'Active';
