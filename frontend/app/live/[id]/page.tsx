@@ -65,7 +65,7 @@ export default async function LivePage({ params }: LivePageProps) {
   // Fetch event details
   const { data: event, error } = await supabase
     .from('events')
-    .select('id, name, event_date, status')
+    .select('id, name, event_date, status, projector_font')
     .eq('id', params.id)
     .eq('user_id', user.id)
     .single()
@@ -138,6 +138,7 @@ export default async function LivePage({ params }: LivePageProps) {
     <LivePageClient
       eventId={params.id}
       eventName={(event as any).name || 'Untitled Event'}
+      projectorFont={(event as any).projector_font ?? null}
       initialSetlist={initialSetlist}
       hasSupabaseMismatch={hasMismatch}
       frontendProjectRef={frontendProjectRef}

@@ -6,7 +6,9 @@ import { ChevronLeft, ChevronRight, Zap, ZapOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
-import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage } from '@/lib/websocket/types';
+import { createClient } from '@/lib/supabase/client';
+import { getProjectorFontClass, getProjectorFontIdOrDefault, projectorFonts } from '@/lib/projectorFonts';
+import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage, isEventSettingsUpdatedMessage } from '@/lib/websocket/types';
 import { GhostText } from './GhostText';
 import { MatchStatus } from './MatchStatus';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -27,6 +29,7 @@ interface OperatorHUDProps {
     artist: string | null;
     sequenceOrder: number;
   }>;
+  initialProjectorFont?: string | null;
 }
 
 /**
@@ -37,12 +40,13 @@ interface OperatorHUDProps {
  * - Center: Current Slide + Next Preview
  * - Right: Setlist
  */
-export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: OperatorHUDProps) {
+export function OperatorHUD({ eventId, eventName, initialSetlist = [], initialProjectorFont = null }: OperatorHUDProps) {
   const router = useRouter();
   const {
     state,
     isConnected,
     startSession,
+    updateEventSettings,
     stopSession,
     nextSlide,
     prevSlide,
@@ -54,6 +58,9 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
   const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
   const [sessionStatus, setSessionStatus] = useState<'idle' | 'starting' | 'active' | 'error'>('idle');
   const [isAutoFollowing, setIsAutoFollowing] = useState(true); // PHASE 2: Auto-follow toggle
+  const [projectorFontId, setProjectorFontId] = useState<string>(
+    getProjectorFontIdOrDefault(initialProjectorFont)
+  );
 
   // Gate audio capture based on session status
   const audioCapture = useAudioCapture({
@@ -126,6 +133,18 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
       }, 100); // Small delay to ensure state propagation
     }
   }, [lastMessage, audioCapture, sessionStatus]);
+
+  // Sync projector font from session start or settings updates
+  useEffect(() => {
+    if (!lastMessage) return;
+    if (isSessionStartedMessage(lastMessage)) {
+      setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+      return;
+    }
+    if (isEventSettingsUpdatedMessage(lastMessage)) {
+      setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+    }
+  }, [lastMessage]);
 
   // Handle error messages - suppress NO_SESSION, show others
   useEffect(() => {
@@ -260,6 +279,23 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
     router.push('/dashboard');
   };
 
+  const handleProjectorFontChange = async (fontId: string) => {
+    setProjectorFontId(fontId);
+    updateEventSettings(fontId);
+
+    try {
+      const supabase = createClient();
+      await (supabase
+        .from('events') as ReturnType<typeof supabase.from>)
+        .update({ projector_font: fontId } as Record<string, unknown>)
+        .eq('id', eventId);
+    } catch (error) {
+      console.warn('[OperatorHUD] Failed to persist projector font setting:', error);
+    }
+  };
+
+  const projectorFontClass = getProjectorFontClass(projectorFontId);
+
   const sessionLabel =
     sessionStatus === 'active'
       ? 'Live'
@@ -294,6 +330,22 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
           <ConnectionStatus />
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+          <div className="hidden md:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
+              Projector Font
+            </span>
+            <select
+              value={projectorFontId}
+              onChange={(e) => handleProjectorFontChange(e.target.value)}
+              className="bg-transparent text-xs text-slate-200 focus:outline-none"
+            >
+              {projectorFonts.map((font) => (
+                <option key={font.id} value={font.id} className="text-slate-900">
+                  {font.label}
+                </option>
+              ))}
+            </select>
+          </div>
           {/* PHASE 2: Auto-Follow Toggle */}
           <button
             onClick={toggleAutoFollow}
@@ -374,7 +426,7 @@ export function OperatorHUD({ eventId, eventName, initialSetlist = [] }: Operato
         {/* Center Panel: Live Display */}
         <div className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 via-white/5 to-white/5 backdrop-blur">
           <div className="flex-1 p-4 overflow-y-auto">
-            <CurrentSlideDisplay />
+            <CurrentSlideDisplay fontClassName={projectorFontClass} />
           </div>
           <div className="px-4 pb-4">
             <NextSlidePreview />

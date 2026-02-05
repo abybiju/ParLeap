@@ -15,6 +15,7 @@ export interface UseWebSocketReturn {
   isConnected: boolean;
   sendMessage: (message: ClientMessage) => void;
   startSession: (eventId: string) => void;
+  updateEventSettings: (projectorFont: string) => void;
   stopSession: () => void;
   nextSlide: () => void;
   prevSlide: () => void;
@@ -121,6 +122,13 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
     [client]
   );
 
+  const updateEventSettings = useCallback(
+    (projectorFont: string) => {
+      client.updateEventSettings(projectorFont);
+    },
+    [client]
+  );
+
   const stopSession = useCallback(() => {
     client.stopSession();
   }, [client]);
@@ -157,6 +165,7 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
     isConnected: client.isConnected(),
     sendMessage,
     startSession,
+    updateEventSettings,
     stopSession,
     nextSlide,
     prevSlide,
@@ -167,4 +176,3 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
     lastMessage,
   };
 }
-

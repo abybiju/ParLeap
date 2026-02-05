@@ -198,6 +198,13 @@ class WebSocketClient {
   }
 
   /**
+   * Send UPDATE_EVENT_SETTINGS message
+   */
+  updateEventSettings(projectorFont: string): void {
+    this.send({ type: 'UPDATE_EVENT_SETTINGS', payload: { projectorFont } });
+  }
+
+  /**
    * Send MANUAL_OVERRIDE message
    */
   manualOverride(action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE', slideIndex?: number, songId?: string): void {
@@ -372,4 +379,3 @@ export function getWebSocketClient(): WebSocketClient {
   }
   return clientInstance;
 }
-

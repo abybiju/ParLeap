@@ -21,6 +21,16 @@ export interface StartSessionMessage {
 }
 
 /**
+ * UPDATE_EVENT_SETTINGS - Update event-level settings (e.g., projector font)
+ */
+export interface UpdateEventSettingsMessage {
+  type: 'UPDATE_EVENT_SETTINGS';
+  payload: {
+    projectorFont: string;
+  };
+}
+
+/**
  * AUDIO_DATA - Stream audio chunks for transcription
  * Sent continuously during live audio capture
  */
@@ -71,6 +81,7 @@ export interface PingMessage {
  */
 export type ClientMessage =
   | StartSessionMessage
+  | UpdateEventSettingsMessage
   | AudioDataMessage
   | ManualOverrideMessage
   | StopSessionMessage
@@ -98,6 +109,7 @@ export interface SessionStartedMessage {
     sessionId: string;
     eventId: string;
     eventName: string;
+    projectorFont?: string | null;
     totalSongs: number;
     currentSongIndex: number;
     currentSlideIndex: number; // Now refers to slide index (not line index)
@@ -112,6 +124,17 @@ export interface SessionStartedMessage {
       }>; // Compiled multi-line slides
       lineToSlideIndex?: number[]; // Mapping: lineIndex -> slideIndex
     }>;
+  };
+  timing?: TimingMetadata;
+}
+
+/**
+ * EVENT_SETTINGS_UPDATED - Broadcast updated event settings to clients
+ */
+export interface EventSettingsUpdatedMessage {
+  type: 'EVENT_SETTINGS_UPDATED';
+  payload: {
+    projectorFont: string;
   };
   timing?: TimingMetadata;
 }
@@ -221,6 +244,7 @@ export interface PongMessage {
  */
 export type ServerMessage =
   | SessionStartedMessage
+  | EventSettingsUpdatedMessage
   | TranscriptUpdateMessage
   | DisplayUpdateMessage
   | SongChangedMessage
@@ -246,6 +270,10 @@ export function isStartSessionMessage(msg: ClientMessage): msg is StartSessionMe
   return msg.type === 'START_SESSION';
 }
 
+export function isUpdateEventSettingsMessage(msg: ClientMessage): msg is UpdateEventSettingsMessage {
+  return msg.type === 'UPDATE_EVENT_SETTINGS';
+}
+
 export function isAudioDataMessage(msg: ClientMessage): msg is AudioDataMessage {
   return msg.type === 'AUDIO_DATA';
 }
@@ -261,4 +289,3 @@ export function isStopSessionMessage(msg: ClientMessage): msg is StopSessionMess
 export function isPingMessage(msg: ClientMessage): msg is PingMessage {
   return msg.type === 'PING';
 }
-

@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowLeft } from 'lucide-react';
 interface LivePageClientProps {
   eventId: string;
   eventName: string;
+  projectorFont?: string | null;
   initialSetlist: Array<{
     id: string;
     title: string;
@@ -26,6 +27,7 @@ interface LivePageClientProps {
 export function LivePageClient({
   eventId,
   eventName,
+  projectorFont = null,
   initialSetlist,
   hasSupabaseMismatch,
   frontendProjectRef,
@@ -139,6 +141,7 @@ export function LivePageClient({
     <OperatorHUD
       eventId={eventId}
       eventName={eventName}
+      initialProjectorFont={projectorFont}
       initialSetlist={initialSetlist}
     />
   );

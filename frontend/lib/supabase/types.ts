@@ -82,6 +82,7 @@ export interface Database {
           name: string
           event_date: string | null
           status: 'draft' | 'live' | 'ended'
+          projector_font: string | null
           created_at: string
           updated_at: string
         }
@@ -91,6 +92,7 @@ export interface Database {
           name: string
           event_date?: string | null
           status?: 'draft' | 'live' | 'ended'
+          projector_font?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -100,6 +102,7 @@ export interface Database {
           name?: string
           event_date?: string | null
           status?: 'draft' | 'live' | 'ended'
+          projector_font?: string | null
           updated_at?: string
         }
         Relationships: [
