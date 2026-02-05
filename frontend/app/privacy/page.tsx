@@ -3,7 +3,7 @@
 export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
-      <div className="container mx-auto px-6 pt-32 pb-16 max-w-4xl">
+      <div className="container mx-auto px-6 pt-36 pb-16 max-w-4xl">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500 mb-3">Privacy</p>
         <h1 className="text-3xl md:text-4xl font-semibold mb-6">Privacy Policy</h1>
         <p className="text-sm text-slate-400 mb-10">Last updated: February 5, 2026</p>

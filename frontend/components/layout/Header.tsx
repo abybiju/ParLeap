@@ -9,6 +9,7 @@ import { motion } from 'framer-motion'
 export function Header() {
   const pathname = usePathname()
   const isHomePage = pathname === '/'
+  const isPolicyPage = pathname === '/privacy' || pathname === '/terms'
   
   // On home page, return a hero header that merges with Spline background
   if (isHomePage) {
@@ -98,7 +99,13 @@ export function Header() {
   
   // Standard header for other pages
   return (
-    <header className="fixed top-0 w-full z-50 backdrop-blur-xl bg-black/50 border-b border-white/5 pt-6">
+    <header
+      className={
+        isPolicyPage
+          ? 'fixed top-0 w-full z-50 backdrop-blur-xl bg-slate-950/80 border-b border-white/5 pt-6'
+          : 'fixed top-0 w-full z-50 backdrop-blur-xl bg-black/50 border-b border-white/5 pt-6'
+      }
+    >
       <div className="container mx-auto px-4">
         <nav className="flex items-center h-24 py-4">
           {/* Logo */}
