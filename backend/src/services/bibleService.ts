@@ -76,40 +76,28 @@ export function findBibleReference(input: string): BibleReference | null {
     let verse: number | null = null;
     let endVerse: number | null = null;
 
-    let refMatch = after.match(
-      /^chapter\s+(\d{1,3})\s+verse\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
-    );
-    if (refMatch) {
+    const patterns = [
+      // chapter 2 verse 1 / chapter 2: verse 1 / ch 2 v 1
+      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*[:\-]?\s*(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      // chapter 2:1
+      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      // 2:1
+      /^(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      // 2 verse 1 / 2 verses 1-3
+      /^(\d{1,3})\s+(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      // chapter 2 1
+      /^(?:chapter|chap|ch)\s+(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      // 2 1
+      /^(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+    ];
+
+    for (const pattern of patterns) {
+      const refMatch = after.match(pattern);
+      if (!refMatch) continue;
       chapter = Number(refMatch[1]);
       verse = Number(refMatch[2]);
       endVerse = refMatch[3] ? Number(refMatch[3]) : null;
-    } else {
-      refMatch = after.match(
-        /^(\d{1,3})\s*[:]\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
-      );
-      if (refMatch) {
-        chapter = Number(refMatch[1]);
-        verse = Number(refMatch[2]);
-        endVerse = refMatch[3] ? Number(refMatch[3]) : null;
-      } else {
-        refMatch = after.match(
-          /^(\d{1,3})\s+verse\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
-        );
-        if (refMatch) {
-          chapter = Number(refMatch[1]);
-          verse = Number(refMatch[2]);
-          endVerse = refMatch[3] ? Number(refMatch[3]) : null;
-        } else {
-          refMatch = after.match(
-            /^(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
-          );
-          if (refMatch) {
-            chapter = Number(refMatch[1]);
-            verse = Number(refMatch[2]);
-            endVerse = refMatch[3] ? Number(refMatch[3]) : null;
-          }
-        }
-      }
+      break;
     }
 
     if (!chapter || !verse) continue;
