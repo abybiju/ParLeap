@@ -68,6 +68,10 @@ function parseNumberEnv(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+const MATCH_STALE_MS = parseNumberEnv(process.env.MATCHER_STALE_MS, 12000);
+const MATCH_RECOVERY_WINDOW_MS = parseNumberEnv(process.env.MATCHER_RECOVERY_WINDOW_MS, 10000);
+const MATCH_RECOVERY_COOLDOWN_MS = parseNumberEnv(process.env.MATCHER_RECOVERY_COOLDOWN_MS, 15000);
+
 function preprocessBufferText(text: string, maxWords = 12): string {
   const fillers = new Set(['uh', 'um', 'oh', 'ah', 'uhh', 'umm', 'hmm']);
   const words = text
@@ -162,6 +166,8 @@ interface SessionState {
   lastBibleRefKey?: string;
   lastBibleRefAt?: number;
   allowBackwardUntil?: number;
+  lastStrongMatchAt?: number;
+  lastRecoveryAt?: number;
   // Debouncing for song switches (prevents false positives)
   suggestedSongSwitch?: {
     songId: string;
@@ -370,6 +376,8 @@ async function handleStartSession(
     songContext,
     matcherConfig,
     lastMatchConfidence: existingSession?.lastMatchConfidence || 0,
+    lastStrongMatchAt: existingSession?.lastStrongMatchAt ?? Date.now(),
+    lastRecoveryAt: existingSession?.lastRecoveryAt ?? 0,
     suggestedSongSwitch: undefined,
     lastSongSwitchAt: undefined,
   };
@@ -586,7 +594,8 @@ async function handleTranscriptionResult(
 
   // Broadcast transcript to all sessions for this event (operator + projector views)
   broadcastToEvent(session.eventId, transcriptMessage);
-  session.lastTranscriptAt = Date.now();
+  const transcriptNow = Date.now();
+  session.lastTranscriptAt = transcriptNow;
 
   if (shouldAttemptMatch) {
     const matchText = trimmedText.length > 0 ? trimmedText : session.lastTranscriptText;
@@ -617,6 +626,25 @@ async function handleTranscriptionResult(
     if (session.matcherConfig.debug) {
       console.log(`[WS] Rolling buffer updated: "${cleanedBuffer.slice(-50)}..."`);
       console.log(`[WS] Cleaned buffer for matching: "${cleanedBuffer}"`);
+    }
+
+    const lastStrongMatchAt = session.lastStrongMatchAt ?? 0;
+    const lastRecoveryAt = session.lastRecoveryAt ?? 0;
+    const hasRecentSpeech = matchText.trim().length > 0;
+    const shouldRecoverMatcher =
+      !session.bibleMode &&
+      hasRecentSpeech &&
+      lastStrongMatchAt > 0 &&
+      transcriptNow - lastStrongMatchAt > MATCH_STALE_MS &&
+      transcriptNow - lastRecoveryAt > MATCH_RECOVERY_COOLDOWN_MS;
+
+    if (shouldRecoverMatcher) {
+      session.allowBackwardUntil = transcriptNow + MATCH_RECOVERY_WINDOW_MS;
+      session.lastRecoveryAt = transcriptNow;
+      console.log(
+        `[WS] 🔄 Matcher recovery: no strong match for ${transcriptNow - lastStrongMatchAt}ms, ` +
+          `allowing backward search for ${MATCH_RECOVERY_WINDOW_MS}ms`
+      );
     }
 
     if (session.bibleMode) {
@@ -778,6 +806,7 @@ async function handleTranscriptionResult(
               );
               session.rollingBuffer = ''; // Clear buffer on song change
               session.lastSongSwitchAt = now;
+              session.lastStrongMatchAt = now;
               session.suggestedSongSwitch = undefined; // Clear suggestion
 
               // Broadcast SONG_CHANGED to all clients
@@ -886,6 +915,7 @@ async function handleTranscriptionResult(
       const isEndTriggerMatch =
         matchResult.advanceReason === 'end-words' && matchResult.endTriggerScore !== undefined;
       if (matchResult.matchFound && (matchResult.confidence >= session.matcherConfig.similarityThreshold || isEndTriggerMatch)) {
+        session.lastStrongMatchAt = Date.now();
         // END-TRIGGER DEBOUNCE: Require consecutive end-word hits within a short window
         const END_TRIGGER_DEBOUNCE_WINDOW_MS = 1800;
         const END_TRIGGER_DEBOUNCE_MATCHES = 2;

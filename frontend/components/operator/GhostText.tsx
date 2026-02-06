@@ -77,7 +77,9 @@ export function GhostText() {
 
       // Update STT confidence
       if (update.payload.confidence !== undefined) {
-        setSttConfidence(update.payload.confidence);
+        if (update.payload.confidence > 0) {
+          setSttConfidence(update.payload.confidence);
+        }
       }
 
       // Highlight when final transcript or high confidence
@@ -167,4 +169,3 @@ export function GhostText() {
     </div>
   );
 }
-
