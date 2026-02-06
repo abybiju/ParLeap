@@ -1,5 +1,69 @@
 # ParLeap AI - Memory Log
 
+## Session: February 6, 2026 - Smart Bible Listen Feature Documentation 📋
+
+### Feature Design Discussion & Documentation
+**Documented Smart Bible Listen feature for future implementation - cost optimization for Bible mode.**
+
+### What We Accomplished
+1. **Smart Bible Listen Feature Specification** ✅
+   - Complete technical specification documented in `SMART_BIBLE_LISTEN.md`
+   - Two-stage hybrid system: Local wake-word detection + selective STT activation
+   - Estimated cost savings: 87-93% for 40-minute sermons
+   - Architecture: Browser wake-word detection → Backend selective STT (30s windows)
+   - Quote-only matching: Opt-in only (disabled by default)
+
+2. **Bible Service Enhancement** ✅
+   - Added bidirectional book lookup cache (`byId` map)
+   - Enables O(1) reverse lookups by book ID
+   - Committed: `ae0d81a` - "feat: add bidirectional book lookup cache in bible service"
+   - Pushed to production
+
+3. **Documentation Updates** ✅
+   - Updated `PROJECT_PLAN.md` with Smart Bible Listen reference
+   - Updated `NEXT_PHASE_PLAN.md` with Phase 8: Smart Bible Listen
+   - Created comprehensive feature specification document
+
+### Key Decisions & Preferences
+- **Default Behavior**: Smart Listen ON by default when Bible mode is on
+- **STT Window**: 30 seconds after wake word detected
+- **Quote Matching**: Opt-in only (disabled by default)
+- **Ring Buffer**: 10 seconds of audio context
+- **Cost Indicator**: Show savings in UI
+
+### Technical Opinion Shared
+**The Core Challenge**: Can't detect Bible content without STT running (chicken-and-egg problem)
+
+**Recommended Solution**: Hybrid two-stage system
+- Stage 1: Local wake-word detection (zero API cost) - runs in browser
+- Stage 2: Selective STT window (controlled cost) - only when wake word detected
+- Audio ring buffer ensures full reference captured even if wake word mid-sentence
+
+**Quote-Only Detection**: Expensive (requires full-text matching against all ~31,000 verses)
+- Recommendation: Opt-in only, with warning about cost impact
+- Only search after Bible reference detected (provides context)
+
+### Feature Status
+- **Status**: 📋 Documented (not yet implemented)
+- **Priority**: Medium (cost optimization, not critical path)
+- **Complexity**: Medium-High (requires frontend + backend coordination)
+- **Risk**: Low (can fallback to always-on STT if issues occur)
+
+### Files Created/Modified
+- `SMART_BIBLE_LISTEN.md` - Complete feature specification (new)
+- `PROJECT_PLAN.md` - Added Future Features section (updated)
+- `NEXT_PHASE_PLAN.md` - Added Phase 8: Smart Bible Listen (updated)
+- `MEMORY.md` - Added February 6, 2026 entry (updated)
+- `memory/2026-02-06.md` - Daily log entry (new)
+- `backend/src/services/bibleService.ts` - Bidirectional cache (committed)
+
+### Next Steps
+- Feature is documented and ready for future implementation
+- Implementation can begin when prioritized
+- See `SMART_BIBLE_LISTEN.md` for complete technical specification
+
+---
+
 ## Session: February 3, 2026 (Evening) - Live Session UX Fixes ✅
 
 ### Critical Fixes Completed

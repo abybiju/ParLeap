@@ -10,6 +10,17 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### February 6, 2026 - Smart Bible Listen Feature Documented 📋
+- 📋 **Smart Bible Listen Feature Specification**: Complete technical specification documented for future implementation
+  - Cost optimization feature for Bible mode (87-93% STT cost reduction)
+  - Two-stage hybrid system: Local wake-word detection + selective STT activation
+  - Audio ring buffer (10s) for context capture
+  - Quote-only matching (opt-in) for phrase detection
+  - See `SMART_BIBLE_LISTEN.md` for complete specification
+- ✅ **Bible Service Enhancement**: Added bidirectional book lookup cache (`byId` map)
+  - Enables O(1) reverse lookups by book ID
+  - Committed: `ae0d81a` - "feat: add bidirectional book lookup cache in bible service"
+
 ### February 3, 2026 - Profile Settings + Avatar System ✅
 - ✅ **Profile Settings Page**: Created `/dashboard/profile` with sidebar tabs (General / Account / Security / Billing)
   - Added “Back to Dashboard” navigation
@@ -531,7 +542,32 @@ Browser Mic → Frontend (MediaRecorder)
 
 ---
 
-**Last Updated:** January 25, 2026
+## 🚀 Future Features
+
+### Smart Bible Listen (Cost Optimization)
+**Status:** 📋 Documented - Ready for Implementation  
+**Priority:** Medium  
+**Complexity:** Medium-High
+
+**Overview:**
+Cost optimization feature for Bible mode that only activates STT when Bible-related content is detected, reducing API costs by 87-93% for long sermons.
+
+**Key Features:**
+- Local wake-word detection (zero API cost)
+- Selective STT activation (30-second windows)
+- Audio ring buffer for context capture
+- Quote-only matching (opt-in)
+
+**Documentation:** See `SMART_BIBLE_LISTEN.md` for complete specification
+
+**Benefits:**
+- Significant cost savings for 40+ minute sermons
+- Maintains accuracy for Bible reference detection
+- Operator can toggle "Always Listen" mode if needed
+
+---
+
+**Last Updated:** February 6, 2026
 **Status:** Phases 1-5 Complete - Testing Infrastructure Operational ✅  
 **Production Status:** Fully operational with 147+ tests, CI/CD pipeline, and comprehensive QA ✅
 
