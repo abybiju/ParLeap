@@ -438,3 +438,87 @@ User → Songs Library → "Import from CCLI" → OAuth → Search → Import �
 
 **See:** `CCLI_SONGSELECT_INTEGRATION.md` for complete specification
 
+---
+
+### Phase 8: Smart Bible Listen (Cost Optimization)
+
+**Priority:** Medium (Post-Launch)  
+**Timeline:** 3-4 weeks after MVP stabilization  
+**Status:** 📋 Documented - Ready for Implementation
+
+#### Smart Bible Listen Feature
+
+**Strategic Value:**
+- Significant cost reduction for Bible mode (87-93% STT savings)
+- Enables longer sermon support without API cost concerns
+- Maintains accuracy while optimizing resource usage
+- Competitive advantage for cost-conscious users
+
+**Problem Statement:**
+- Current Bible mode runs STT continuously (expensive for 40+ min sermons)
+- User concern: "I don't want my AI token to get finished by listening to all words"
+- Need to only activate STT when Bible content detected
+
+**Solution Architecture:**
+Two-stage hybrid system:
+1. **Stage 1:** Local wake-word detection (zero API cost)
+   - Pattern matching on audio chunks in browser
+   - Detects Bible book names, wake phrases ("chapter", "verse", "it is written")
+   - Maintains 10-second audio ring buffer
+2. **Stage 2:** Selective STT window (controlled cost)
+   - Activates ElevenLabs STT only when wake word detected
+   - 30-second window after trigger
+   - Auto-shutoff if no Bible reference found
+   - Extends window if reference detected (follow mode)
+
+**Implementation Phases:**
+
+1. **Frontend Wake-Word Detection**
+   - Create `useBibleWakeWord` hook
+   - Implement pattern matching for wake words
+   - Add audio ring buffer to `useAudioCapture`
+   - Test wake word detection accuracy
+   - Add UI toggle in Operator HUD
+
+2. **Backend Selective STT**
+   - Add `smartListenEnabled` flag to SessionState
+   - Implement conditional STT initialization
+   - Add 30-second window timer
+   - Implement auto-shutoff logic
+   - Test STT activation/deactivation
+
+3. **Integration & Testing**
+   - End-to-end testing with real sermons
+   - Verify cost savings calculations
+   - Test edge cases (rapid references, long pauses)
+   - Performance optimization
+   - UI polish (cost indicator, toggles)
+
+4. **Quote Matching (Optional)**
+   - Create `bibleQuoteMatcher` service
+   - Implement full-text search across all verses
+   - Add fuzzy matching for partial quotes
+   - Add UI toggle for quote search (opt-in)
+   - Test with various quote formats
+
+**Cost Savings:**
+- **40-minute sermon example:**
+  - Current: 2,400 seconds of STT
+  - With Smart Listen: ~300 seconds (5-10 references × 30s)
+  - **Savings: 87-93% cost reduction**
+
+**User Preferences:**
+- Smart Listen enabled by default when Bible mode is on
+- 30-second STT window after trigger (configurable)
+- Quote-only matching: Opt-in only (disabled by default)
+- Cost savings indicator in UI
+
+**Technical Components:**
+- Frontend: `frontend/lib/hooks/useBibleWakeWord.ts` (new)
+- Frontend: `frontend/lib/hooks/useAudioCapture.ts` (modify)
+- Backend: `backend/src/websocket/handler.ts` (modify)
+- Backend: `backend/src/services/bibleQuoteMatcher.ts` (new, optional)
+- UI: `frontend/components/operator/OperatorHUD.tsx` (modify)
+
+**See:** `SMART_BIBLE_LISTEN.md` for complete specification
+
