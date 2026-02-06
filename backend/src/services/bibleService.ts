@@ -78,7 +78,7 @@ export function findBibleReference(input: string): BibleReference | null {
 
     const patterns = [
       // chapter 2 verse 1 / chapter 2: verse 1 / ch 2 v 1
-      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*[:\-]?\s*(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*[:-]?\s*(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
       // chapter 2:1
       /^(?:chapter|chap|ch)\s+(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
       // 2:1
