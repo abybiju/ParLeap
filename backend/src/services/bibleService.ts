@@ -5,6 +5,7 @@ export type BibleReference = {
   book: string;
   chapter: number;
   verse: number;
+  endVerse?: number | null;
 };
 
 export type BibleVerseResult = {
@@ -53,8 +54,9 @@ function normalizeReferenceText(input: string) {
     .replace(/\b(first|1st)\b/g, '1')
     .replace(/\b(second|2nd)\b/g, '2')
     .replace(/\b(third|3rd)\b/g, '3')
+    .replace(/[\u2013\u2014]/g, '-')
     .replace(/[\u2019']/g, '')
-    .replace(/[^a-z0-9:\s]/g, ' ')
+    .replace(/[^a-z0-9:\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -72,37 +74,53 @@ export function findBibleReference(input: string): BibleReference | null {
 
     let chapter: number | null = null;
     let verse: number | null = null;
+    let endVerse: number | null = null;
 
-    let refMatch = after.match(/^chapter\s+(\d{1,3})\s+verse\s+(\d{1,3})/);
+    let refMatch = after.match(
+      /^chapter\s+(\d{1,3})\s+verse\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
+    );
     if (refMatch) {
       chapter = Number(refMatch[1]);
       verse = Number(refMatch[2]);
+      endVerse = refMatch[3] ? Number(refMatch[3]) : null;
     } else {
-      refMatch = after.match(/^(\d{1,3})\s*[:]\s*(\d{1,3})/);
+      refMatch = after.match(
+        /^(\d{1,3})\s*[:]\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
+      );
       if (refMatch) {
         chapter = Number(refMatch[1]);
         verse = Number(refMatch[2]);
+        endVerse = refMatch[3] ? Number(refMatch[3]) : null;
       } else {
-        refMatch = after.match(/^(\d{1,3})\s+verse\s+(\d{1,3})/);
+        refMatch = after.match(
+          /^(\d{1,3})\s+verse\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
+        );
         if (refMatch) {
           chapter = Number(refMatch[1]);
           verse = Number(refMatch[2]);
+          endVerse = refMatch[3] ? Number(refMatch[3]) : null;
         } else {
-          refMatch = after.match(/^(\d{1,3})\s+(\d{1,3})/);
+          refMatch = after.match(
+            /^(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/
+          );
           if (refMatch) {
             chapter = Number(refMatch[1]);
             verse = Number(refMatch[2]);
+            endVerse = refMatch[3] ? Number(refMatch[3]) : null;
           }
         }
       }
     }
 
     if (!chapter || !verse) continue;
+    if (endVerse !== null && endVerse < verse) {
+      endVerse = null;
+    }
 
     const bookName = aliasToBookName.get(alias);
     if (!bookName) continue;
 
-    return { book: bookName, chapter, verse };
+    return { book: bookName, chapter, verse, endVerse };
   }
 
   return null;

@@ -79,6 +79,7 @@ export function OperatorHUD({
   );
   const [bibleMode, setBibleMode] = useState<boolean>(initialBibleMode);
   const [bibleVersionId, setBibleVersionId] = useState<string | null>(initialBibleVersionId);
+  const [bibleFollow, setBibleFollow] = useState<boolean>(false);
   const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
 
   // Gate audio capture based on session status
@@ -213,6 +214,9 @@ export function OperatorHUD({
       if (lastMessage.payload.bibleVersionId !== undefined) {
         setBibleVersionId(lastMessage.payload.bibleVersionId);
       }
+      if (lastMessage.payload.bibleFollow !== undefined) {
+        setBibleFollow(lastMessage.payload.bibleFollow);
+      }
       return;
     }
     if (isEventSettingsUpdatedMessage(lastMessage)) {
@@ -224,6 +228,9 @@ export function OperatorHUD({
       }
       if (lastMessage.payload.bibleVersionId !== undefined) {
         setBibleVersionId(lastMessage.payload.bibleVersionId);
+      }
+      if (lastMessage.payload.bibleFollow !== undefined) {
+        setBibleFollow(lastMessage.payload.bibleFollow);
       }
     }
   }, [lastMessage]);
@@ -391,6 +398,9 @@ export function OperatorHUD({
     }
 
     setBibleMode(nextMode);
+    if (!nextMode) {
+      setBibleFollow(false);
+    }
     updateEventSettings({ bibleMode: nextMode, bibleVersionId: nextVersionId ?? undefined });
     await persistEventSettings({ bible_mode: nextMode, bible_version_id: nextVersionId });
 
@@ -405,6 +415,12 @@ export function OperatorHUD({
     setBibleVersionId(versionId);
     updateEventSettings({ bibleVersionId: versionId });
     await persistEventSettings({ bible_version_id: versionId });
+  };
+
+  const handleStopBibleFollow = () => {
+    setBibleFollow(false);
+    updateEventSettings({ bibleFollow: false });
+    toast.info('Passage follow paused');
   };
 
   const projectorFontClass = getProjectorFontClass(projectorFontId);
@@ -493,6 +509,19 @@ export function OperatorHUD({
               ))}
             </select>
           </div>
+          {bibleFollow && (
+            <div className="hidden lg:flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-300">
+                Following
+              </span>
+              <button
+                onClick={handleStopBibleFollow}
+                className="text-[10px] font-semibold text-emerald-100/90 hover:text-white transition-colors"
+              >
+                Stop
+              </button>
+            </div>
+          )}
           {/* PHASE 2: Auto-Follow Toggle */}
           <button
             onClick={toggleAutoFollow}

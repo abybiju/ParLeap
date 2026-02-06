@@ -23,6 +23,7 @@ export const UpdateEventSettingsSchema = z.object({
     projectorFont: z.string().min(1).optional(),
     bibleMode: z.boolean().optional(),
     bibleVersionId: z.string().uuid().nullable().optional(),
+    bibleFollow: z.boolean().optional(),
   }),
 });
 

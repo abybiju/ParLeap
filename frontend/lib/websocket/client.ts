@@ -200,7 +200,7 @@ class WebSocketClient {
   /**
    * Send UPDATE_EVENT_SETTINGS message
    */
-  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null }): void {
+  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean }): void {
     this.send({ type: 'UPDATE_EVENT_SETTINGS', payload: settings });
   }
 

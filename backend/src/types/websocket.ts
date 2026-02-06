@@ -29,6 +29,7 @@ export interface UpdateEventSettingsMessage {
     projectorFont?: string;
     bibleMode?: boolean;
     bibleVersionId?: string | null;
+    bibleFollow?: boolean;
   };
 }
 
@@ -114,6 +115,7 @@ export interface SessionStartedMessage {
     projectorFont?: string | null;
     bibleMode?: boolean;
     bibleVersionId?: string | null;
+    bibleFollow?: boolean;
     totalSongs: number;
     currentSongIndex: number;
     currentSlideIndex: number; // Now refers to slide index (not line index)
@@ -141,6 +143,7 @@ export interface EventSettingsUpdatedMessage {
     projectorFont?: string | null;
     bibleMode?: boolean;
     bibleVersionId?: string | null;
+    bibleFollow?: boolean;
   };
   timing?: TimingMetadata;
 }
