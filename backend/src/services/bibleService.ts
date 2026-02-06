@@ -18,6 +18,7 @@ export type BibleVerseResult = {
 
 type BookCache = {
   byName: Map<string, { id: string; name: string }>;
+  byId: Map<string, { id: string; name: string }>;
 };
 
 type VersionCache = {
@@ -141,11 +142,14 @@ async function ensureBookCache(): Promise<BookCache | null> {
   }
 
   const byName = new Map<string, { id: string; name: string }>();
+  const byId = new Map<string, { id: string; name: string }>();
   for (const row of data) {
-    byName.set(row.name.toLowerCase(), { id: row.id as string, name: row.name as string });
+    const entry = { id: row.id as string, name: row.name as string };
+    byName.set(row.name.toLowerCase(), entry);
+    byId.set(row.id as string, entry);
   }
 
-  bookCache = { byName };
+  bookCache = { byName, byId };
   return bookCache;
 }
 
