@@ -5,7 +5,6 @@ import { Music, BookOpen, Image as ImageIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import type { SongSetlistItem, BibleSetlistItem, MediaSetlistItem } from '@/lib/types/setlist';
 
 type TabType = 'songs' | 'bible' | 'media';
 

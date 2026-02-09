@@ -191,7 +191,12 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         
         // Build setlistItems from old format (all songs)
         if (itemsWithoutConfig) {
-          setlistItems = itemsWithoutConfig.map((item: { id: string; sequence_order: number; song_id?: string; songs?: { id: string } | null }) => ({
+          setlistItems = (itemsWithoutConfig as unknown as Array<{
+            id: string;
+            sequence_order: number;
+            song_id?: string;
+            songs?: { id: string; title: string; artist: string | null; lyrics: string } | null;
+          }>).map((item) => ({
             id: item.id,
             type: 'SONG' as const,
             sequenceOrder: item.sequence_order,
@@ -208,16 +213,17 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       
       // Build setlistItems from new polymorphic format
       if (itemsWithConfig) {
-        setlistItems = itemsWithConfig.map((item: {
+        setlistItems = (itemsWithConfig as unknown as Array<{
           id: string;
           sequence_order: number;
           item_type?: string | null;
           song_id?: string | null;
-          songs?: { id: string } | null;
+          songs?: { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig } | null;
           bible_ref?: string | null;
           media_url?: string | null;
           media_title?: string | null;
-        }) => {
+          slide_config_override?: SlideConfig | null;
+        }>).map((item) => {
           const itemType = item.item_type || (item.song_id ? 'SONG' : null) || 'SONG';
           return {
             id: item.id,
