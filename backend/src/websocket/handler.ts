@@ -424,7 +424,6 @@ async function handleStartSession(
   
   // Find current song (only if current item is a SONG type)
   // For backward compatibility: if no setlistItems, use songs array directly
-  let currentSong: SongData | undefined;
   let actualSongIndex = currentSongIndex;
   
   if (setlistItems.length > 0 && currentSetlistItem) {
@@ -444,7 +443,7 @@ async function handleStartSession(
     }
   }
   
-  currentSong = eventData.songs[actualSongIndex] || eventData.songs[0];
+  const currentSong = eventData.songs[actualSongIndex] || eventData.songs[0];
   
   // Determine current line index from slide index (for matching)
   // If slides exist, find the first line of the current slide

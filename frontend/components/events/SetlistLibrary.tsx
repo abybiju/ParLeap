@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Music, BookOpen, Image, Plus } from 'lucide-react';
+import { Music, BookOpen, Image as ImageIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -97,7 +97,7 @@ export function SetlistLibrary({
           )}
         >
           <div className="flex items-center gap-2">
-            <Image className="h-4 w-4" />
+            <ImageIcon className="h-4 w-4" aria-label="Media" />
             Media
           </div>
         </button>

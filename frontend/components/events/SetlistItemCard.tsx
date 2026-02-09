@@ -1,6 +1,6 @@
 'use client';
 
-import { GripVertical, Music, BookOpen, Image, Trash2 } from 'lucide-react';
+import { GripVertical, Music, BookOpen, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SetlistItem, SongSetlistItem, BibleSetlistItem, MediaSetlistItem } from '@/lib/types/setlist';
@@ -21,7 +21,7 @@ export function SetlistItemCard({ item, onRemove, isDragging, className, dragLis
   const getItemIcon = () => {
     if (isSongItem(item)) return <Music className="h-4 w-4" />;
     if (isBibleItem(item)) return <BookOpen className="h-4 w-4" />;
-    if (isMediaItem(item)) return <Image className="h-4 w-4" />;
+    if (isMediaItem(item)) return <ImageIcon className="h-4 w-4" aria-label="Media" />;
     return null;
   };
 
