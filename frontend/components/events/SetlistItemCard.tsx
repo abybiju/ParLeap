@@ -3,7 +3,7 @@
 import { GripVertical, Music, BookOpen, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { SetlistItem, SongSetlistItem, BibleSetlistItem, MediaSetlistItem } from '@/lib/types/setlist';
+import type { SetlistItem } from '@/lib/types/setlist';
 import { isSongItem, isBibleItem, isMediaItem } from '@/lib/types/setlist';
 
 interface SetlistItemCardProps {

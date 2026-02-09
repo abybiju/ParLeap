@@ -79,7 +79,7 @@ function SortableSetlistItem({
 
 export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilderProps) {
   const [setlistItems, setSetlistItems] = useState<SetlistItem[]>(initialSetlist);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const sensors = useSensors(
     useSensor(PointerSensor),

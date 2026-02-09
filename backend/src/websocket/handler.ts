@@ -45,7 +45,6 @@ import {
   type SongContext,
   type MultiSongMatchResult,
 } from '../services/matcherService';
-import type { SetlistItemData } from '../services/eventService';
 
 // ============================================
 // Timing Utilities
