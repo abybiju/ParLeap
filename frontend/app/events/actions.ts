@@ -337,18 +337,30 @@ export async function reorderEventItems(eventId: string, orderedItemIds: string[
     return { success: false, error: ownership.error };
   }
 
-  const updates = orderedItemIds.map((itemId, index) =>
-    (supabase.from('event_items') as ReturnType<typeof supabase.from>)
+  // Update sequence_order sequentially to avoid duplicate key violations
+  // First, set all to negative values to free up the sequence_order space
+  for (const itemId of orderedItemIds) {
+    const { error: tempError } = await (supabase.from('event_items') as ReturnType<typeof supabase.from>)
+      .update({ sequence_order: -1 } as Record<string, unknown>)
+      .eq('id', itemId)
+      .eq('event_id', eventId);
+
+    if (tempError) {
+      return { success: false, error: tempError.message };
+    }
+  }
+
+  // Then update to final sequence_order values
+  for (let index = 0; index < orderedItemIds.length; index++) {
+    const itemId = orderedItemIds[index];
+    const { error: updateError } = await (supabase.from('event_items') as ReturnType<typeof supabase.from>)
       .update({ sequence_order: index + 1 } as Record<string, unknown>)
       .eq('id', itemId)
-      .eq('event_id', eventId)
-  );
+      .eq('event_id', eventId);
 
-  const results = await Promise.all(updates);
-  const failed = results.find((result) => result.error);
-
-  if (failed?.error) {
-    return { success: false, error: failed.error.message };
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
   }
 
   revalidatePath(`/events/${eventId}`);
