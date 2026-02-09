@@ -1,20 +1,35 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { GripVertical, Plus, Trash2 } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
-import { addSongToEvent, removeSongFromEvent, reorderEventItems } from '@/app/events/actions';
-import { cn } from '@/lib/utils';
-
-interface SetlistItem {
-  id: string;
-  songId: string;
-  title: string;
-  artist: string | null;
-  sequenceOrder: number;
-}
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { SetlistItemCard } from './SetlistItemCard';
+import { SetlistLibrary } from './SetlistLibrary';
+import {
+  addSongToEvent,
+  addBibleToEvent,
+  addMediaToEvent,
+  removeSetlistItem,
+  reorderEventItems,
+} from '@/app/events/actions';
+import type { SetlistItem, SongSetlistItem, BibleSetlistItem, MediaSetlistItem } from '@/lib/types/setlist';
+import { isSongItem } from '@/lib/types/setlist';
 
 interface SongOption {
   id: string;
@@ -28,168 +43,255 @@ interface SetlistBuilderProps {
   songs: SongOption[];
 }
 
+function SortableSetlistItem({
+  item,
+  onRemove,
+}: {
+  item: SetlistItem;
+  onRemove: (item: SetlistItem) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <SetlistItemCard
+        item={item}
+        onRemove={onRemove}
+        isDragging={isDragging}
+        dragListeners={listeners}
+        dragAttributes={attributes}
+      />
+    </div>
+  );
+}
+
 export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilderProps) {
   const [setlistItems, setSetlistItems] = useState<SetlistItem[]>(initialSetlist);
-  const [selectedSongId, setSelectedSongId] = useState<string>('');
   const [isPending, startTransition] = useTransition();
-  const dragId = useRef<string | null>(null);
 
-  const availableSongs = useMemo(() => {
-    const inSetlist = new Set(setlistItems.map((item) => item.songId));
-    return songs.filter((song) => !inSetlist.has(song.id));
-  }, [setlistItems, songs]);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  const persistOrder = (orderedItems: SetlistItem[]) => {
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = setlistItems.findIndex((item) => item.id === active.id);
+    const newIndex = setlistItems.findIndex((item) => item.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    const reordered = arrayMove(setlistItems, oldIndex, newIndex);
+    const resequenced = reordered.map((item, index) => ({
+      ...item,
+      sequenceOrder: index + 1,
+    }));
+
+    setSetlistItems(resequenced);
+
+    // Persist order to database
     startTransition(async () => {
-      const result = await reorderEventItems(eventId, orderedItems.map((item) => item.id));
+      const result = await reorderEventItems(
+        eventId,
+        resequenced.map((item) => item.id)
+      );
       if (!result.success) {
         toast.error(result.error || 'Failed to save order');
+        // Revert on error
+        setSetlistItems(setlistItems);
       } else {
         toast.success('Setlist order saved');
       }
     });
   };
 
-  const handleAddSong = () => {
-    if (!selectedSongId) return;
+  const handleAddSong = (songId: string) => {
+    const song = songs.find((s) => s.id === songId);
+    if (!song) return;
+
     const nextOrder = setlistItems.length + 1;
     startTransition(async () => {
-      const result = await addSongToEvent(eventId, selectedSongId, nextOrder);
+      const result = await addSongToEvent(eventId, songId, nextOrder);
       if (!result.success) {
         toast.error(result.error || 'Failed to add song');
         return;
       }
+
+      const newItem: SongSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'SONG',
+        songId: song.id,
+        title: song.title,
+        artist: song.artist,
+        sequenceOrder: nextOrder,
+      };
+
+      setSetlistItems((prev) => [...prev, newItem]);
       toast.success('Song added to setlist');
-      const song = songs.find((item) => item.id === selectedSongId);
-      if (song && result.id) {
-        setSetlistItems((prev) => [
-          ...prev,
-          {
-            id: result.id as string,
-            songId: song.id,
-            title: song.title,
-            artist: song.artist,
-            sequenceOrder: nextOrder,
-          },
-        ]);
-      } else {
-        toast.message('Setlist updated', { description: 'Refresh to see the latest changes.' });
+    });
+  };
+
+  const handleAddBible = (bibleRef: string) => {
+    const nextOrder = setlistItems.length + 1;
+    startTransition(async () => {
+      const result = await addBibleToEvent(eventId, bibleRef, nextOrder);
+      if (!result.success) {
+        toast.error(result.error || 'Failed to add Bible reference');
+        return;
       }
-      setSelectedSongId('');
+
+      const newItem: BibleSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'BIBLE',
+        bibleRef,
+        sequenceOrder: nextOrder,
+      };
+
+      setSetlistItems((prev) => [...prev, newItem]);
+      toast.success('Bible reference added to setlist');
+    });
+  };
+
+  const handleAddMedia = (mediaUrl: string, mediaTitle: string) => {
+    const nextOrder = setlistItems.length + 1;
+    startTransition(async () => {
+      const result = await addMediaToEvent(eventId, mediaUrl, mediaTitle, nextOrder);
+      if (!result.success) {
+        toast.error(result.error || 'Failed to add media');
+        return;
+      }
+
+      const newItem: MediaSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'MEDIA',
+        mediaUrl,
+        mediaTitle,
+        sequenceOrder: nextOrder,
+      };
+
+      setSetlistItems((prev) => [...prev, newItem]);
+      toast.success('Media added to setlist');
     });
   };
 
   const handleRemove = (item: SetlistItem) => {
     startTransition(async () => {
-      const result = await removeSongFromEvent(eventId, item.id);
+      const result = await removeSetlistItem(eventId, item.id);
       if (!result.success) {
-        toast.error(result.error || 'Failed to remove song');
+        toast.error(result.error || 'Failed to remove item');
         return;
       }
-      toast.success('Song removed');
+
       const remaining = setlistItems.filter((entry) => entry.id !== item.id);
       const resequenced = remaining.map((entry, index) => ({
         ...entry,
         sequenceOrder: index + 1,
       }));
+
       setSetlistItems(resequenced);
-      persistOrder(resequenced);
+
+      // Update order in database
+      const reorderResult = await reorderEventItems(
+        eventId,
+        resequenced.map((item) => item.id)
+      );
+      if (!reorderResult.success) {
+        toast.error('Item removed but order update failed');
+      }
+
+      toast.success('Item removed');
     });
-  };
-
-  const handleDragStart = (itemId: string) => {
-    dragId.current = itemId;
-  };
-
-  const handleDrop = (targetId: string) => {
-    const sourceId = dragId.current;
-    dragId.current = null;
-    if (!sourceId || sourceId === targetId) return;
-
-    const current = [...setlistItems];
-    const sourceIndex = current.findIndex((item) => item.id === sourceId);
-    const targetIndex = current.findIndex((item) => item.id === targetId);
-    if (sourceIndex === -1 || targetIndex === -1) return;
-
-    const [moved] = current.splice(sourceIndex, 1);
-    current.splice(targetIndex, 0, moved);
-    const resequenced = current.map((item, index) => ({
-      ...item,
-      sequenceOrder: index + 1,
-    }));
-    setSetlistItems(resequenced);
-    persistOrder(resequenced);
   };
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-slate-900/40 backdrop-blur">
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-white">Setlist Builder</h2>
-        <p className="text-sm text-slate-300">Drag songs to reorder the live setlist.</p>
+        <p className="text-sm text-slate-300">
+          Drag items to reorder. Add songs, Bible references, or media from the library.
+        </p>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end">
-        <div className="flex-1">
-          <label className="text-sm text-slate-300">Add Song</label>
-          <select
-            value={selectedSongId}
-            onChange={(event) => setSelectedSongId(event.target.value)}
-            className="mt-2 w-full rounded-md border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-          >
-            <option value="">Select a song</option>
-            {availableSongs.map((song) => (
-              <option key={song.id} value={song.id}>
-                {song.title}{song.artist ? ` — ${song.artist}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button onClick={handleAddSong} disabled={!selectedSongId || isPending}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add to Setlist
-        </Button>
-      </div>
-
-      {setlistItems.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-white/10 p-6 text-center text-slate-400">
-          No songs in the setlist yet.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {setlistItems.map((item) => (
-            <div
-              key={item.id}
-              draggable
-              onDragStart={() => handleDragStart(item.id)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => handleDrop(item.id)}
-              className={cn(
-                'flex items-center justify-between rounded-lg border border-white/10 bg-slate-900/40 px-4 py-3 transition',
-                'hover:border-indigo-300/50'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <GripVertical className="h-4 w-4 text-slate-500" />
+      {/* Split Screen Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[500px]">
+        {/* Left: Setlist */}
+        <div className="flex flex-col">
+          <h3 className="text-sm font-medium text-slate-300 mb-3">Setlist</h3>
+          <div className="flex-1 rounded-lg border border-white/10 bg-slate-900/40 p-4 overflow-y-auto">
+            {setlistItems.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-center text-slate-400 py-8">
                 <div>
-                  <p className="text-sm font-medium text-white">
-                    {item.sequenceOrder}. {item.title}
-                  </p>
-                  {item.artist && <p className="text-xs text-slate-400">{item.artist}</p>}
+                  <p className="text-sm">No items in setlist yet.</p>
+                  <p className="text-xs mt-1">Drag items from the library to add them.</p>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-slate-300 hover:text-red-300"
-                onClick={() => handleRemove(item)}
-                disabled={isPending}
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
               >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
+                <SortableContext
+                  items={setlistItems.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2">
+                    {setlistItems.map((item) => (
+                      <SortableSetlistItem
+                        key={item.id}
+                        item={item}
+                        onRemove={handleRemove}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Right: Library */}
+        <div className="flex flex-col">
+          <h3 className="text-sm font-medium text-slate-300 mb-3">Library</h3>
+          <div className="flex-1 rounded-lg border border-white/10 bg-slate-900/40 p-4">
+            <SetlistLibrary
+              songs={songs}
+              setlistItems={setlistItems.map((item) => ({
+                songId: isSongItem(item) ? item.songId : undefined,
+                bibleRef: item.itemType === 'BIBLE' ? item.bibleRef : undefined,
+                mediaUrl: item.itemType === 'MEDIA' ? item.mediaUrl : undefined,
+              }))}
+              onAddSong={handleAddSong}
+              onAddBible={handleAddBible}
+              onAddMedia={handleAddMedia}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

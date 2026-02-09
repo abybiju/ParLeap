@@ -182,15 +182,39 @@ export async function addSongToEvent(eventId: string, songId: string, sequenceOr
     return { success: false, error: 'Song not found or access denied' };
   }
 
+  // Try new schema with item_type, fallback to old schema
+  const insertData: Record<string, unknown> = {
+    event_id: eventId,
+    song_id: songId,
+    sequence_order: sequenceOrder,
+    item_type: 'SONG',
+  };
+
   const { data, error: insertError } = await (supabase
     .from('event_items') as ReturnType<typeof supabase.from>)
-    .insert({
-      event_id: eventId,
-      song_id: songId,
-      sequence_order: sequenceOrder,
-    } as Record<string, unknown>)
+    .insert(insertData)
     .select('id')
     .single();
+
+  // If item_type column doesn't exist, try without it (backward compatibility)
+  if (insertError && insertError.code === '42703' && insertError.message?.includes('item_type')) {
+    const { data: fallbackData, error: fallbackError } = await (supabase
+      .from('event_items') as ReturnType<typeof supabase.from>)
+      .insert({
+        event_id: eventId,
+        song_id: songId,
+        sequence_order: sequenceOrder,
+      } as Record<string, unknown>)
+      .select('id')
+      .single();
+
+    if (fallbackError) {
+      return { success: false, error: fallbackError.message };
+    }
+
+    revalidatePath(`/events/${eventId}`);
+    return { success: true, id: (fallbackData as { id: string } | null)?.id };
+  }
 
   if (insertError) {
     return { success: false, error: insertError.message };
@@ -200,7 +224,84 @@ export async function addSongToEvent(eventId: string, songId: string, sequenceOr
   return { success: true, id: (data as { id: string } | null)?.id };
 }
 
+export async function addBibleToEvent(eventId: string, bibleRef: string, sequenceOrder: number): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) {
+    return { success: false, error };
+  }
+
+  const ownership = await ensureEventOwnership(supabase, user.id, eventId);
+  if (ownership.error) {
+    return { success: false, error: ownership.error };
+  }
+
+  const insertData: Record<string, unknown> = {
+    event_id: eventId,
+    item_type: 'BIBLE',
+    bible_ref: bibleRef,
+    sequence_order: sequenceOrder,
+  };
+
+  const { data, error: insertError } = await (supabase
+    .from('event_items') as ReturnType<typeof supabase.from>)
+    .insert(insertData)
+    .select('id')
+    .single();
+
+  if (insertError) {
+    // If columns don't exist, migration not run
+    if (insertError.code === '42703') {
+      return { success: false, error: 'Bible items require database migration 011. Please run the migration first.' };
+    }
+    return { success: false, error: insertError.message };
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  return { success: true, id: (data as { id: string } | null)?.id };
+}
+
+export async function addMediaToEvent(eventId: string, mediaUrl: string, mediaTitle: string, sequenceOrder: number): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) {
+    return { success: false, error };
+  }
+
+  const ownership = await ensureEventOwnership(supabase, user.id, eventId);
+  if (ownership.error) {
+    return { success: false, error: ownership.error };
+  }
+
+  const insertData: Record<string, unknown> = {
+    event_id: eventId,
+    item_type: 'MEDIA',
+    media_url: mediaUrl,
+    media_title: mediaTitle,
+    sequence_order: sequenceOrder,
+  };
+
+  const { data, error: insertError } = await (supabase
+    .from('event_items') as ReturnType<typeof supabase.from>)
+    .insert(insertData)
+    .select('id')
+    .single();
+
+  if (insertError) {
+    // If columns don't exist, migration not run
+    if (insertError.code === '42703') {
+      return { success: false, error: 'Media items require database migration 011. Please run the migration first.' };
+    }
+    return { success: false, error: insertError.message };
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  return { success: true, id: (data as { id: string } | null)?.id };
+}
+
 export async function removeSongFromEvent(eventId: string, eventItemId: string): Promise<ActionResult> {
+  return removeSetlistItem(eventId, eventItemId);
+}
+
+export async function removeSetlistItem(eventId: string, eventItemId: string): Promise<ActionResult> {
   const { supabase, user, error } = await requireUser();
   if (!user) {
     return { success: false, error };
