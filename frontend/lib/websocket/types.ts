@@ -99,6 +99,15 @@ export interface SessionStartedMessage {
       }>; // Compiled multi-line slides
       lineToSlideIndex?: number[]; // Mapping: lineIndex -> slideIndex
     }>;
+    setlistItems?: Array<{
+      id: string;
+      type: 'SONG' | 'BIBLE' | 'MEDIA';
+      sequenceOrder: number;
+      songId?: string;
+      bibleRef?: string;
+      mediaUrl?: string;
+      mediaTitle?: string;
+    }>; // Polymorphic setlist items
   };
   timing?: TimingMetadata;
 }

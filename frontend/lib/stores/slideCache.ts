@@ -18,10 +18,21 @@ export interface CachedSong {
   lineToSlideIndex?: number[]; // Mapping: lineIndex -> slideIndex
 }
 
+export interface CachedSetlistItem {
+  id: string;
+  type: 'SONG' | 'BIBLE' | 'MEDIA';
+  sequenceOrder: number;
+  songId?: string;
+  bibleRef?: string;
+  mediaUrl?: string;
+  mediaTitle?: string;
+}
+
 export interface CachedSetlist {
   eventId: string;
   eventName: string;
   songs: CachedSong[];
+  setlistItems?: CachedSetlistItem[]; // Polymorphic setlist items
   cachedAt: number;
 }
 
@@ -35,7 +46,7 @@ interface SlideCacheState {
   }>;
   
   // Actions
-  cacheSetlist: (eventId: string, eventName: string, songs: CachedSong[]) => void;
+  cacheSetlist: (eventId: string, eventName: string, songs: CachedSong[], setlistItems?: CachedSetlistItem[]) => void;
   preloadNextSlides: (currentSongIndex: number, currentSlideIndex: number, count?: number) => void;
   getSlide: (songIndex: number, slideIndex: number) => { songId: string; songTitle: string; lineText: string } | null;
   getNextSlides: (currentSongIndex: number, currentSlideIndex: number, count?: number) => Array<{
@@ -51,12 +62,13 @@ export const useSlideCache = create<SlideCacheState>((set, get) => ({
   setlist: null,
   preloadedSlides: [],
 
-  cacheSetlist: (eventId, eventName, songs) => {
+  cacheSetlist: (eventId, eventName, songs, setlistItems) => {
     set({
       setlist: {
         eventId,
         eventName,
         songs,
+        setlistItems,
         cachedAt: Date.now(),
       },
       preloadedSlides: [],

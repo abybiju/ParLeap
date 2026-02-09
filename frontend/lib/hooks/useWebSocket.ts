@@ -55,7 +55,7 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
 
       // Cache setlist when session starts
       if (isSessionStartedMessage(message)) {
-        console.log(`[useWebSocket] Received SESSION_STARTED: ${message.payload.totalSongs} songs, setlist:`, message.payload.setlist?.length ?? 0);
+        console.log(`[useWebSocket] Received SESSION_STARTED: ${message.payload.totalSongs} songs, setlist:`, message.payload.setlist?.length ?? 0, `setlistItems:`, message.payload.setlistItems?.length ?? 0);
         if (message.payload.setlist && message.payload.setlist.length > 0) {
           slideCache.cacheSetlist(
             message.payload.eventId,
@@ -67,7 +67,8 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
               lines: song.lines,
               slides: song.slides,
               lineToSlideIndex: song.lineToSlideIndex,
-            }))
+            })),
+            message.payload.setlistItems // Include polymorphic setlist items
           );
           // Preload initial slides
           slideCache.preloadNextSlides(message.payload.currentSongIndex, message.payload.currentSlideIndex);
