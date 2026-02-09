@@ -191,7 +191,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         
         // Build setlistItems from old format (all songs)
         if (itemsWithoutConfig) {
-          setlistItems = itemsWithoutConfig.map((item: any) => ({
+          setlistItems = itemsWithoutConfig.map((item: { id: string; sequence_order: number; song_id?: string; songs?: { id: string } | null }) => ({
             id: item.id,
             type: 'SONG' as const,
             sequenceOrder: item.sequence_order,
@@ -208,16 +208,25 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       
       // Build setlistItems from new polymorphic format
       if (itemsWithConfig) {
-        setlistItems = itemsWithConfig.map((item: any) => {
+        setlistItems = itemsWithConfig.map((item: {
+          id: string;
+          sequence_order: number;
+          item_type?: string | null;
+          song_id?: string | null;
+          songs?: { id: string } | null;
+          bible_ref?: string | null;
+          media_url?: string | null;
+          media_title?: string | null;
+        }) => {
           const itemType = item.item_type || (item.song_id ? 'SONG' : null) || 'SONG';
           return {
             id: item.id,
             type: itemType as 'SONG' | 'BIBLE' | 'MEDIA',
             sequenceOrder: item.sequence_order,
-            songId: itemType === 'SONG' ? (item.songs?.id || item.song_id) : undefined,
-            bibleRef: itemType === 'BIBLE' ? item.bible_ref : undefined,
-            mediaUrl: itemType === 'MEDIA' ? item.media_url : undefined,
-            mediaTitle: itemType === 'MEDIA' ? item.media_title : undefined,
+            songId: itemType === 'SONG' ? (item.songs?.id || item.song_id || undefined) : undefined,
+            bibleRef: itemType === 'BIBLE' ? item.bible_ref || undefined : undefined,
+            mediaUrl: itemType === 'MEDIA' ? item.media_url || undefined : undefined,
+            mediaTitle: itemType === 'MEDIA' ? item.media_title || undefined : undefined,
           };
         });
       }
@@ -253,7 +262,8 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     const songs = eventItems
       .filter((item) => {
         // Only process items that are songs (backward compatible: NULL item_type or song_id present = SONG)
-        const itemType = (item as any).item_type || ((item as any).song_id ? 'SONG' : null);
+        const itemWithType = item as EventItem & { item_type?: string | null; song_id?: string | null };
+        const itemType = itemWithType.item_type || (itemWithType.song_id ? 'SONG' : null);
         return !itemType || itemType === 'SONG';
       })
       .map((item) => {
