@@ -10,7 +10,15 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
-### February 6, 2026 - Smart Bible Listen Feature Documented 📋
+### February 6, 2026 (Afternoon) - Event Management UI Bug Fixes 🐛
+- ✅ **TypeScript Type-Check Fixes**: Resolved all type-check errors (unused imports, duplicate imports, type casting)
+- ✅ **Duplicate Key Constraint Violation**: Fixed drag-and-drop reordering with two-phase sequential updates + PostgreSQL function
+- ✅ **Null song_id Constraint**: Made `song_id` nullable in migration for polymorphic items
+- ⚠️ **Setlist Items in Live Session**: Partial fix - added `setlistItems` to SESSION_STARTED message (needs further investigation)
+- **Commits**: `7688fd6`, `09c3b8f`, `69250ba`, `8d91e41`
+- **See**: `.cursor/SESSION_SUMMARY_FEB_06_2026.md` for details
+
+### February 6, 2026 (Morning) - Smart Bible Listen Feature Documented 📋
 - 📋 **Smart Bible Listen Feature Specification**: Complete technical specification documented for future implementation
   - Cost optimization feature for Bible mode (87-93% STT cost reduction)
   - Two-stage hybrid system: Local wake-word detection + selective STT activation

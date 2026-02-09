@@ -1,6 +1,51 @@
 # ParLeap AI - Memory Log
 
-## Session: February 6, 2026 - Smart Bible Listen Feature Documentation 📋
+## Session: February 6, 2026 (Afternoon) - Event Management UI Bug Fixes 🐛
+
+### Critical Bug Fixes for Polymorphic Setlist Feature
+**Fixed TypeScript errors, database constraint violations, and partial fix for setlist items in live session.**
+
+### What We Accomplished
+1. **TypeScript Type-Check Fixes** ✅
+   - Fixed unused variables and imports across 5 files
+   - Fixed duplicate import in WebSocket handler
+   - Fixed type casting issues in eventService (needed `as unknown as` pattern)
+   - Commit: `7688fd6` - "fix: resolve TypeScript type-check errors"
+
+2. **Duplicate Key Constraint Violation (Drag-and-Drop)** ✅
+   - Problem: Error when reordering items via drag-and-drop
+   - Solution: Two-phase sequential update (temp values → final values)
+   - Added PostgreSQL function `reorder_event_items()` for atomic updates
+   - Commits: `09c3b8f`, `69250ba`
+
+3. **Null song_id Constraint Violation** ✅
+   - Problem: Error when adding Bible/Media items (song_id was NOT NULL)
+   - Solution: Made `song_id` nullable in migration
+   - Commit: `09c3b8f`
+
+4. **Setlist Items Not Loading in Live Session** ⚠️ (Partial)
+   - Problem: Setlist items not appearing in live session
+   - Solution Applied: Added `setlistItems` to SESSION_STARTED message, updated caching
+   - Status: Fix applied but user reports still not working - needs investigation
+   - Commit: `8d91e41`
+
+### Key Technical Decisions
+- **Sequential Updates**: Use two-phase approach (temp values → final) to avoid constraint violations
+- **PostgreSQL Functions**: Prefer atomic database functions for complex operations
+- **Type Casting**: Use `as unknown as` pattern for Supabase query results when TypeScript can't infer structure
+- **Data Flow**: Ensure new fields flow through entire pipeline: DB → Backend → WebSocket → Frontend → Display
+
+### Files Modified
+- Backend: `eventService.ts`, `handler.ts`, `websocket.ts` (types)
+- Frontend: `SetlistBuilder.tsx`, `SetlistItemCard.tsx`, `SetlistLibrary.tsx`, `actions.ts`, `slideCache.ts`, `useWebSocket.ts`, `live/[id]/page.tsx`, `websocket/types.ts`
+- Database: `011_add_polymorphic_setlist_items.sql` (migration)
+
+### Outstanding Issues
+- Setlist items not showing in live session (needs debug tomorrow)
+
+---
+
+## Session: February 6, 2026 (Morning) - Smart Bible Listen Feature Documentation 📋
 
 ### Feature Design Discussion & Documentation
 **Documented Smart Bible Listen feature for future implementation - cost optimization for Bible mode.**
