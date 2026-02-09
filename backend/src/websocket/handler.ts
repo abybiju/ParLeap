@@ -518,7 +518,7 @@ async function handleStartSession(
     lineToSlideIndex: song.lineToSlideIndex,
   }));
 
-  console.log(`[WS] Sending SESSION_STARTED with ${setlistPayload.length} songs in setlist`);
+  console.log(`[WS] Sending SESSION_STARTED with ${setlistPayload.length} songs in setlist and ${session.setlistItems?.length ?? 0} setlist items`);
 
   const response: SessionStartedMessage = {
     type: 'SESSION_STARTED',
@@ -534,6 +534,7 @@ async function handleStartSession(
       currentSongIndex,
       currentSlideIndex,
       setlist: setlistPayload,
+      setlistItems: session.setlistItems, // Include polymorphic setlist items
     },
     timing: createTiming(receivedAt, processingStart),
   };

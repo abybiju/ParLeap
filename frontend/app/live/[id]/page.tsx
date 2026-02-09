@@ -74,20 +74,39 @@ export default async function LivePage({ params }: LivePageProps) {
     notFound()
   }
 
-  // Fetch event_items for pre-session setlist
-  const { data: eventItems } = await supabase
+  // Fetch event_items for pre-session setlist (with polymorphic support)
+  // Try new schema first, fallback to old schema for backward compatibility
+  const { data: eventItems, error: itemsError } = await supabase
     .from('event_items')
-    .select('id, sequence_order, songs(id, title, artist)')
+    .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title, songs(id, title, artist)')
     .eq('event_id', params.id)
     .order('sequence_order', { ascending: true })
 
-  // Build initial setlist
-  const initialSetlist = (eventItems ?? [])
+  // If new columns don't exist, fallback to old query
+  let items: any[] = eventItems || [];
+  if (itemsError && itemsError.code === '42703') {
+    const { data: oldItems } = await supabase
+      .from('event_items')
+      .select('id, sequence_order, song_id, songs(id, title, artist)')
+      .eq('event_id', params.id)
+      .order('sequence_order', { ascending: true });
+    items = oldItems || [];
+  }
+
+  // Build initial setlist (only songs for display - BIBLE/MEDIA items are handled separately)
+  const initialSetlist = (items ?? [])
     .map((item: {
       id: string
       sequence_order: number
+      item_type?: string | null
+      song_id?: string | null
       songs: { id: string; title: string; artist: string | null } | null
     }) => {
+      // Only include SONG items in the setlist display
+      const itemType = item.item_type || (item.song_id ? 'SONG' : null) || 'SONG';
+      if (itemType !== 'SONG') {
+        return null; // Skip BIBLE and MEDIA items from initial setlist (they're handled in session)
+      }
       const song = item.songs
       if (!song) {
         return null
