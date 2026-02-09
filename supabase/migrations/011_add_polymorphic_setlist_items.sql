@@ -35,3 +35,35 @@ COMMENT ON COLUMN event_items.item_type IS 'Type of setlist item: SONG, BIBLE, o
 COMMENT ON COLUMN event_items.bible_ref IS 'Bible reference string (e.g., "John 3:16-18") for BIBLE type items';
 COMMENT ON COLUMN event_items.media_url IS 'URL to media content (image/video) for MEDIA type items';
 COMMENT ON COLUMN event_items.media_title IS 'Display title for MEDIA type items';
+
+-- Function to atomically reorder event items
+-- This prevents duplicate key violations during reordering
+CREATE OR REPLACE FUNCTION reorder_event_items(
+  p_event_id UUID,
+  p_item_ids UUID[]
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  temp_offset INT := 10000;
+  i INT;
+BEGIN
+  -- Phase 1: Set all items to unique temporary values
+  FOR i IN 1..array_length(p_item_ids, 1) LOOP
+    UPDATE event_items
+    SET sequence_order = temp_offset + i
+    WHERE id = p_item_ids[i]
+      AND event_id = p_event_id;
+  END LOOP;
+
+  -- Phase 2: Update to final sequence_order values
+  FOR i IN 1..array_length(p_item_ids, 1) LOOP
+    UPDATE event_items
+    SET sequence_order = i
+    WHERE id = p_item_ids[i]
+      AND event_id = p_event_id;
+  END LOOP;
+END;
+$$;

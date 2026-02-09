@@ -337,29 +337,39 @@ export async function reorderEventItems(eventId: string, orderedItemIds: string[
     return { success: false, error: ownership.error };
   }
 
-  // Update sequence_order sequentially to avoid duplicate key violations
-  // First, set all to negative values to free up the sequence_order space
-  for (const itemId of orderedItemIds) {
-    const { error: tempError } = await (supabase.from('event_items') as ReturnType<typeof supabase.from>)
-      .update({ sequence_order: -1 } as Record<string, unknown>)
-      .eq('id', itemId)
-      .eq('event_id', eventId);
+  // Try using the PostgreSQL function for atomic reordering (if available)
+  // Fallback to sequential updates if function doesn't exist
+  const { error: rpcError } = await (supabase.rpc as any)('reorder_event_items', {
+    p_event_id: eventId,
+    p_item_ids: orderedItemIds,
+  });
 
-    if (tempError) {
-      return { success: false, error: tempError.message };
+  if (rpcError) {
+    // Fallback: Use sequential updates with unique temporary values
+    // Use a large offset (10000) to ensure temporary values don't conflict
+    for (let index = 0; index < orderedItemIds.length; index++) {
+      const itemId = orderedItemIds[index];
+      const { error: tempError } = await (supabase.from('event_items') as ReturnType<typeof supabase.from>)
+        .update({ sequence_order: 10000 + index } as Record<string, unknown>)
+        .eq('id', itemId)
+        .eq('event_id', eventId);
+
+      if (tempError) {
+        return { success: false, error: tempError.message };
+      }
     }
-  }
 
-  // Then update to final sequence_order values
-  for (let index = 0; index < orderedItemIds.length; index++) {
-    const itemId = orderedItemIds[index];
-    const { error: updateError } = await (supabase.from('event_items') as ReturnType<typeof supabase.from>)
-      .update({ sequence_order: index + 1 } as Record<string, unknown>)
-      .eq('id', itemId)
-      .eq('event_id', eventId);
+    // Phase 2: Update to final sequence_order values
+    for (let index = 0; index < orderedItemIds.length; index++) {
+      const itemId = orderedItemIds[index];
+      const { error: updateError } = await (supabase.from('event_items') as ReturnType<typeof supabase.from>)
+        .update({ sequence_order: index + 1 } as Record<string, unknown>)
+        .eq('id', itemId)
+        .eq('event_id', eventId);
 
-    if (updateError) {
-      return { success: false, error: updateError.message };
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
     }
   }
 
