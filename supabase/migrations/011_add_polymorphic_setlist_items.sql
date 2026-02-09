@@ -2,6 +2,10 @@
 -- Allows event_items to contain Songs, Bible references, or Media items
 -- Maintains backward compatibility with existing song-only items
 
+-- Make song_id nullable to support non-song items
+ALTER TABLE event_items
+  ALTER COLUMN song_id DROP NOT NULL;
+
 -- Add new columns to event_items (all nullable for backward compatibility)
 ALTER TABLE event_items
   ADD COLUMN IF NOT EXISTS item_type TEXT DEFAULT 'SONG' CHECK (item_type IN ('SONG', 'BIBLE', 'MEDIA')),
