@@ -36,11 +36,24 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     notFound();
   }
 
-  const { data: eventItems } = await supabase
+  // Fetch event items with polymorphic support
+  // Try new schema first, fallback to old schema for backward compatibility
+  const { data: eventItems, error: itemsError } = await supabase
     .from('event_items')
-    .select('id, sequence_order, songs(id, title, artist)')
+    .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title, songs(id, title, artist)')
     .eq('event_id', params.id)
     .order('sequence_order', { ascending: true });
+
+  // If new columns don't exist, fallback to old query
+  let items: any[] = eventItems || [];
+  if (itemsError && itemsError.code === '42703') {
+    const { data: oldItems } = await supabase
+      .from('event_items')
+      .select('id, sequence_order, song_id, songs(id, title, artist)')
+      .eq('event_id', params.id)
+      .order('sequence_order', { ascending: true });
+    items = oldItems || [];
+  }
 
   const { data: songs } = await supabase
     .from('songs')
@@ -48,25 +61,49 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     .eq('user_id', user.id)
     .order('title', { ascending: true });
 
-  const setlist = (eventItems ?? [])
-    .map((item: { 
-      id: string; 
-      sequence_order: number; 
-      songs: { id: string; title: string; artist: string | null } | null 
-    }) => {
-      const song = item.songs;
-      if (!song) {
-        return null;
+  // Convert to SetlistItem format
+  const setlist = items
+    .map((item: any) => {
+      const itemType = item.item_type || (item.song_id ? 'SONG' : null) || 'SONG';
+      
+      if (itemType === 'SONG') {
+        const song = item.songs;
+        if (!song) return null;
+        return {
+          id: item.id,
+          eventId: params.id,
+          itemType: 'SONG' as const,
+          songId: song.id,
+          title: song.title,
+          artist: song.artist,
+          sequenceOrder: item.sequence_order,
+        };
       }
-      return {
-        id: item.id,
-        songId: song.id,
-        title: song.title,
-        artist: song.artist,
-        sequenceOrder: item.sequence_order,
-      };
+      
+      if (itemType === 'BIBLE') {
+        return {
+          id: item.id,
+          eventId: params.id,
+          itemType: 'BIBLE' as const,
+          bibleRef: item.bible_ref,
+          sequenceOrder: item.sequence_order,
+        };
+      }
+      
+      if (itemType === 'MEDIA') {
+        return {
+          id: item.id,
+          eventId: params.id,
+          itemType: 'MEDIA' as const,
+          mediaUrl: item.media_url,
+          mediaTitle: item.media_title,
+          sequenceOrder: item.sequence_order,
+        };
+      }
+      
+      return null;
     })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+    .filter((item: any): item is NonNullable<typeof item> => item !== null);
 
   return (
     <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">

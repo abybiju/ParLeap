@@ -25,7 +25,7 @@ import {
   isPingMessage,
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
-import { fetchEventData, type SongData } from '../services/eventService';
+import { fetchEventData, type SongData, type SetlistItemData } from '../services/eventService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 import {
   type BibleReference,
@@ -45,6 +45,7 @@ import {
   type SongContext,
   type MultiSongMatchResult,
 } from '../services/matcherService';
+import type { SetlistItemData } from '../services/eventService';
 
 // ============================================
 // Timing Utilities
@@ -199,7 +200,9 @@ interface SessionState {
   };
   bibleFollowCache?: Map<string, { text: string; book: string; chapter: number; verse: number; versionAbbrev: string }>;
   songs: SongData[];
+  setlistItems?: SetlistItemData[]; // Polymorphic setlist items
   currentSongIndex: number;
+  currentItemIndex?: number; // Index in polymorphic setlist (not just songs)
   currentSlideIndex: number; // Slide index (for display)
   currentLineIndex: number; // Line index (for matching) - tracks which line we're matching against
   rollingBuffer: string;
@@ -411,26 +414,54 @@ async function handleStartSession(
 
   // If there's an existing session, sync to its current state
   // Otherwise, start from the beginning
+  const currentItemIndex = existingSession?.currentItemIndex ?? 0;
   const currentSongIndex = existingSession?.currentSongIndex ?? 0;
   const currentSlideIndex = existingSession?.currentSlideIndex ?? 0;
-  const currentSong = eventData.songs[currentSongIndex] || eventData.songs[0];
+  
+  // Find current item in polymorphic setlist
+  const setlistItems = eventData.setlistItems || [];
+  const currentSetlistItem = setlistItems[currentItemIndex];
+  
+  // Find current song (only if current item is a SONG type)
+  // For backward compatibility: if no setlistItems, use songs array directly
+  let currentSong: SongData | undefined;
+  let actualSongIndex = currentSongIndex;
+  
+  if (setlistItems.length > 0 && currentSetlistItem) {
+    // Find the song index based on setlist item
+    if (currentSetlistItem.type === 'SONG' && currentSetlistItem.songId) {
+      actualSongIndex = eventData.songs.findIndex((s) => s.id === currentSetlistItem.songId);
+      if (actualSongIndex === -1) actualSongIndex = 0;
+    } else {
+      // Current item is BIBLE or MEDIA - find next SONG item
+      const nextSongItem = setlistItems.slice(currentItemIndex).find((item) => item.type === 'SONG');
+      if (nextSongItem?.songId) {
+        actualSongIndex = eventData.songs.findIndex((s) => s.id === nextSongItem.songId);
+        if (actualSongIndex === -1) actualSongIndex = 0;
+      } else {
+        actualSongIndex = 0;
+      }
+    }
+  }
+  
+  currentSong = eventData.songs[actualSongIndex] || eventData.songs[0];
   
   // Determine current line index from slide index (for matching)
   // If slides exist, find the first line of the current slide
   let currentLineIndex = currentSlideIndex;
-  if (currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
+  if (currentSong && currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
     currentLineIndex = currentSong.slides[currentSlideIndex].startLineIndex;
-  } else if (currentSong.lineToSlideIndex && currentSong.lineToSlideIndex.length > 0) {
+  } else if (currentSong && currentSong.lineToSlideIndex && currentSong.lineToSlideIndex.length > 0) {
     // Fallback: find first line that maps to this slide
     currentLineIndex = currentSong.lineToSlideIndex.findIndex(slideIdx => slideIdx === currentSlideIndex);
     if (currentLineIndex === -1) currentLineIndex = 0;
   }
   
-  const songContext = createSongContext(
-    { id: currentSong.id, sequence_order: currentSongIndex + 1 },
+  const songContext = currentSong ? createSongContext(
+    { id: currentSong.id, sequence_order: actualSongIndex + 1 },
     currentSong,
     currentLineIndex // Use line index for matching
-  );
+  ) : undefined;
   
   const session: SessionState = {
     sessionId,
@@ -444,7 +475,9 @@ async function handleStartSession(
     bibleFollowHit: undefined,
     bibleFollowCache: existingSession?.bibleFollowCache ?? undefined,
     songs: eventData.songs,
-    currentSongIndex,
+    setlistItems: eventData.setlistItems, // Include polymorphic setlist items
+    currentSongIndex: actualSongIndex,
+    currentItemIndex, // Track position in polymorphic setlist
     currentSlideIndex,
     currentLineIndex, // Track line index separately for matching
     rollingBuffer: existingSession?.rollingBuffer || '',

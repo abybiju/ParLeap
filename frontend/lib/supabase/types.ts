@@ -230,22 +230,34 @@ export interface Database {
         Row: {
           id: string
           event_id: string
-          song_id: string
+          song_id: string | null
           sequence_order: number
+          item_type: 'SONG' | 'BIBLE' | 'MEDIA' | null
+          bible_ref: string | null
+          media_url: string | null
+          media_title: string | null
           created_at: string
         }
         Insert: {
           id?: string
           event_id: string
-          song_id: string
+          song_id?: string | null
           sequence_order: number
+          item_type?: 'SONG' | 'BIBLE' | 'MEDIA' | null
+          bible_ref?: string | null
+          media_url?: string | null
+          media_title?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           event_id?: string
-          song_id?: string
+          song_id?: string | null
           sequence_order?: number
+          item_type?: 'SONG' | 'BIBLE' | 'MEDIA' | null
+          bible_ref?: string | null
+          media_url?: string | null
+          media_title?: string | null
         }
         Relationships: [
           {
