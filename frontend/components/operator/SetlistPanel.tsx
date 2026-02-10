@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Play } from 'lucide-react';
+import { Play, Music, BookOpen, Image as ImageIcon } from 'lucide-react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useSlideCache } from '@/lib/stores/slideCache';
 import { isDisplayUpdateMessage, isSessionStartedMessage, type DisplayUpdateMessage } from '@/lib/websocket/types';
@@ -16,37 +16,48 @@ interface SetlistPanelProps {
   }>;
 }
 
+/** Display item for the setlist (unified from setlistItems + songs or legacy songs-only) */
+type DisplayItem =
+  | { kind: 'SONG'; id: string; title: string; artist: string | null; sequenceOrder: number; songId: string }
+  | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+
 /**
  * Setlist Panel Component
- * 
- * Displays the full setlist with current song/slide highlighted
- * PHASE 2: Songs are now clickable for manual override
- * 
- * Shows initialSetlist before session starts, then switches to slideCache after SESSION_STARTED
+ *
+ * Displays the full setlist (songs, Bible, media) with current item/slide highlighted.
+ * Uses setlistItems when available (polymorphic), otherwise falls back to songs-only.
  */
 export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
   const { lastMessage, goToSlide } = useWebSocket(false);
   const slideCache = useSlideCache();
   const [currentSongId, setCurrentSongId] = useState<string | null>(null);
+  const [currentItemIndex, setCurrentItemIndex] = useState<number>(0);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [hasSessionStarted, setHasSessionStarted] = useState(false);
 
-  // Handle manual song jump
-  const handleSongClick = (songId: string, songIndex: number) => {
-    // Jump to first slide of the clicked song
+  const handleSongClick = (songId: string, _songIndex: number) => {
     goToSlide(0, songId);
-    console.log(`[SetlistPanel] Manual override: Jumping to song "${songId}" (index ${songIndex})`);
+    console.log(`[SetlistPanel] Manual override: Jumping to song "${songId}"`);
   };
 
   useEffect(() => {
     if (!lastMessage) return;
 
     if (isSessionStartedMessage(lastMessage)) {
-      console.log(`[SetlistPanel] SESSION_STARTED: ${lastMessage.payload.totalSongs} songs, cached setlist:`, slideCache.setlist?.songs.length ?? 0);
+      const payloadSetlistItems = lastMessage.payload.setlistItems;
+      const cachedSetlistItems = slideCache.setlist?.setlistItems;
+      console.log(`[SetlistPanel] SESSION_STARTED: ${lastMessage.payload.totalSongs} songs, cached setlist songs:`, slideCache.setlist?.songs.length ?? 0);
+      console.log('[SetlistPanel] payload.setlistItems:', payloadSetlistItems?.length ?? 0, payloadSetlistItems ?? 'undefined');
+      console.log('[SetlistPanel] slideCache.setlist.setlistItems:', cachedSetlistItems?.length ?? 0, cachedSetlistItems ?? 'undefined');
+      if (!payloadSetlistItems || payloadSetlistItems.length === 0) {
+        console.log('[SetlistPanel] setlistItems is undefined or empty in SESSION_STARTED payload');
+      }
       setHasSessionStarted(true);
       setCurrentSlideIndex(lastMessage.payload.currentSlideIndex);
+      setCurrentItemIndex(lastMessage.payload.currentItemIndex ?? lastMessage.payload.currentSongIndex ?? 0);
       if (slideCache.setlist && slideCache.setlist.songs.length > 0) {
-        setCurrentSongId(slideCache.setlist.songs[lastMessage.payload.currentSongIndex]?.id || null);
+        setCurrentSongId(slideCache.setlist.songs[lastMessage.payload.currentSongIndex]?.id ?? null);
       }
     }
 
@@ -57,23 +68,67 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
     }
   }, [lastMessage, slideCache.setlist]);
 
-  // Determine which setlist to display
-  const displaySetlist = hasSessionStarted && slideCache.setlist && slideCache.setlist.songs.length > 0
-    ? slideCache.setlist.songs
-    : initialSetlist;
+  // Build display list: prefer setlistItems when available, else songs-only
+  const displayItems: DisplayItem[] = (() => {
+    if (hasSessionStarted && slideCache.setlist) {
+      const items = slideCache.setlist.setlistItems;
+      const songs = slideCache.setlist.songs;
+      if (items && items.length > 0) {
+        const result: DisplayItem[] = [];
+        for (const item of items) {
+          if (item.type === 'SONG' && item.songId) {
+            const song = songs.find((s) => s.id === item.songId);
+            result.push({
+              kind: 'SONG',
+              id: item.id,
+              songId: item.songId,
+              title: song?.title ?? 'Unknown',
+              artist: song?.artist ?? null,
+              sequenceOrder: item.sequenceOrder,
+            });
+          } else if (item.type === 'BIBLE' && item.bibleRef) {
+            result.push({ kind: 'BIBLE', id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder });
+          } else if (item.type === 'MEDIA' && item.mediaUrl) {
+            result.push({
+              kind: 'MEDIA',
+              id: item.id,
+              mediaTitle: item.mediaTitle ?? 'Media',
+              mediaUrl: item.mediaUrl,
+              sequenceOrder: item.sequenceOrder,
+            });
+          }
+        }
+        return result;
+      }
+      return songs.map((song, idx) => ({
+        kind: 'SONG' as const,
+        id: song.id,
+        songId: song.id,
+        title: song.title,
+        artist: song.artist ?? null,
+        sequenceOrder: idx + 1,
+      }));
+    }
+    return initialSetlist.map((s) => ({
+      kind: 'SONG' as const,
+      id: s.id,
+      songId: s.id,
+      title: s.title,
+      artist: s.artist,
+      sequenceOrder: s.sequenceOrder,
+    }));
+  })();
 
-  const isUsingCachedSetlist = hasSessionStarted && slideCache.setlist && slideCache.setlist.songs.length > 0;
+  const isUsingCachedSetlist = hasSessionStarted && slideCache.setlist && (slideCache.setlist.songs.length > 0 || (slideCache.setlist.setlistItems?.length ?? 0) > 0);
 
-  if (displaySetlist.length === 0) {
+  if (displayItems.length === 0) {
     return (
       <div className="p-4">
         <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Setlist</h3>
-        <p className="text-sm text-slate-500">No songs in setlist</p>
+        <p className="text-sm text-slate-500">No items in setlist</p>
         {process.env.NODE_ENV === 'development' && (
           <p className="text-xs text-slate-600 mt-2">
-            Debug: hasSessionStarted={hasSessionStarted ? 'yes' : 'no'}, 
-            cached={slideCache.setlist ? 'exists' : 'null'}, 
-            initial={initialSetlist.length}
+            Debug: hasSessionStarted={hasSessionStarted ? 'yes' : 'no'}, cached={slideCache.setlist ? 'exists' : 'null'}, initial={initialSetlist.length}
           </p>
         )}
       </div>
@@ -83,64 +138,74 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
   return (
     <div className="h-full flex flex-col">
       <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4 px-4 pt-4">
-        Setlist ({displaySetlist.length} songs)
+        Setlist ({displayItems.length} items)
       </h3>
-      
+
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
-        {displaySetlist.map((song, songIndex) => {
-          const isCurrentSong = song.id === currentSongId;
-          
-          // Get slide data from cached setlist if available, otherwise use empty array
-          const cachedSong = isUsingCachedSetlist
-            ? slideCache.setlist!.songs.find((s) => s.id === song.id)
+        {displayItems.map((item, index) => {
+          const isCurrent = isUsingCachedSetlist ? index === currentItemIndex : item.kind === 'SONG' && item.songId === currentSongId;
+          const isSong = item.kind === 'SONG';
+          const cachedSong = isSong && isUsingCachedSetlist && slideCache.setlist
+            ? slideCache.setlist.songs.find((s) => s.id === item.songId)
             : null;
           const songLines = cachedSong?.lines ?? [];
           const songSlides = cachedSong?.slides;
-          
-          return (
-            <button
-              key={song.id}
-              onClick={() => handleSongClick(song.id, songIndex)}
-              disabled={isCurrentSong || !hasSessionStarted}
-              className={cn(
-                'w-full rounded-lg border p-3 transition-all text-left',
-                'hover:border-indigo-400/50 hover:bg-indigo-500/5',
-                'focus:outline-none focus:ring-2 focus:ring-indigo-500/50',
-                'disabled:cursor-default disabled:hover:border-indigo-500/50 disabled:hover:bg-indigo-500/10',
-                isCurrentSong
-                  ? 'border-indigo-500/50 bg-indigo-500/10'
-                  : 'border-white/10 bg-white/5 cursor-pointer',
-                !hasSessionStarted && 'opacity-75'
-              )}
-            >
+
+          const borderColor = isCurrent
+            ? 'border-indigo-500/50 bg-indigo-500/10'
+            : item.kind === 'SONG'
+              ? 'border-white/10 bg-white/5'
+              : item.kind === 'BIBLE'
+                ? 'border-purple-400/30 bg-purple-500/5'
+                : 'border-green-400/30 bg-green-500/5';
+
+          const content = (
+            <>
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 flex items-start gap-2">
-                  {!isCurrentSong && hasSessionStarted && (
+                  {isSong && !isCurrent && hasSessionStarted && (
                     <Play className="h-4 w-4 text-slate-400 flex-shrink-0 mt-0.5" />
                   )}
-                  <div className="flex-1">
-                    <p
-                      className={cn(
-                        'text-sm font-medium',
-                        isCurrentSong ? 'text-indigo-300' : 'text-slate-300'
-                      )}
-                    >
-                      {songIndex + 1}. {song.title}
-                    </p>
-                    {song.artist && (
-                      <p className="text-xs text-slate-500 mt-0.5">{song.artist}</p>
+                  <div className="flex-shrink-0 text-slate-400 mt-0.5">
+                    {item.kind === 'SONG' && <Music className="h-4 w-4" />}
+                    {item.kind === 'BIBLE' && <BookOpen className="h-4 w-4" />}
+                    {item.kind === 'MEDIA' && <ImageIcon className="h-4 w-4" aria-label="Media" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {item.kind === 'SONG' && (
+                      <>
+                        <p className={cn('text-sm font-medium', isCurrent ? 'text-indigo-300' : 'text-slate-300')}>
+                          {item.sequenceOrder}. {item.title}
+                        </p>
+                        {item.artist && <p className="text-xs text-slate-500 mt-0.5">{item.artist}</p>}
+                      </>
+                    )}
+                    {item.kind === 'BIBLE' && (
+                      <>
+                        <p className={cn('text-sm font-medium', isCurrent ? 'text-indigo-300' : 'text-slate-300')}>
+                          {item.sequenceOrder}. {item.bibleRef}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">Bible Reference</p>
+                      </>
+                    )}
+                    {item.kind === 'MEDIA' && (
+                      <>
+                        <p className={cn('text-sm font-medium', isCurrent ? 'text-indigo-300' : 'text-slate-300')}>
+                          {item.sequenceOrder}. {item.mediaTitle}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate max-w-[200px]">{item.mediaUrl}</p>
+                      </>
                     )}
                   </div>
                 </div>
-                {isCurrentSong && (
+                {isCurrent && (
                   <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-medium">
                     Current
                   </span>
                 )}
               </div>
 
-              {/* Show slide indicators for current song (only after session started) */}
-              {isCurrentSong && hasSessionStarted && songLines.length > 0 && (
+              {isSong && isCurrent && hasSessionStarted && songLines.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-white/10">
                   <div className="flex flex-wrap gap-1">
                     {songSlides
@@ -149,11 +214,7 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
                             key={slideIndex}
                             className={cn(
                               'w-2 h-2 rounded-full transition-all',
-                              slideIndex === currentSlideIndex
-                                ? 'bg-indigo-400'
-                                : slideIndex < currentSlideIndex
-                                ? 'bg-indigo-500/30'
-                                : 'bg-slate-600/30'
+                              slideIndex === currentSlideIndex ? 'bg-indigo-400' : slideIndex < currentSlideIndex ? 'bg-indigo-500/30' : 'bg-slate-600/30'
                             )}
                             title={`Slide ${slideIndex + 1}`}
                           />
@@ -163,24 +224,51 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
                             key={lineIndex}
                             className={cn(
                               'w-2 h-2 rounded-full transition-all',
-                              lineIndex === currentSlideIndex
-                                ? 'bg-indigo-400'
-                                : lineIndex < currentSlideIndex
-                                ? 'bg-indigo-500/30'
-                                : 'bg-slate-600/30'
+                              lineIndex === currentSlideIndex ? 'bg-indigo-400' : lineIndex < currentSlideIndex ? 'bg-indigo-500/30' : 'bg-slate-600/30'
                             )}
-                            title={`Slide ${lineIndex + 1}`}
+                            title={`Line ${lineIndex + 1}`}
                           />
                         ))}
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
-                    {songSlides
-                      ? `Slide ${currentSlideIndex + 1} of ${songSlides.length}`
-                      : `Line ${currentSlideIndex + 1} of ${songLines.length}`}
+                    {songSlides ? `Slide ${currentSlideIndex + 1} of ${songSlides.length}` : `Line ${currentSlideIndex + 1} of ${songLines.length}`}
                   </p>
                 </div>
               )}
-            </button>
+            </>
+          );
+
+          if (isSong && hasSessionStarted) {
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleSongClick(item.songId, index)}
+                disabled={isCurrent}
+                className={cn(
+                  'w-full rounded-lg border p-3 transition-all text-left',
+                  'hover:border-indigo-400/50 hover:bg-indigo-500/5',
+                  'focus:outline-none focus:ring-2 focus:ring-indigo-500/50',
+                  'disabled:cursor-default disabled:hover:border-indigo-500/50 disabled:hover:bg-indigo-500/10',
+                  borderColor,
+                  !hasSessionStarted && 'opacity-75'
+                )}
+              >
+                {content}
+              </button>
+            );
+          }
+
+          return (
+            <div
+              key={item.id}
+              className={cn(
+                'w-full rounded-lg border p-3 transition-all text-left cursor-default',
+                borderColor,
+                !hasSessionStarted && 'opacity-75'
+              )}
+            >
+              {content}
+            </div>
           );
         })}
       </div>
