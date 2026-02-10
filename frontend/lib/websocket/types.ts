@@ -87,6 +87,7 @@ export interface SessionStartedMessage {
     bibleFollow?: boolean;
     totalSongs: number;
     currentSongIndex: number;
+    currentItemIndex?: number; // Index in polymorphic setlist
     currentSlideIndex: number; // Now refers to slide index (not line index)
     setlist?: Array<{
       id: string;

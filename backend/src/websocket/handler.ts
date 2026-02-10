@@ -519,6 +519,11 @@ async function handleStartSession(
   }));
 
   console.log(`[WS] Sending SESSION_STARTED with ${setlistPayload.length} songs in setlist and ${session.setlistItems?.length ?? 0} setlist items`);
+  if (session.setlistItems && session.setlistItems.length > 0) {
+    console.log('[WS] setlistItems payload:', JSON.stringify(session.setlistItems.slice(0, 5)));
+  } else {
+    console.log('[WS] setlistItems is undefined or empty');
+  }
 
   const response: SessionStartedMessage = {
     type: 'SESSION_STARTED',
@@ -532,6 +537,7 @@ async function handleStartSession(
       bibleFollow: session.bibleFollow ?? false,
       totalSongs: session.songs.length,
       currentSongIndex,
+      currentItemIndex: session.currentItemIndex,
       currentSlideIndex,
       setlist: setlistPayload,
       setlistItems: session.setlistItems, // Include polymorphic setlist items
