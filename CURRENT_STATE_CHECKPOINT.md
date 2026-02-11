@@ -61,6 +61,15 @@ git checkout -b rollback-pre-smart-audio 8a57809
 - **Frontend:** `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_STT_PROVIDER`.
 - No Smart Listen–specific env vars yet.
 
+### Matcher tuning (optional, for inconsistent matching)
+| Env | Default | Effect |
+|-----|---------|--------|
+| `MATCHER_SIMILARITY_THRESHOLD` | 0.55 | Lower = more sensitive (risk: false advances) |
+| `MATCHER_PREPROCESS_MAX_WORDS` | 22 | Words used from transcript for matching |
+| `MATCHER_END_TRIGGER_DEBOUNCE` | 1 | Consecutive end-word hits to advance (1 = faster) |
+| `MATCHER_MIN_BUFFER_LENGTH` | 2 | Min words before attempting match |
+| `DEBUG_MATCHER` | false | Set `true` for verbose match logs |
+
 ---
 
 **After Smart Audio:** New message type(s) (e.g. `STT_WINDOW_REQUEST`), optional ring buffer and `useBibleWakeWord` in frontend, and conditional ElevenLabs start in handler when Smart Listen is on and current item is BIBLE. Default and kill switch must preserve the behavior described above.
