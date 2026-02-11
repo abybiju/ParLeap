@@ -63,8 +63,21 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
 
     if (isDisplayUpdateMessage(lastMessage)) {
       const displayMsg = lastMessage as DisplayUpdateMessage;
-      setCurrentSongId(displayMsg.payload.songId);
+      const songId = displayMsg.payload.songId;
+      setCurrentSongId(songId);
       setCurrentSlideIndex(displayMsg.payload.slideIndex);
+      // Sync currentItemIndex so setlist "Current" highlights the right item on AI auto-switch
+      if (slideCache.setlist?.setlistItems && slideCache.setlist.setlistItems.length > 0) {
+        const idx = slideCache.setlist.setlistItems.findIndex(
+          (item) =>
+            (item.type === 'SONG' && item.songId === songId) ||
+            (songId.startsWith('bible:') && item.type === 'BIBLE')
+        );
+        if (idx >= 0) setCurrentItemIndex(idx);
+      } else if (slideCache.setlist?.songs) {
+        const idx = slideCache.setlist.songs.findIndex((s) => s.id === songId);
+        if (idx >= 0) setCurrentItemIndex(idx);
+      }
     }
   }, [lastMessage, slideCache.setlist]);
 
