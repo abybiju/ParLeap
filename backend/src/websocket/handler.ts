@@ -245,7 +245,7 @@ interface SessionState {
   };
   // Audio chunk tracking for logging
   audioChunkCount?: number; // Track number of audio chunks received (for diagnostic logging)
-  // Smart Bible Listen: STT window active until this timestamp (only when smartListenEnabled and current item is BIBLE)
+  // Smart Listen: STT window active until this timestamp (used for non-SONG items when smartListenEnabled)
   sttWindowActiveUntil?: number;
   /** Client opted in to Smart Listen; gate only applies when true. Default false so we never drop audio unless client enables it. */
   smartListenEnabled?: boolean;
@@ -273,23 +273,27 @@ function sendError(ws: WebSocket, code: string, message: string, details?: unkno
   send(ws, errorMessage);
 }
 
-/**
- * True when the current setlist item is BIBLE (used for Smart Listen gate).
- */
-function currentItemIsBible(session: SessionState): boolean {
+function currentItemType(session: SessionState): 'SONG' | 'BIBLE' | 'MEDIA' | null {
   const items = session.setlistItems;
   const idx = session.currentItemIndex ?? 0;
-  if (!items || idx < 0 || idx >= items.length) return false;
-  return items[idx].type === 'BIBLE';
+  if (!items || idx < 0 || idx >= items.length) return null;
+  return items[idx].type;
 }
 
 /**
- * Smart Listen gate: when true, we do not start ElevenLabs on first audio for BIBLE items; we wait for STT_WINDOW_REQUEST.
- * Active when (1) server kill switch is NOT set, (2) client sent smartListenEnabled: true, (3) current item is BIBLE.
+ * Smart Listen gate: when true, we do not start ElevenLabs on first audio for non-SONG items;
+ * we wait for STT_WINDOW_REQUEST.
+ * Active when:
+ *   (1) server kill switch is NOT set
+ *   (2) client opted in via smartListenEnabled: true
+ *   (3) current setlist item is non-SONG (BIBLE/MEDIA)
+ * Unknown item types fail-safe to SONG-like behavior (no gate) for reliability.
  */
 function shouldUseSmartListenGate(session: SessionState): boolean {
   if (BIBLE_SMART_LISTEN_KILL_SWITCH) return false; // Server forcibly disabled
-  return session.smartListenEnabled === true && currentItemIsBible(session);
+  const type = currentItemType(session);
+  if (!type || type === 'SONG') return false;
+  return session.smartListenEnabled === true;
 }
 
 /**
@@ -1438,22 +1442,28 @@ async function handleAudioData(
       console.log(`[WS] ✅ Audio format validated: PCM 16-bit (${format.sampleRate}Hz, ${format.channels} channel)`);
     }
 
-    // Smart Bible Listen gate: for BIBLE items when enabled, do not start STT until STT_WINDOW_REQUEST
+    // Smart Listen gate: for non-SONG items when enabled, do not start STT until STT_WINDOW_REQUEST.
+    // Also close idle stream outside active window to avoid unnecessary paid connection time.
     if (shouldUseSmartListenGate(session)) {
-      if (session.sttWindowActiveUntil && Date.now() > session.sttWindowActiveUntil) {
+      const now = Date.now();
+      const windowActive =
+        session.sttWindowActiveUntil !== undefined && now <= session.sttWindowActiveUntil;
+
+      if (!windowActive) {
         if (session.sttStream) {
           try {
             session.sttStream.end();
           } catch (e) {
-            console.warn('[STT] Smart Listen: error ending stream after window:', e);
+            console.warn('[STT] Smart Listen: error ending stream outside active window:', e);
           }
           session.sttStream = undefined;
+          console.log('[STT] Smart Listen: stream closed (standby)');
         }
-        session.sttWindowActiveUntil = undefined;
-        console.log('[STT] Smart Listen: STT window expired, stream closed');
-      }
-      if (!session.sttStream || !session.sttWindowActiveUntil || Date.now() > session.sttWindowActiveUntil) {
-        return; // Drop audio until client sends STT_WINDOW_REQUEST or window is active
+        if (session.sttWindowActiveUntil && now > session.sttWindowActiveUntil) {
+          session.sttWindowActiveUntil = undefined;
+          console.log('[STT] Smart Listen: STT window expired');
+        }
+        return; // Drop audio until client sends STT_WINDOW_REQUEST and window is active
       }
     }
 
@@ -1530,7 +1540,7 @@ async function handleAudioData(
 }
 
 /**
- * Handle STT_WINDOW_REQUEST (Smart Bible Listen).
+ * Handle STT_WINDOW_REQUEST (Smart Listen).
  * Opens ElevenLabs STT window; optional catch-up audio from ring buffer.
  */
 function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string }): void {
@@ -1547,8 +1557,12 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
     sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'Smart Listen is not enabled for this session.');
     return;
   }
-  if (!currentItemIsBible(session)) {
-    sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'STT_WINDOW_REQUEST is only valid when current setlist item is BIBLE.');
+  if (!shouldUseSmartListenGate(session)) {
+    sendError(
+      ws,
+      'STT_WINDOW_UNSUPPORTED',
+      'STT_WINDOW_REQUEST is only valid when Smart Listen is enabled for a non-SONG setlist item.'
+    );
     return;
   }
   if (!isElevenLabsConfigured) {

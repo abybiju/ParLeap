@@ -13,9 +13,15 @@ import { cn } from '@/lib/utils';
  */
 interface STTStatusProps {
   audioActive?: boolean;
+  smartListenEnabled?: boolean;
+  smartListenWindowOpen?: boolean;
 }
 
-export function STTStatus({ audioActive = false }: STTStatusProps) {
+export function STTStatus({
+  audioActive = false,
+  smartListenEnabled = false,
+  smartListenWindowOpen = false,
+}: STTStatusProps) {
   const { lastMessage } = useWebSocket(false);
   const [hasReceivedTranscript, setHasReceivedTranscript] = useState(false);
   const [lastTranscriptTime, setLastTranscriptTime] = useState<number | null>(null);
@@ -44,6 +50,8 @@ export function STTStatus({ audioActive = false }: STTStatusProps) {
   const getStatusColor = () => {
     if (sttError) return 'text-red-400';
     if (sttProvider === 'mock') return 'text-orange-400';
+    if (smartListenEnabled && !smartListenWindowOpen) return 'text-sky-300';
+    if (smartListenEnabled && smartListenWindowOpen) return 'text-emerald-400';
     if (isSttActive) return 'text-green-400';
     return 'text-yellow-400';
   };
@@ -56,6 +64,12 @@ export function STTStatus({ audioActive = false }: STTStatusProps) {
       return 'Mock Mode (Not Transcribing)';
     }
     if (sttProvider === 'elevenlabs') {
+      if (smartListenEnabled) {
+        if (smartListenWindowOpen) {
+          return isSttActive ? 'Active (Window open)' : 'Window open (Awaiting speech)';
+        }
+        return 'Standby (Smart Listen)';
+      }
       if (isSttActive) {
         return 'Active (Receiving transcripts)';
       }
@@ -110,7 +124,7 @@ export function STTStatus({ audioActive = false }: STTStatusProps) {
           )}
         </div>
       )}
-      {sttProvider === 'elevenlabs' && !isSttActive && !hasReceivedTranscript && !sttError && (
+      {sttProvider === 'elevenlabs' && !smartListenEnabled && !isSttActive && !hasReceivedTranscript && !sttError && (
         <div className="mt-2 pt-2 border-t border-yellow-500/20">
           <p className="text-xs text-yellow-300">
             ⚠️ Check: ELEVENLABS_API_KEY configured in backend? Audio format is PCM?

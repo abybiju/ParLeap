@@ -17,7 +17,7 @@ export interface StartSessionMessage {
   type: 'START_SESSION';
   payload: {
     eventId: string;
-    /** When true, backend uses Smart Listen gate for BIBLE items (only start STT on STT_WINDOW_REQUEST). Default false so matching always works when client does not opt in. */
+    /** When true, backend uses Smart Listen gate for non-SONG items (only start STT on STT_WINDOW_REQUEST). */
     smartListenEnabled?: boolean;
   };
 }

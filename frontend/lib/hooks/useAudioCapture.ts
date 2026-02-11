@@ -17,6 +17,7 @@ export interface AudioCaptureState {
   permissionState: PermissionState;
   error: string | null;
   audioLevel: number; // 0-100
+  smartListenWindowOpen: boolean;
 }
 
 export interface UseAudioCaptureReturn {
@@ -35,7 +36,7 @@ export interface AudioCaptureOptions {
   sessionActive?: boolean; // Only send audio when session is active
   /** When true (and usePcm), audio is buffered until requestSttWindow() is called; then catch-up + live stream sent. */
   smartListenEnabled?: boolean;
-  /** Ring buffer length in ms (default 10000). Only used when smartListenEnabled. */
+  /** Ring buffer length in ms (default 5000). Only used when smartListenEnabled. */
   smartListenBufferMs?: number;
 }
 
@@ -56,6 +57,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     permissionState: 'prompt',
     error: null,
     audioLevel: 0,
+    smartListenWindowOpen: false,
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -76,7 +78,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const usePcm = options.usePcm === true;
   const sessionActive = options.sessionActive === true;
   const smartListenEnabled = options.smartListenEnabled === true;
-  const smartListenBufferMs = options.smartListenBufferMs ?? 10000;
+  const smartListenBufferMs = options.smartListenBufferMs ?? 5000;
   const ringBufferMaxChunks = Math.max(1, Math.ceil(smartListenBufferMs / 128));
   const ringBufferRef = useRef<string[]>([]);
   const sttWindowOpenRef = useRef(false);
@@ -88,6 +90,19 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     sessionActiveRef.current = sessionActive === true;
     console.log(`[AudioCapture] sessionActive changed to: ${sessionActive}`);
   }, [sessionActive]);
+
+  useEffect(() => {
+    if (!smartListenEnabled) {
+      if (sttWindowTimeoutRef.current) {
+        clearTimeout(sttWindowTimeoutRef.current);
+        sttWindowTimeoutRef.current = null;
+      }
+      sttWindowOpenRef.current = false;
+      setState((prev) =>
+        prev.smartListenWindowOpen ? { ...prev, smartListenWindowOpen: false } : prev
+      );
+    }
+  }, [smartListenEnabled]);
 
   // Runtime validation: Log warning if PCM mode is enabled but environment suggests wrong provider
   useEffect(() => {
@@ -593,9 +608,11 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     };
     wsClient.send(msg);
     sttWindowOpenRef.current = true;
+    setState((prev) => ({ ...prev, smartListenWindowOpen: true }));
     sttWindowTimeoutRef.current = setTimeout(() => {
       sttWindowOpenRef.current = false;
       sttWindowTimeoutRef.current = null;
+      setState((prev) => ({ ...prev, smartListenWindowOpen: false }));
     }, STT_WINDOW_MS);
   }, [usePcm, smartListenEnabled, wsClient, concatBase64Chunks]);
 
@@ -609,6 +626,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     }
     sttWindowOpenRef.current = false;
     ringBufferRef.current = [];
+    setState((prev) => ({ ...prev, smartListenWindowOpen: false }));
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
@@ -678,4 +696,3 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     ...(smartListenEnabled && usePcm ? { requestSttWindow } : {}),
   };
 }
-
