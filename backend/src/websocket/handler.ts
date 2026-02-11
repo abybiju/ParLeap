@@ -286,16 +286,12 @@ function currentItemType(session: SessionState): 'SONG' | 'BIBLE' | 'MEDIA' | nu
  * Gate is active when:
  *   (1) server kill switch is NOT set
  *   (2) client opted in via smartListenEnabled: true
- *   (3) either:
- *       - bibleMode is enabled (strict gate, all item types), or
- *       - current setlist item is non-SONG
- *
- * This allows strict Bible-mode cost control while keeping non-Bible sessions reliable.
+ *   (3) bibleMode is enabled AND current setlist item is non-SONG (Bible/Media)
  */
 function shouldUseSmartListenGate(session: SessionState): boolean {
   if (BIBLE_SMART_LISTEN_KILL_SWITCH) return false; // Server forcibly disabled
   if (session.smartListenEnabled !== true) return false;
-  if (session.bibleMode === true) return true;
+  if (session.bibleMode !== true) return false;
   const type = currentItemType(session);
   if (!type || type === 'SONG') return false;
   return true;
