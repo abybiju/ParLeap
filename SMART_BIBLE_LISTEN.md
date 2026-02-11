@@ -142,6 +142,7 @@ Audio captured → Store in ring buffer → Check for wake word → If detected:
 - **Default:** 30 seconds after wake word detected
 - **Configurable:** Via env var `BIBLE_SMART_LISTEN_WINDOW_MS=30000`
 - **Auto-extend:** If Bible reference found, window extends for follow mode
+- ✅ **Auto-start:** STT window starts automatically when the wake trigger fires
 
 ### Quote Matching
 - **Default:** Disabled (opt-in only)
@@ -406,6 +407,6 @@ BIBLE_WAKE_WORD_SENSITIVITY=0.7
 
 ---
 
-**Last Updated:** February 6, 2026  
+**Last Updated:** February 11, 2026  
 **Documented By:** ParLeap AI Assistant  
 **Next Review:** When implementation begins
