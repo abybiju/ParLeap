@@ -42,9 +42,20 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Recent Features
 
-**Landing page** – Scripture section ("And scripture too." with three cards, Bible Verses in marquee) and Live Console showcase (operator screenshot with 3D tilt, hover glow, click-to-open lightbox).
+**Smart Bible Listen** (February 11, 2026) — IN PROGRESS
+- Smart Listen toggle in operator HUD gates STT for Bible items
+- Frontend: audio buffered until wake word or "Listen now" triggers STT window
+- Backend: `shouldUseSmartListenGate()` checks `session.smartListenEnabled && currentItemIsBible`
+- Kill switch: `BIBLE_SMART_LISTEN_ENABLED=false` to force-disable server-side
+- **Known issue**: Bible items still not appearing in live setlist after session starts (fix deployed, needs verification)
+- Debug endpoint available: `/api/debug/event-items/:eventId`
 
-**Polymorphic setlist in live** – Setlist items (songs, Bible, media) display correctly in the live operator view; SESSION_STARTED includes setlistItems and frontend renders them.
+**Polymorphic setlist** — Bible items in live setlist
+- Backend eventService uses split queries (no songs() embed) to avoid PostgREST INNER JOIN issue
+- Frontend SetlistPanel merges missing Bible/Media from initialSetlist
+- OperatorHUD tracks currentItemIsBible from local clicks + backend messages
+
+**Landing page** – Scripture section ("And scripture too." with three cards, Bible Verses in marquee) and Live Console showcase (operator screenshot with 3D tilt, hover glow, click-to-open lightbox).
 
 **Adaptive Live Mode** (January 27, 2026)
 - Multi-song matching: AI detects when singer jumps to different song
@@ -56,7 +67,7 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Session Summaries Location
 Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
-- **Latest**: `SESSION_SUMMARY_FEB_06_2026.md` - Event Management UI fixes; setlist in live confirmed working
+- **Latest**: `SESSION_SUMMARY_FEB_11_2026.md` - Bible in live setlist + Smart Listen gate fixes
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap

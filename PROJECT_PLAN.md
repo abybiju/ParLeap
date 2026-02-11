@@ -10,6 +10,15 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### February 11, 2026 - Bible in Live Setlist + Smart Listen Gate ⚠️
+- ⚠️ **PostgREST INNER JOIN Fix**: Backend eventService split into separate queries (event_items + songs) to avoid INNER JOIN filtering out Bible items when `song_id IS NULL`
+- ✅ **Smart Listen Gate**: No longer requires `BIBLE_SMART_LISTEN_ENABLED` env var; honors client toggle directly
+- ✅ **Frontend Resilience**: SetlistPanel merges missing Bible/Media from initialSetlist; OperatorHUD tracks currentItemIsBible locally
+- 🔍 **Debug Endpoint**: `/api/debug/event-items/:eventId` for production diagnosis
+- **Status**: Fix deployed but needs verification — Bible still not showing in live setlist per user report
+- **Commits**: `3097cd0`, `b435214`
+- **See**: `.cursor/SESSION_SUMMARY_FEB_11_2026.md` for details
+
 ### Landing Page – Scripture & Live Console Showcase ✅
 - ✅ **Scripture section**: New "And scripture too." section between LyricWall and TestimonialWall
   - Three cards (verse display, reference follow, one flow) with glass-card-hover, purple accents, BookOpen/Mic/LayoutList icons
