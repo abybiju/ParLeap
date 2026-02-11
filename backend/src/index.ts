@@ -4,7 +4,7 @@ import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
 import { searchByHum, SearchResult } from './services/humSearchService';
 import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
-import { isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
+import { supabase, isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -112,6 +112,21 @@ app.get('/health', (_req, res) => {
     supabaseUrlPrefix: getSupabaseUrlPrefix(),
     supabaseProjectRef: getSupabaseProjectRef(),
   });
+});
+
+// Debug: show raw event_items for an event (temporary diagnostic)
+app.get('/api/debug/event-items/:eventId', async (req, res) => {
+  if (!isSupabaseConfigured || !supabase) {
+    res.json({ error: 'Supabase not configured' });
+    return;
+  }
+  const { eventId } = req.params;
+  const { data, error } = await supabase
+    .from('event_items')
+    .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title')
+    .eq('event_id', eventId)
+    .order('sequence_order', { ascending: true });
+  res.json({ eventId, itemCount: data?.length ?? 0, items: data, error });
 });
 
 // Hum-to-Search endpoint
