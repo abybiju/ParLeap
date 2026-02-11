@@ -203,7 +203,7 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
                         <p className={cn('text-sm font-medium', isCurrent ? 'text-indigo-300' : 'text-slate-300')}>
                           {item.sequenceOrder}. {item.bibleRef}
                         </p>
-                        <p className="text-xs text-slate-500 mt-0.5">Bible Reference</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Scripture</p>
                       </>
                     )}
                     {item.kind === 'MEDIA' && (

@@ -53,7 +53,7 @@ export function SetlistItemCard({ item, onRemove, isDragging, className, dragLis
             <p className="text-sm font-medium text-white">
               {item.sequenceOrder}. {item.bibleRef}
             </p>
-            <p className="text-xs text-slate-400">Bible Reference</p>
+            <p className="text-xs text-slate-400">Scripture</p>
           </div>
         </>
       );
