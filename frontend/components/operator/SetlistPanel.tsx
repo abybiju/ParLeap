@@ -15,6 +15,8 @@ type InitialSetlistItem =
 
 interface SetlistPanelProps {
   initialSetlist?: InitialSetlistItem[];
+  /** Called when the operator clicks a setlist item. Provides index and item kind for Smart Listen gate. */
+  onItemActivated?: (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA') => void;
 }
 
 /** Display item for the setlist (unified from setlistItems + songs or legacy songs-only) */
@@ -29,7 +31,7 @@ type DisplayItem =
  * Displays the full setlist (songs, Bible, media) with current item/slide highlighted.
  * Uses setlistItems when available (polymorphic), otherwise falls back to songs-only.
  */
-export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
+export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPanelProps) {
   const { lastMessage, goToItem } = useWebSocket(false);
   const slideCache = useSlideCache();
   const [currentSongId, setCurrentSongId] = useState<string | null>(null);
@@ -39,6 +41,7 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
 
   const handleItemClick = (index: number, item: DisplayItem) => {
     goToItem(index);
+    onItemActivated?.(index, item.kind);
     const label = item.kind === 'SONG' ? item.title : item.kind === 'BIBLE' ? item.bibleRef : item.mediaTitle;
     console.log(`[SetlistPanel] Manual override: Jumping to item ${index} (${item.kind}) "${label}"`);
   };
@@ -87,14 +90,28 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
     }
   }, [lastMessage, slideCache.setlist]);
 
-  // Build display list: prefer setlistItems when available, else fall back to initialSetlist or songs-only
+  // Convert an InitialSetlistItem to a DisplayItem
+  const toDisplayItem = (item: InitialSetlistItem): DisplayItem => {
+    if (item.kind === 'SONG') {
+      return { kind: 'SONG' as const, id: item.id, songId: item.songId, title: item.title, artist: item.artist, sequenceOrder: item.sequenceOrder };
+    }
+    if (item.kind === 'BIBLE') {
+      return { kind: 'BIBLE' as const, id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder };
+    }
+    return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.mediaTitle, mediaUrl: item.mediaUrl, sequenceOrder: item.sequenceOrder };
+  };
+
+  // Build display list: merge cached setlistItems with initialSetlist to ensure Bible/Media always appear
   const displayItems: DisplayItem[] = (() => {
     if (hasSessionStarted && slideCache.setlist) {
       const items = slideCache.setlist.setlistItems;
       const songs = slideCache.setlist.songs;
       if (items && items.length > 0) {
+        // Build from cached items
         const result: DisplayItem[] = [];
+        const cachedIds = new Set<string>();
         for (const item of items) {
+          cachedIds.add(item.id);
           if (item.type === 'SONG' && item.songId) {
             const song = songs.find((s) => s.id === item.songId);
             result.push({
@@ -117,19 +134,25 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
             });
           }
         }
+        // Merge any BIBLE/MEDIA items from initialSetlist that the backend missed
+        // (PostgREST INNER JOIN may have dropped them if song_id is NULL)
+        const missingItems: DisplayItem[] = [];
+        for (const init of initialSetlist) {
+          if ((init.kind === 'BIBLE' || init.kind === 'MEDIA') && !cachedIds.has(init.id)) {
+            missingItems.push(toDisplayItem(init));
+          }
+        }
+        if (missingItems.length > 0) {
+          console.log(`[SetlistPanel] Merging ${missingItems.length} missing Bible/Media items from initialSetlist`);
+          result.push(...missingItems);
+          // Re-sort by sequenceOrder so items appear in the correct position
+          result.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+        }
         return result;
       }
       // Backend may not send setlistItems (e.g. DB mismatch). Fall back to initialSetlist from live page.
       if (initialSetlist.length > 0) {
-        return initialSetlist.map((item) => {
-          if (item.kind === 'SONG') {
-            return { kind: 'SONG' as const, id: item.id, songId: item.songId, title: item.title, artist: item.artist, sequenceOrder: item.sequenceOrder };
-          }
-          if (item.kind === 'BIBLE') {
-            return { kind: 'BIBLE' as const, id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder };
-          }
-          return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.mediaTitle, mediaUrl: item.mediaUrl, sequenceOrder: item.sequenceOrder };
-        });
+        return initialSetlist.map(toDisplayItem);
       }
       return songs.map((song, idx) => ({
         kind: 'SONG' as const,
@@ -141,15 +164,7 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
       }));
     }
     // Pre-session: use polymorphic initialSetlist
-    return initialSetlist.map((item) => {
-      if (item.kind === 'SONG') {
-        return { kind: 'SONG' as const, id: item.id, songId: item.songId, title: item.title, artist: item.artist, sequenceOrder: item.sequenceOrder };
-      }
-      if (item.kind === 'BIBLE') {
-        return { kind: 'BIBLE' as const, id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder };
-      }
-      return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.mediaTitle, mediaUrl: item.mediaUrl, sequenceOrder: item.sequenceOrder };
-    });
+    return initialSetlist.map(toDisplayItem);
   })();
 
   const isUsingCachedSetlist = hasSessionStarted && slideCache.setlist && (slideCache.setlist.songs.length > 0 || (slideCache.setlist.setlistItems?.length ?? 0) > 0);

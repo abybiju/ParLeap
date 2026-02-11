@@ -44,31 +44,6 @@ export interface EventData {
   bibleVersionId?: string | null;
 }
 
-// Types for Supabase query results (with/without slide_config)
-type EventItemWithSlideConfig = {
-  sequence_order: number;
-  slide_config_override: SlideConfig | null;
-  songs: {
-    id: string;
-    title: string;
-    artist: string | null;
-    lyrics: string;
-    slide_config?: SlideConfig;
-  } | null;
-};
-
-type EventItemWithoutSlideConfig = {
-  sequence_order: number;
-  slide_config_override: SlideConfig | null;
-  songs: {
-    id: string;
-    title: string;
-    artist: string | null;
-    lyrics: string;
-  } | null;
-};
-
-type EventItem = EventItemWithSlideConfig | EventItemWithoutSlideConfig;
 
 interface SongWithSlideConfig {
   id: string;
@@ -156,104 +131,63 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     }
 
     // 2. Fetch event items (setlist) with polymorphic support
-    // Try with slide_config and item_type first (if migrations 006 and 011 have been run)
-    let eventItems: EventItem[] | null = null;
+    // Use TWO separate queries to avoid PostgREST INNER JOIN on songs() embed
+    // which filters out Bible/Media items when song_id IS NULL.
     let setlistItems: SetlistItemData[] | null = null;
-    let itemsError: { code?: string; message?: string } | null = null;
-    
-    // First attempt: try with slide_config, slide_config_override, and item_type (new schema)
-    const { data: itemsWithConfig, error: errorWithConfig } = await supabase
+    let rawItems: Array<{
+      id: string;
+      sequence_order: number;
+      item_type?: string | null;
+      song_id?: string | null;
+      slide_config_override?: SlideConfig | null;
+      bible_ref?: string | null;
+      media_url?: string | null;
+      media_title?: string | null;
+    }> | null = null;
+    let songsMap: Map<string, { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig }> = new Map();
+
+    // Query 1: Fetch ALL event_items WITHOUT the songs() embed (avoids INNER JOIN issue)
+    const { data: allItems, error: itemsError } = await supabase
       .from('event_items')
-      .select('id, sequence_order, item_type, slide_config_override, bible_ref, media_url, media_title, songs(id, title, artist, lyrics, slide_config)')
+      .select('id, sequence_order, item_type, song_id, slide_config_override, bible_ref, media_url, media_title')
       .eq('event_id', eventId)
       .order('sequence_order', { ascending: true });
 
-    // If column doesn't exist (migration not run), fall back to query without new columns
-    if (errorWithConfig && errorWithConfig.code === '42703') {
-      const missingColumns = [
-        errorWithConfig.message?.includes('slide_config'),
-        errorWithConfig.message?.includes('slide_config_override'),
-        errorWithConfig.message?.includes('item_type'),
-        errorWithConfig.message?.includes('bible_ref'),
-        errorWithConfig.message?.includes('media_url'),
-      ].some(Boolean);
-      
-      if (missingColumns) {
-        console.warn('[EventService] New columns not found - migrations may not be applied. Using fallback query.');
-        const { data: itemsWithoutConfig, error: errorWithoutConfig } = await supabase
-          .from('event_items')
-          .select('id, sequence_order, song_id, songs(id, title, artist, lyrics)')
-          .eq('event_id', eventId)
-          .order('sequence_order', { ascending: true });
-        
-        eventItems = itemsWithoutConfig as EventItem[] | null;
-        itemsError = errorWithoutConfig;
-        
-        // Build setlistItems from old format (all songs)
-        if (itemsWithoutConfig) {
-          setlistItems = (itemsWithoutConfig as unknown as Array<{
-            id: string;
-            sequence_order: number;
-            song_id?: string;
-            songs?: { id: string; title: string; artist: string | null; lyrics: string } | null;
-          }>).map((item) => ({
-            id: item.id,
-            type: 'SONG' as const,
-            sequenceOrder: item.sequence_order,
-            songId: item.song_id || item.songs?.id,
-          }));
-        }
-      } else {
-        eventItems = itemsWithConfig as EventItem[] | null;
-        itemsError = errorWithConfig;
-      }
-    } else {
-      eventItems = itemsWithConfig as EventItem[] | null;
-      itemsError = errorWithConfig;
-      
-      // Build setlistItems from new polymorphic format
-      if (itemsWithConfig) {
-        setlistItems = (itemsWithConfig as unknown as Array<{
-          id: string;
-          sequence_order: number;
-          item_type?: string | null;
-          song_id?: string | null;
-          songs?: { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig } | null;
-          bible_ref?: string | null;
-          media_url?: string | null;
-          media_title?: string | null;
-          slide_config_override?: SlideConfig | null;
-        }>).map((item) => {
-          const itemType =
-            item.item_type ||
-            (item.song_id ? 'SONG' : null) ||
-            (item.bible_ref ? 'BIBLE' : null) ||
-            (item.media_url ? 'MEDIA' : null) ||
-            'SONG';
-          return {
-            id: item.id,
-            type: itemType as 'SONG' | 'BIBLE' | 'MEDIA',
-            sequenceOrder: item.sequence_order,
-            songId: itemType === 'SONG' ? (item.songs?.id || item.song_id || undefined) : undefined,
-            bibleRef: itemType === 'BIBLE' ? item.bible_ref || undefined : undefined,
-            mediaUrl: itemType === 'MEDIA' ? item.media_url || undefined : undefined,
-            mediaTitle: itemType === 'MEDIA' ? item.media_title || undefined : undefined,
-          };
-        });
-      }
-    }
+    // If new columns don't exist (42703), fall back to minimal query
+    if (itemsError && itemsError.code === '42703') {
+      console.warn('[EventService] New columns not found - migrations may not be applied. Using fallback query.');
+      const { data: oldItems, error: oldError } = await supabase
+        .from('event_items')
+        .select('id, sequence_order, song_id')
+        .eq('event_id', eventId)
+        .order('sequence_order', { ascending: true });
 
-    if (itemsError) {
+      if (oldError) {
+        console.error(`[EventService] Fallback query failed for ${eventId}:`, oldError);
+        if (fallbackToMockData) {
+          console.warn('[EventService] Falling back to mock data (SUPABASE_FALLBACK_TO_MOCK=true)');
+          return getMockEventData(eventId);
+        }
+        return null;
+      }
+      rawItems = (oldItems ?? []).map((i: { id: string; sequence_order: number; song_id?: string | null }) => ({
+        id: i.id,
+        sequence_order: i.sequence_order,
+        song_id: i.song_id ?? null,
+      }));
+    } else if (itemsError) {
       console.error(`[EventService] Failed to fetch event items for ${eventId}:`, itemsError);
       if (fallbackToMockData) {
         console.warn('[EventService] Falling back to mock data (SUPABASE_FALLBACK_TO_MOCK=true)');
         return getMockEventData(eventId);
       }
       return null;
+    } else {
+      rawItems = allItems;
     }
 
-    if (!eventItems || eventItems.length === 0) {
-      console.warn(`[EventService] No songs found in setlist for event ${eventId}`);
+    if (!rawItems || rawItems.length === 0) {
+      console.warn(`[EventService] No items found in setlist for event ${eventId}`);
       if (fallbackToMockData) {
         console.warn('[EventService] Falling back to mock data (SUPABASE_FALLBACK_TO_MOCK=true)');
         return getMockEventData(eventId);
@@ -269,27 +203,75 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       };
     }
 
+    console.log(`[EventService] Fetched ${rawItems.length} event_items for event ${eventId}:`,
+      rawItems.map((i) => `${i.id.slice(0, 8)} type=${i.item_type ?? 'null'} song_id=${i.song_id?.slice(0, 8) ?? 'null'} bible_ref=${i.bible_ref ?? 'null'}`));
+
+    // Query 2: Fetch songs separately for all song_id references
+    const songIds = rawItems.filter((i) => i.song_id).map((i) => i.song_id as string);
+    if (songIds.length > 0) {
+      // Try with slide_config first
+      const { data: songsData, error: songsError } = await supabase
+        .from('songs')
+        .select('id, title, artist, lyrics, slide_config')
+        .in('id', songIds);
+
+      if (songsError && songsError.code === '42703') {
+        // slide_config column might not exist
+        console.warn('[EventService] songs.slide_config not found, using fallback.');
+        const { data: songsDataOld } = await supabase
+          .from('songs')
+          .select('id, title, artist, lyrics')
+          .in('id', songIds);
+        if (songsDataOld) {
+          for (const s of songsDataOld as Array<{ id: string; title: string; artist: string | null; lyrics: string }>) {
+            songsMap.set(s.id, s);
+          }
+        }
+      } else if (songsData) {
+        for (const s of songsData as Array<{ id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig }>) {
+          songsMap.set(s.id, s);
+        }
+      }
+    }
+
+    // Build polymorphic setlistItems
+    setlistItems = rawItems.map((item) => {
+      const itemType =
+        item.item_type ||
+        (item.song_id ? 'SONG' : null) ||
+        (item.bible_ref ? 'BIBLE' : null) ||
+        (item.media_url ? 'MEDIA' : null) ||
+        'SONG';
+      return {
+        id: item.id,
+        type: itemType as 'SONG' | 'BIBLE' | 'MEDIA',
+        sequenceOrder: item.sequence_order,
+        songId: itemType === 'SONG' ? (item.song_id || undefined) : undefined,
+        bibleRef: itemType === 'BIBLE' ? (item.bible_ref || undefined) : undefined,
+        mediaUrl: itemType === 'MEDIA' ? (item.media_url || undefined) : undefined,
+        mediaTitle: itemType === 'MEDIA' ? (item.media_title || undefined) : undefined,
+      };
+    });
+
+    console.log(`[EventService] Built ${setlistItems.length} setlistItems:`,
+      setlistItems.map((i) => `${i.type} id=${i.id.slice(0, 8)} songId=${i.songId?.slice(0, 8) ?? '-'} bibleRef=${i.bibleRef ?? '-'}`));
+
     // 3. Parse lyrics into lines and compile slides for each song (only SONG items)
-    const songs = eventItems
+    const songs = rawItems
       .filter((item) => {
-        // Only process items that are songs (backward compatible: NULL item_type or song_id present = SONG)
-        const itemWithType = item as EventItem & { item_type?: string | null; song_id?: string | null };
-        const itemType = itemWithType.item_type || (itemWithType.song_id ? 'SONG' : null);
+        const itemType = item.item_type || (item.song_id ? 'SONG' : null);
         return !itemType || itemType === 'SONG';
       })
       .map((item) => {
-        const songInfo = item.songs as unknown as (SongData & { lyrics: string; slide_config?: SlideConfig }) | null;
+        const songInfo = item.song_id ? songsMap.get(item.song_id) : null;
         if (!songInfo) {
-          console.warn(`[EventService] Song data is null for event item`);
+          console.warn(`[EventService] Song data is null for event item ${item.id} (song_id: ${item.song_id})`);
           return null;
         }
 
         // Merge song default config with event override
-        // slide_config and slide_config_override may not exist if migration 006 hasn't been run
-        const songSlideConfig = 'slide_config' in songInfo ? songInfo.slide_config : undefined;
-        const eventOverride = 'slide_config_override' in item && item.slide_config_override 
-          ? (item.slide_config_override as SlideConfig | null) ?? undefined
-          : undefined;
+        const songSlideConfig = songInfo.slide_config;
+        const eventOverride = item.slide_config_override ?? undefined;
         const mergedConfig = mergeSlideConfig(songSlideConfig, eventOverride);
 
         // Compile slides

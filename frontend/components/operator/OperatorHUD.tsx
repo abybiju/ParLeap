@@ -103,28 +103,42 @@ export function OperatorHUD({
     cooldownMs: 3000,
   });
 
-  // Sync currentItemIsBible from setlist item at currentItemIndex—never from displayed songId.
-  // When bibleMode displays a verse while on a song, songId can be "bible:..." but the setlist item is still a song.
-  // Smart Listen and Listen now require the actual setlist item to be BIBLE.
+  // Callback from SetlistPanel when operator clicks a setlist item.
+  // Immediately updates currentItemIsBible so the Smart Listen gate reacts without waiting for backend.
+  const handleItemActivated = (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA') => {
+    setCurrentItemIsBible(kind === 'BIBLE');
+    console.log(`[OperatorHUD] Item activated: index=${index} kind=${kind} → currentItemIsBible=${kind === 'BIBLE'}`);
+  };
+
+  // Sync currentItemIsBible from backend messages.
+  // Also checks initialSetlist as fallback when backend setlistItems may not include Bible items.
   useEffect(() => {
     if (!lastMessage) return;
-    const items =
-      isSessionStartedMessage(lastMessage)
-        ? lastMessage.payload.setlistItems
-        : slideCache.setlist?.setlistItems;
     let idx: number | undefined;
     if (isSessionStartedMessage(lastMessage)) {
       idx = lastMessage.payload.currentItemIndex ?? lastMessage.payload.currentSongIndex ?? 0;
     } else if (isDisplayUpdateMessage(lastMessage)) {
       idx = (lastMessage.payload as { currentItemIndex?: number }).currentItemIndex;
     }
-    if (items && idx !== undefined && idx >= 0) {
-      const item = items[idx];
-      setCurrentItemIsBible(item?.type === 'BIBLE');
+    if (idx === undefined || idx < 0) return;
+
+    // Try backend setlistItems first
+    const items =
+      isSessionStartedMessage(lastMessage)
+        ? lastMessage.payload.setlistItems
+        : slideCache.setlist?.setlistItems;
+    if (items && idx < items.length) {
+      setCurrentItemIsBible(items[idx].type === 'BIBLE');
+      return;
+    }
+    // Fallback: check initialSetlist (which always includes Bible items from frontend Supabase)
+    if (initialSetlist && idx < initialSetlist.length) {
+      setCurrentItemIsBible(initialSetlist[idx].kind === 'BIBLE');
+      return;
     }
     // When DISPLAY_UPDATE has no currentItemIndex (e.g. bibleMode verse display), do not infer from songId
     // — we may be on a song with bibleMode showing a verse.
-  }, [lastMessage, slideCache.setlist]);
+  }, [lastMessage, slideCache.setlist, initialSetlist]);
 
   // Environment variable validation and debug logging
   useEffect(() => {
@@ -769,7 +783,7 @@ export function OperatorHUD({
 
         {/* Right Panel: Setlist */}
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
-          <SetlistPanel initialSetlist={initialSetlist} />
+          <SetlistPanel initialSetlist={initialSetlist} onItemActivated={handleItemActivated} />
         </div>
       </div>
     </div>
