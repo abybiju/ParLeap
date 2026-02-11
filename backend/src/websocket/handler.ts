@@ -599,6 +599,7 @@ async function handleStartSession(
         songId: currentSong.id,
         songTitle: currentSong.title,
         isAutoAdvance: false,
+        currentItemIndex: session.currentItemIndex,
       },
       timing: createTiming(receivedAt, processingStart),
     };
@@ -616,6 +617,7 @@ async function handleStartSession(
         songId: currentSong.id,
         songTitle: currentSong.title,
         isAutoAdvance: false,
+        currentItemIndex: session.currentItemIndex,
       },
       timing: createTiming(receivedAt, processingStart),
     };
@@ -706,6 +708,7 @@ function handleUpdateEventSettings(
             songId: currentSong.id,
             songTitle: currentSong.title,
             isAutoAdvance: false,
+            currentItemIndex: session.currentItemIndex,
           },
           timing: createTiming(receivedAt, processingStart),
         };
@@ -884,6 +887,7 @@ async function handleTranscriptionResult(
             songId: `bible:${verse.book}:${verse.chapter}:${verse.verse}`,
             songTitle: verseTitle,
             isAutoAdvance: true,
+            currentItemIndex: session.currentItemIndex,
           },
           timing: createTiming(receivedAt, processingStart),
         };
@@ -1008,6 +1012,7 @@ async function handleTranscriptionResult(
                 songId: `bible:${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}`,
                 songTitle: verseTitle,
                 isAutoAdvance: true,
+                currentItemIndex: session.currentItemIndex,
               },
               timing: createTiming(receivedAt, processingStart),
             };
@@ -1095,6 +1100,10 @@ async function handleTranscriptionResult(
               // Perform the song switch
               session.currentSongIndex = suggestion.songIndex;
               session.currentSlideIndex = suggestion.matchedLineIndex;
+              // Update currentItemIndex to match the setlist item for this song
+              const setlistItems = session.setlistItems ?? [];
+              const itemIdx = setlistItems.findIndex((i) => i.type === 'SONG' && i.songId === suggestion.songId);
+              if (itemIdx >= 0) session.currentItemIndex = itemIdx;
               session.songContext = createSongContext(
                 { id: suggestion.songId, sequence_order: suggestion.songIndex + 1 },
                 session.songs[suggestion.songIndex],
@@ -1148,6 +1157,7 @@ async function handleTranscriptionResult(
                   songTitle: suggestion.songTitle,
                   matchConfidence: suggestion.confidence,
                   isAutoAdvance: true,
+                  currentItemIndex: session.currentItemIndex,
                 },
                 timing: createTiming(receivedAt, processingStart),
               };
@@ -1314,6 +1324,7 @@ async function handleTranscriptionResult(
               songTitle: session.songContext.title,
               matchConfidence: matchResult.confidence,
               isAutoAdvance: isLineEndConfirmed || false,
+              currentItemIndex: session.currentItemIndex,
             },
             timing: createTiming(receivedAt, processingStart),
           };
