@@ -103,17 +103,27 @@ export function OperatorHUD({
     cooldownMs: 3000,
   });
 
-  // Sync currentItemIsBible from lastMessage (SESSION_STARTED or DISPLAY_UPDATE)
+  // Sync currentItemIsBible from setlist item at currentItemIndex—never from displayed songId.
+  // When bibleMode displays a verse while on a song, songId can be "bible:..." but the setlist item is still a song.
+  // Smart Listen and Listen now require the actual setlist item to be BIBLE.
   useEffect(() => {
     if (!lastMessage) return;
+    const items =
+      isSessionStartedMessage(lastMessage)
+        ? lastMessage.payload.setlistItems
+        : slideCache.setlist?.setlistItems;
+    let idx: number | undefined;
     if (isSessionStartedMessage(lastMessage)) {
-      const items = lastMessage.payload.setlistItems ?? slideCache.setlist?.setlistItems;
-      const idx = lastMessage.payload.currentItemIndex ?? lastMessage.payload.currentSongIndex ?? 0;
-      const item = items?.[idx];
-      setCurrentItemIsBible(item?.type === 'BIBLE');
+      idx = lastMessage.payload.currentItemIndex ?? lastMessage.payload.currentSongIndex ?? 0;
     } else if (isDisplayUpdateMessage(lastMessage)) {
-      setCurrentItemIsBible((lastMessage.payload as { songId?: string }).songId?.startsWith('bible:') ?? false);
+      idx = (lastMessage.payload as { currentItemIndex?: number }).currentItemIndex;
     }
+    if (items && idx !== undefined && idx >= 0) {
+      const item = items[idx];
+      setCurrentItemIsBible(item?.type === 'BIBLE');
+    }
+    // When DISPLAY_UPDATE has no currentItemIndex (e.g. bibleMode verse display), do not infer from songId
+    // — we may be on a song with bibleMode showing a verse.
   }, [lastMessage, slideCache.setlist]);
 
   // Environment variable validation and debug logging
