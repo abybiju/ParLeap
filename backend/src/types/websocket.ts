@@ -17,6 +17,8 @@ export interface StartSessionMessage {
   type: 'START_SESSION';
   payload: {
     eventId: string;
+    /** When true, backend uses Smart Listen gate for BIBLE items (only start STT on STT_WINDOW_REQUEST). Default false so matching always works when client does not opt in. */
+    smartListenEnabled?: boolean;
   };
 }
 
@@ -80,6 +82,19 @@ export interface PingMessage {
 }
 
 /**
+ * STT_WINDOW_REQUEST - Request to start STT for Smart Bible Listen (gatekeeper pattern).
+ * When Smart Listen is on, backend does not start ElevenLabs until this message.
+ * Optional catch-up audio (e.g. last 3–10s from ring buffer) can be sent to reduce latency.
+ */
+export interface SttWindowRequestMessage {
+  type: 'STT_WINDOW_REQUEST';
+  payload: {
+    /** Optional: base64-encoded PCM audio (ring buffer) to send before live stream */
+    catchUpAudio?: string;
+  };
+}
+
+/**
  * All client-to-server message types
  */
 export type ClientMessage =
@@ -88,7 +103,8 @@ export type ClientMessage =
   | AudioDataMessage
   | ManualOverrideMessage
   | StopSessionMessage
-  | PingMessage;
+  | PingMessage
+  | SttWindowRequestMessage;
 
 // ============================================
 // Server-to-Client Message Types
@@ -307,4 +323,8 @@ export function isStopSessionMessage(msg: ClientMessage): msg is StopSessionMess
 
 export function isPingMessage(msg: ClientMessage): msg is PingMessage {
   return msg.type === 'PING';
+}
+
+export function isSttWindowRequestMessage(msg: ClientMessage): msg is SttWindowRequestMessage {
+  return msg.type === 'STT_WINDOW_REQUEST';
 }
