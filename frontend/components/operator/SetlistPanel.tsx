@@ -87,7 +87,7 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
     }
   }, [lastMessage, slideCache.setlist]);
 
-  // Build display list: prefer setlistItems when available, else songs-only
+  // Build display list: prefer setlistItems when available, else fall back to initialSetlist or songs-only
   const displayItems: DisplayItem[] = (() => {
     if (hasSessionStarted && slideCache.setlist) {
       const items = slideCache.setlist.setlistItems;
@@ -118,6 +118,18 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
           }
         }
         return result;
+      }
+      // Backend may not send setlistItems (e.g. DB mismatch). Fall back to initialSetlist from live page.
+      if (initialSetlist.length > 0) {
+        return initialSetlist.map((item) => {
+          if (item.kind === 'SONG') {
+            return { kind: 'SONG' as const, id: item.id, songId: item.songId, title: item.title, artist: item.artist, sequenceOrder: item.sequenceOrder };
+          }
+          if (item.kind === 'BIBLE') {
+            return { kind: 'BIBLE' as const, id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder };
+          }
+          return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.mediaTitle, mediaUrl: item.mediaUrl, sequenceOrder: item.sequenceOrder };
+        });
       }
       return songs.map((song, idx) => ({
         kind: 'SONG' as const,
