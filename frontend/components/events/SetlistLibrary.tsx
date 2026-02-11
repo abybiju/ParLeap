@@ -30,7 +30,6 @@ export function SetlistLibrary({
   onAddMedia,
 }: SetlistLibraryProps) {
   const [activeTab, setActiveTab] = useState<TabType>('songs');
-  const [bibleRef, setBibleRef] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaTitle, setMediaTitle] = useState('');
 
@@ -40,11 +39,7 @@ export function SetlistLibrary({
   );
 
   const handleAddBible = () => {
-    const ref = bibleRef.trim();
-    if (ref) {
-      onAddBible(ref);
-      setBibleRef('');
-    }
+    onAddBible('Bible'); // Generic slot – AI listens for any verse, not a pre-set reference
   };
 
   const handleAddMedia = () => {
@@ -133,31 +128,15 @@ export function SetlistLibrary({
 
         {activeTab === 'bible' && (
           <div className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-300 mb-2 block">Bible Reference</label>
-              <Input
-                type="text"
-                placeholder="e.g., John 3:16 or Psalm 23:1-6"
-                value={bibleRef}
-                onChange={(e) => setBibleRef(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleAddBible();
-                  }
-                }}
-                className="bg-slate-900/60 border-white/10 text-white"
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                Enter a passage reference (book chapter:verse or range)
-              </p>
-            </div>
+            <p className="text-sm text-slate-400">
+              Add a Bible segment to your setlist. When this item is active, the AI will listen for any spoken verse reference and display it on the projector—no need to pre-specify passages.
+            </p>
             <Button
               onClick={handleAddBible}
-              disabled={!bibleRef.trim()}
               className="w-full"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Bible Reference
+              Add Bible
             </Button>
           </div>
         )}

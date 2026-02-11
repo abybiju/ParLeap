@@ -158,7 +158,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
     startTransition(async () => {
       const result = await addBibleToEvent(eventId, bibleRef, nextOrder);
       if (!result.success) {
-        toast.error(result.error || 'Failed to add Bible reference');
+        toast.error(result.error || 'Failed to add Bible segment');
         return;
       }
 
@@ -171,7 +171,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
       };
 
       setSetlistItems((prev) => [...prev, newItem]);
-      toast.success('Bible reference added to setlist');
+      toast.success('Bible segment added to setlist');
     });
   };
 
@@ -232,7 +232,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-white">Setlist Builder</h2>
         <p className="text-sm text-slate-300">
-          Drag items to reorder. Add songs, Bible references, or media from the library.
+          Drag items to reorder. Add songs, Bible, or media from the library.
         </p>
       </div>
 
