@@ -355,7 +355,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
 
       wsClient.send(message, captureTime);
     },
-    [encodePcmToBase64, wsClient, sessionActive, smartListenEnabled, ringBufferMaxChunks]
+    [encodePcmToBase64, wsClient, smartListenEnabled, ringBufferMaxChunks]
   );
 
   const startPcmProcessing = useCallback((stream: MediaStream) => {
@@ -403,7 +403,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     audioContext.resume().catch((error) => {
       console.warn('AudioContext resume failed:', error);
     });
-  }, [ensureAudioContext, sendPcmChunk, sessionActive, wsClient]);
+  }, [ensureAudioContext, sendPcmChunk, wsClient]);
 
   /**
    * Send audio chunk to WebSocket
