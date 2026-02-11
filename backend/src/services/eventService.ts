@@ -224,7 +224,12 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
           media_title?: string | null;
           slide_config_override?: SlideConfig | null;
         }>).map((item) => {
-          const itemType = item.item_type || (item.song_id ? 'SONG' : null) || 'SONG';
+          const itemType =
+            item.item_type ||
+            (item.song_id ? 'SONG' : null) ||
+            (item.bible_ref ? 'BIBLE' : null) ||
+            (item.media_url ? 'MEDIA' : null) ||
+            'SONG';
           return {
             id: item.id,
             type: itemType as 'SONG' | 'BIBLE' | 'MEDIA',
