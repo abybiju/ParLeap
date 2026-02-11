@@ -14,6 +14,7 @@ export const StartSessionSchema = z.object({
   type: z.literal('START_SESSION'),
   payload: z.object({
     eventId: z.string().uuid(),
+    smartListenEnabled: z.boolean().optional(),
   }),
 });
 
@@ -58,6 +59,13 @@ export const PingSchema = z.object({
   type: z.literal('PING'),
 });
 
+export const SttWindowRequestSchema = z.object({
+  type: z.literal('STT_WINDOW_REQUEST'),
+  payload: z.object({
+    catchUpAudio: z.string().optional(),
+  }),
+});
+
 /**
  * Combined schema for all client messages
  */
@@ -68,6 +76,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   ManualOverrideSchema,
   StopSessionSchema,
   PingSchema,
+  SttWindowRequestSchema,
 ]);
 
 // ============================================
@@ -80,6 +89,7 @@ export type ValidatedAudioData = z.infer<typeof AudioDataSchema>;
 export type ValidatedManualOverride = z.infer<typeof ManualOverrideSchema>;
 export type ValidatedStopSession = z.infer<typeof StopSessionSchema>;
 export type ValidatedPing = z.infer<typeof PingSchema>;
+export type ValidatedSttWindowRequest = z.infer<typeof SttWindowRequestSchema>;
 export type ValidatedClientMessage = z.infer<typeof ClientMessageSchema>;
 
 // ============================================

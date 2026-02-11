@@ -12,6 +12,8 @@ export interface StartSessionMessage {
   type: 'START_SESSION';
   payload: {
     eventId: string;
+    /** When true, backend uses Smart Listen gate for BIBLE items. Default false so matching always works. */
+    smartListenEnabled?: boolean;
   };
 }
 
@@ -54,13 +56,22 @@ export interface PingMessage {
   type: 'PING';
 }
 
+/** Smart Bible Listen: request backend to open STT window; optional catch-up audio from ring buffer. */
+export interface SttWindowRequestMessage {
+  type: 'STT_WINDOW_REQUEST';
+  payload: {
+    catchUpAudio?: string;
+  };
+}
+
 export type ClientMessage =
   | StartSessionMessage
   | UpdateEventSettingsMessage
   | AudioDataMessage
   | ManualOverrideMessage
   | StopSessionMessage
-  | PingMessage;
+  | PingMessage
+  | SttWindowRequestMessage;
 
 // ============================================
 // Server-to-Client Message Types

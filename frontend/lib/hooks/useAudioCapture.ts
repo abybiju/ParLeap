@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getWebSocketClient } from '../websocket/client';
-import type { AudioDataMessage } from '../websocket/types';
+import type { AudioDataMessage, SttWindowRequestMessage } from '../websocket/types';
 
 export type PermissionState = 'prompt' | 'granted' | 'denied' | 'unsupported';
 
@@ -26,11 +26,17 @@ export interface UseAudioCaptureReturn {
   pause: () => void;
   resume: () => void;
   requestPermission: () => Promise<boolean>;
+  /** Smart Bible Listen: open STT window and send ring-buffer catch-up. No-op when not in PCM or smartListenEnabled. */
+  requestSttWindow?: () => void;
 }
 
 export interface AudioCaptureOptions {
   usePcm?: boolean;
   sessionActive?: boolean; // Only send audio when session is active
+  /** When true (and usePcm), audio is buffered until requestSttWindow() is called; then catch-up + live stream sent. */
+  smartListenEnabled?: boolean;
+  /** Ring buffer length in ms (default 10000). Only used when smartListenEnabled. */
+  smartListenBufferMs?: number;
 }
 
 /**
@@ -69,6 +75,13 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const wsClient = getWebSocketClient();
   const usePcm = options.usePcm === true;
   const sessionActive = options.sessionActive === true;
+  const smartListenEnabled = options.smartListenEnabled === true;
+  const smartListenBufferMs = options.smartListenBufferMs ?? 10000;
+  const ringBufferMaxChunks = Math.max(1, Math.ceil(smartListenBufferMs / 128));
+  const ringBufferRef = useRef<string[]>([]);
+  const sttWindowOpenRef = useRef(false);
+  const sttWindowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const STT_WINDOW_MS = 30000;
   
   // Update ref when sessionActive changes
   useEffect(() => {
@@ -273,39 +286,60 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     return btoa(binary);
   }, []);
 
+  /** Concatenate ring-buffer base64 chunks into one base64 string (decode → concat → encode). */
+  const concatBase64Chunks = useCallback((chunks: string[]): string => {
+    if (chunks.length === 0) return '';
+    const totalLength = chunks.reduce((sum, b64) => sum + (atob(b64).length), 0);
+    const out = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const b64 of chunks) {
+      const bin = atob(b64);
+      for (let i = 0; i < bin.length; i++) {
+        out[offset++] = bin.charCodeAt(i);
+      }
+    }
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < out.length; i += chunkSize) {
+      const chunk = out.subarray(i, Math.min(i + chunkSize, out.length));
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }, []);
+
   const sendPcmChunk = useCallback(
     (pcmData: Int16Array, captureTime: number) => {
-      // Use ref to get current sessionActive value (always up-to-date)
-      const isSessionActive = sessionActiveRef.current;
-      
-      // Only send if session is active and WebSocket is connected
-      if (!isSessionActive || !wsClient.isConnected()) {
-        // Don't queue if session is not active - just drop the chunk
-        if (!isSessionActive) {
-          // Log first few dropped chunks to help debug
-          if (pcmChunkCountRef.current < 3) {
-            console.warn(`[AudioCapture] ⚠️  Dropping audio chunk: sessionActive=false (session not active yet)`);
-          }
-          return; // Silently drop chunks when session is not active
-        }
-        // Queue only if WebSocket is disconnected but session is active
-        const base64Audio = encodePcmToBase64(pcmData);
-        const format = {
-          sampleRate: 16000,
-          channels: 1,
-          encoding: 'pcm_s16le',
-        };
-        chunkQueueRef.current.push({ data: base64Audio, format });
-        console.warn('[AudioCapture] ⚠️  WebSocket not connected, queuing audio chunk');
-        return;
-      }
-
       const base64Audio = encodePcmToBase64(pcmData);
       const format = {
         sampleRate: 16000,
         channels: 1,
         encoding: 'pcm_s16le',
       };
+
+      // Smart Listen: buffer instead of sending until STT window is open
+      if (smartListenEnabled) {
+        if (!sttWindowOpenRef.current) {
+          ringBufferRef.current.push(base64Audio);
+          if (ringBufferRef.current.length > ringBufferMaxChunks) {
+            ringBufferRef.current.shift();
+          }
+          return;
+        }
+      }
+
+      const isSessionActive = sessionActiveRef.current;
+      if (!isSessionActive || !wsClient.isConnected()) {
+        if (!isSessionActive) {
+          if (pcmChunkCountRef.current < 3) {
+            console.warn(`[AudioCapture] ⚠️  Dropping audio chunk: sessionActive=false (session not active yet)`);
+          }
+          return;
+        }
+        chunkQueueRef.current.push({ data: base64Audio, format });
+        console.warn('[AudioCapture] ⚠️  WebSocket not connected, queuing audio chunk');
+        return;
+      }
+
       const message: AudioDataMessage = {
         type: 'AUDIO_DATA',
         payload: {
@@ -314,7 +348,6 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         },
       };
 
-      // Log first few chunks to verify audio is being sent
       pcmChunkCountRef.current += 1;
       if (pcmChunkCountRef.current <= 3) {
         console.log(`[AudioCapture] ✅ Sending PCM chunk #${pcmChunkCountRef.current}: ${pcmData.length} samples (${pcmData.length * 2} bytes)`);
@@ -322,7 +355,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
 
       wsClient.send(message, captureTime);
     },
-    [encodePcmToBase64, wsClient, sessionActive]
+    [encodePcmToBase64, wsClient, sessionActive, smartListenEnabled, ringBufferMaxChunks]
   );
 
   const startPcmProcessing = useCallback((stream: MediaStream) => {
@@ -542,9 +575,41 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   }, [state.permissionState, requestPermission, startAudioLevelMonitoring, stopAudioLevelMonitoring, sendAudioChunk, usePcm, startPcmProcessing]);
 
   /**
+   * Smart Bible Listen: open STT window, send ring-buffer catch-up, then send live audio for STT_WINDOW_MS.
+   * No-op when not usePcm or not smartListenEnabled or session/ws not ready.
+   */
+  const requestSttWindow = useCallback(() => {
+    if (!usePcm || !smartListenEnabled || !sessionActiveRef.current || !wsClient.isConnected()) {
+      return;
+    }
+    if (sttWindowTimeoutRef.current) {
+      clearTimeout(sttWindowTimeoutRef.current);
+      sttWindowTimeoutRef.current = null;
+    }
+    const catchUp = concatBase64Chunks(ringBufferRef.current);
+    const msg: SttWindowRequestMessage = {
+      type: 'STT_WINDOW_REQUEST',
+      payload: catchUp ? { catchUpAudio: catchUp } : {},
+    };
+    wsClient.send(msg);
+    sttWindowOpenRef.current = true;
+    sttWindowTimeoutRef.current = setTimeout(() => {
+      sttWindowOpenRef.current = false;
+      sttWindowTimeoutRef.current = null;
+    }, STT_WINDOW_MS);
+  }, [usePcm, smartListenEnabled, wsClient, concatBase64Chunks]);
+
+  /**
    * Stop recording
    */
   const stop = useCallback(() => {
+    if (sttWindowTimeoutRef.current) {
+      clearTimeout(sttWindowTimeoutRef.current);
+      sttWindowTimeoutRef.current = null;
+    }
+    sttWindowOpenRef.current = false;
+    ringBufferRef.current = [];
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
@@ -610,6 +675,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     pause,
     resume,
     requestPermission,
+    ...(smartListenEnabled && usePcm ? { requestSttWindow } : {}),
   };
 }
 

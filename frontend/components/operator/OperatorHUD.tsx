@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Zap, ZapOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Zap, ZapOff, Mic } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
+import { useBibleWakeWord } from '@/lib/hooks/useBibleWakeWord';
+import { useSlideCache } from '@/lib/stores/slideCache';
 import { createClient } from '@/lib/supabase/client';
 import { getProjectorFontClass, getProjectorFontIdOrDefault, projectorFonts } from '@/lib/projectorFonts';
-import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage, isEventSettingsUpdatedMessage } from '@/lib/websocket/types';
+import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage, isEventSettingsUpdatedMessage, isDisplayUpdateMessage } from '@/lib/websocket/types';
 import { GhostText } from './GhostText';
 import { MatchStatus } from './MatchStatus';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -81,12 +83,37 @@ export function OperatorHUD({
   const [bibleVersionId, setBibleVersionId] = useState<string | null>(initialBibleVersionId);
   const [bibleFollow, setBibleFollow] = useState<boolean>(false);
   const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
+  const [smartListenEnabled, setSmartListenEnabled] = useState<boolean>(false);
+  const [currentItemIsBible, setCurrentItemIsBible] = useState<boolean>(false);
+  const slideCache = useSlideCache();
 
-  // Gate audio capture based on session status
+  const useSmartListenGate = smartListenEnabled && currentItemIsBible;
+
   const audioCapture = useAudioCapture({
     usePcm: sttProvider === 'elevenlabs',
     sessionActive: sessionStatus === 'active',
+    smartListenEnabled: useSmartListenGate,
+    smartListenBufferMs: 10000,
   });
+
+  const wakeWord = useBibleWakeWord({
+    enabled: sessionStatus === 'active' && useSmartListenGate && !!audioCapture.requestSttWindow,
+    onWake: () => audioCapture.requestSttWindow?.(),
+    cooldownMs: 3000,
+  });
+
+  // Sync currentItemIsBible from lastMessage (SESSION_STARTED or DISPLAY_UPDATE)
+  useEffect(() => {
+    if (!lastMessage) return;
+    if (isSessionStartedMessage(lastMessage)) {
+      const items = lastMessage.payload.setlistItems ?? slideCache.setlist?.setlistItems;
+      const idx = lastMessage.payload.currentItemIndex ?? lastMessage.payload.currentSongIndex ?? 0;
+      const item = items?.[idx];
+      setCurrentItemIsBible(item?.type === 'BIBLE');
+    } else if (isDisplayUpdateMessage(lastMessage)) {
+      setCurrentItemIsBible((lastMessage.payload as { songId?: string }).songId?.startsWith('bible:') ?? false);
+    }
+  }, [lastMessage, slideCache.setlist]);
 
   // Environment variable validation and debug logging
   useEffect(() => {
@@ -316,7 +343,7 @@ export function OperatorHUD({
           clearInterval(checkConnection);
           console.log('[OperatorHUD] WebSocket connected, starting session for event:', eventId);
           setSessionStatus('starting');
-          startSession(eventId);
+          startSession(eventId, { smartListenEnabled: smartListenEnabled });
         }
       }, 100);
       // Timeout after 5 seconds
@@ -324,7 +351,7 @@ export function OperatorHUD({
     } else if (isConnected) {
       console.log('[OperatorHUD] Starting session for event:', eventId);
       setSessionStatus('starting');
-      startSession(eventId);
+      startSession(eventId, { smartListenEnabled: smartListenEnabled });
     }
   };
 
@@ -520,6 +547,47 @@ export function OperatorHUD({
               >
                 Stop
               </button>
+            </div>
+          )}
+          {/* Smart Bible Listen: only stream STT when wake word or manual trigger */}
+          {bibleMode && (
+            <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Smart Listen</span>
+              <button
+                onClick={() => {
+                  setSmartListenEnabled((v) => !v);
+                  if (!smartListenEnabled) toast.success('Smart Listen on: STT only after wake word or Listen now');
+                  else toast.info('Smart Listen off: STT always on for Bible');
+                }}
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors',
+                  smartListenEnabled ? 'bg-amber-500/20 text-amber-200 border-amber-500/40' : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                )}
+              >
+                {smartListenEnabled ? 'On' : 'Off'}
+              </button>
+              {smartListenEnabled && currentItemIsBible && sessionStatus === 'active' && audioCapture.requestSttWindow && (
+                <>
+                  {wakeWord.isListening && (
+                    <span className="text-[10px] text-slate-400" title="Listening for Bible wake words">
+                      Wake
+                    </span>
+                  )}
+                  {wakeWord.error && (
+                    <span className="text-[10px] text-amber-400" title={wakeWord.error}>
+                      No wake
+                    </span>
+                  )}
+                  <button
+                    onClick={() => audioCapture.requestSttWindow?.()}
+                    className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-sky-500/40 bg-sky-500/20 text-sky-200"
+                    title="Open STT window now (send buffer + next 30s)"
+                  >
+                    <Mic className="inline h-3 w-3 mr-1" />
+                    Listen now
+                  </button>
+                </>
+              )}
             </div>
           )}
           {/* PHASE 2: Auto-Follow Toggle */}

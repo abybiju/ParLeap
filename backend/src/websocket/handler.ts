@@ -23,6 +23,7 @@ import {
   isManualOverrideMessage,
   isStopSessionMessage,
   isPingMessage,
+  isSttWindowRequestMessage,
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, type SongData, type SetlistItemData } from '../services/eventService';
@@ -78,6 +79,11 @@ const BIBLE_FOLLOW_MATCH_THRESHOLD = parseNumberEnv(process.env.BIBLE_FOLLOW_MAT
 const BIBLE_FOLLOW_MATCH_MARGIN = parseNumberEnv(process.env.BIBLE_FOLLOW_MATCH_MARGIN, 0.05);
 const BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS, 1800);
 const BIBLE_FOLLOW_DEBOUNCE_MATCHES = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_MATCHES, 2);
+
+/** Smart Bible Listen: when true, for BIBLE setlist items we wait for STT_WINDOW_REQUEST before starting ElevenLabs. Kill switch: set to false to restore always-on STT. */
+const BIBLE_SMART_LISTEN_ENABLED = process.env.BIBLE_SMART_LISTEN_ENABLED === 'true';
+/** STT window duration (ms) after wake word. Default 30s. */
+const BIBLE_SMART_LISTEN_WINDOW_MS = parseNumberEnv(process.env.BIBLE_SMART_LISTEN_WINDOW_MS, 30000);
 
 function preprocessBufferText(text: string, maxWords = 12): string {
   const fillers = new Set(['uh', 'um', 'oh', 'ah', 'uhh', 'umm', 'hmm']);
@@ -238,6 +244,10 @@ interface SessionState {
   };
   // Audio chunk tracking for logging
   audioChunkCount?: number; // Track number of audio chunks received (for diagnostic logging)
+  // Smart Bible Listen: STT window active until this timestamp (only when BIBLE_SMART_LISTEN_ENABLED and current item is BIBLE)
+  sttWindowActiveUntil?: number;
+  /** Client opted in to Smart Listen; gate only applies when true. Default false so we never drop audio unless client enables it. */
+  smartListenEnabled?: boolean;
 }
 
 
@@ -260,6 +270,24 @@ function sendError(ws: WebSocket, code: string, message: string, details?: unkno
     payload: { code, message, details },
   };
   send(ws, errorMessage);
+}
+
+/**
+ * True when the current setlist item is BIBLE (used for Smart Listen gate).
+ */
+function currentItemIsBible(session: SessionState): boolean {
+  const items = session.setlistItems;
+  const idx = session.currentItemIndex ?? 0;
+  if (!items || idx < 0 || idx >= items.length) return false;
+  return items[idx].type === 'BIBLE';
+}
+
+/**
+ * Smart Listen gate: when true, we do not start ElevenLabs on first audio for BIBLE items; we wait for STT_WINDOW_REQUEST.
+ * Only active when (1) backend env BIBLE_SMART_LISTEN_ENABLED, (2) client sent smartListenEnabled: true in START_SESSION, (3) current item is BIBLE.
+ */
+function shouldUseSmartListenGate(session: SessionState): boolean {
+  return BIBLE_SMART_LISTEN_ENABLED === true && session.smartListenEnabled === true && currentItemIsBible(session);
 }
 
 /**
@@ -350,11 +378,13 @@ function restartElevenLabsStream(session: SessionState, ws: WebSocket, reason: s
  */
 async function handleStartSession(
   ws: WebSocket,
-  eventId: string,
+  payload: { eventId: string; smartListenEnabled?: boolean },
   receivedAt: number
 ): Promise<void> {
+  const eventId = payload.eventId;
+  const smartListenEnabled = payload.smartListenEnabled === true;
   const processingStart = Date.now();
-  console.log(`[WS] Starting session for event: ${eventId}`);
+  console.log(`[WS] Starting session for event: ${eventId}, smartListenEnabled: ${smartListenEnabled}`);
 
   // Check if session already exists for this WebSocket
   if (sessions.has(ws)) {
@@ -488,6 +518,7 @@ async function handleStartSession(
     lastRecoveryAt: existingSession?.lastRecoveryAt ?? 0,
     suggestedSongSwitch: undefined,
     lastSongSwitchAt: undefined,
+    smartListenEnabled,
   };
 
   // For ElevenLabs: Use lazy initialization - create stream only when first audio arrives
@@ -1392,6 +1423,25 @@ async function handleAudioData(
       console.log(`[WS] ✅ Audio format validated: PCM 16-bit (${format.sampleRate}Hz, ${format.channels} channel)`);
     }
 
+    // Smart Bible Listen gate: for BIBLE items when enabled, do not start STT until STT_WINDOW_REQUEST
+    if (shouldUseSmartListenGate(session)) {
+      if (session.sttWindowActiveUntil && Date.now() > session.sttWindowActiveUntil) {
+        if (session.sttStream) {
+          try {
+            session.sttStream.end();
+          } catch (e) {
+            console.warn('[STT] Smart Listen: error ending stream after window:', e);
+          }
+          session.sttStream = undefined;
+        }
+        session.sttWindowActiveUntil = undefined;
+        console.log('[STT] Smart Listen: STT window expired, stream closed');
+      }
+      if (!session.sttStream || !session.sttWindowActiveUntil || Date.now() > session.sttWindowActiveUntil) {
+        return; // Drop audio until client sends STT_WINDOW_REQUEST or window is active
+      }
+    }
+
     // Lazy initialization: Create ElevenLabs stream on first audio chunk
     if (!session.sttStream) {
       if (!isElevenLabsConfigured) {
@@ -1461,6 +1511,48 @@ async function handleAudioData(
   } catch (error) {
     console.error('[WS] Error processing audio:', error);
     sendError(ws, 'STT_ERROR', 'Failed to transcribe audio', { error: String(error) });
+  }
+}
+
+/**
+ * Handle STT_WINDOW_REQUEST (Smart Bible Listen).
+ * Opens ElevenLabs STT window; optional catch-up audio from ring buffer.
+ */
+function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string }, _receivedAt: number): void {
+  const session = sessions.get(ws);
+  if (!session || !session.isActive) {
+    sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
+    return;
+  }
+  if (!BIBLE_SMART_LISTEN_ENABLED) {
+    sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'Smart Listen is disabled. Set BIBLE_SMART_LISTEN_ENABLED=true to use STT_WINDOW_REQUEST.');
+    return;
+  }
+  if (!currentItemIsBible(session)) {
+    sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'STT_WINDOW_REQUEST is only valid when current setlist item is BIBLE.');
+    return;
+  }
+  if (!isElevenLabsConfigured) {
+    sendError(ws, 'STT_ERROR', 'ElevenLabs API key not configured.');
+    return;
+  }
+
+  if (!session.sttStream) {
+    initElevenLabsStream(session, ws);
+  }
+  session.sttWindowActiveUntil = Date.now() + BIBLE_SMART_LISTEN_WINDOW_MS;
+  console.log(`[STT] Smart Listen: STT window opened for ${BIBLE_SMART_LISTEN_WINDOW_MS}ms`);
+
+  if (payload.catchUpAudio) {
+    try {
+      const buffer = Buffer.from(payload.catchUpAudio, 'base64');
+      if (session.sttStream && buffer.length > 0) {
+        session.sttStream.write(buffer);
+        console.log(`[STT] Smart Listen: sent ${buffer.length} bytes catch-up audio`);
+      }
+    } catch (err) {
+      console.warn('[STT] Smart Listen: failed to write catch-up audio:', err);
+    }
   }
 }
 
@@ -1729,7 +1821,7 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
   // Route message to appropriate handler
   try {
     if (isStartSessionMessage(message)) {
-      await handleStartSession(ws, message.payload.eventId, receivedAt);
+      await handleStartSession(ws, message.payload, receivedAt);
     } else if (isUpdateEventSettingsMessage(message)) {
       handleUpdateEventSettings(ws, message.payload, receivedAt);
     } else if (isAudioDataMessage(message)) {
@@ -1746,6 +1838,8 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
       handleStopSession(ws, receivedAt);
     } else if (isPingMessage(message)) {
       handlePing(ws, receivedAt);
+    } else if (isSttWindowRequestMessage(message)) {
+      handleSttWindowRequest(ws, message.payload, receivedAt);
     } else {
       sendError(ws, 'UNKNOWN_TYPE', `Unknown message type`);
     }

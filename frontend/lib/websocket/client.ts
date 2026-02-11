@@ -192,9 +192,13 @@ class WebSocketClient {
 
   /**
    * Send START_SESSION message
+   * @param smartListenEnabled - when true, backend uses Smart Listen gate for BIBLE items. Omit or false so matching always works.
    */
-  startSession(eventId: string): void {
-    this.send({ type: 'START_SESSION', payload: { eventId } });
+  startSession(eventId: string, options?: { smartListenEnabled?: boolean }): void {
+    this.send({
+      type: 'START_SESSION',
+      payload: { eventId, smartListenEnabled: options?.smartListenEnabled === true },
+    });
   }
 
   /**
