@@ -159,15 +159,41 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     try {
       setState((prev) => ({ ...prev, error: null }));
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000, // Optimal for STT
-          channelCount: 1, // Mono
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+      const preferredConstraints: MediaStreamConstraints[] = [
+        {
+          audio: {
+            sampleRate: 16000, // Preferred for STT
+            channelCount: 1, // Preferred mono
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         },
-      });
+        {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        },
+        { audio: true },
+      ];
+
+      let stream: MediaStream | null = null;
+      let lastError: Error | null = null;
+
+      for (const constraints of preferredConstraints) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (error) {
+          lastError = error as Error;
+        }
+      }
+
+      if (!stream) {
+        throw lastError ?? new Error('Failed to access microphone');
+      }
 
       // Permission granted
       setState((prev) => ({ ...prev, permissionState: 'granted' }));
@@ -185,7 +211,9 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         errorMessage = 'Microphone permission denied. Please allow access in your browser settings.';
         setState((prev) => ({ ...prev, permissionState: 'denied' }));
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        errorMessage = 'No microphone found. Please connect a microphone.';
+        errorMessage = 'No microphone input available. Check OS input device and browser site mic access.';
+      } else if (err.name === 'OverconstrainedError') {
+        errorMessage = 'Microphone found but browser could not satisfy requested audio settings. Please retry.';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
         errorMessage = 'Microphone is already in use by another application.';
       } else {
@@ -504,16 +532,40 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         }
       }
 
-      // Get media stream
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+      const preferredConstraints: MediaStreamConstraints[] = [
+        {
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         },
-      });
+        {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        },
+        { audio: true },
+      ];
+
+      let stream: MediaStream | null = null;
+      let lastError: Error | null = null;
+      for (const constraints of preferredConstraints) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (error) {
+          lastError = error as Error;
+        }
+      }
+
+      if (!stream) {
+        throw lastError ?? new Error('Failed to start microphone stream');
+      }
 
       mediaStreamRef.current = stream;
 
