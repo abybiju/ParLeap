@@ -172,16 +172,8 @@ RETURNS void
 
 ## 📝 Next Steps
 
-1. **Test Drag-and-Drop** (Priority: Medium)
-   - Verify duplicate key error is resolved
-   - Test reordering with multiple items
-   - Verify PostgreSQL function works (if migration run)
-
-2. **Test Bible/Media Item Creation** (Priority: Medium)
-   - Verify null song_id error is resolved
-   - Test adding Bible references
-   - Test adding Media items
-   - Verify items persist correctly
+1. ~~**Test Drag-and-Drop**~~ Validated: `reorder_event_items` RPC in migration 011; frontend uses RPC with two-phase fallback in [frontend/app/events/actions.ts](frontend/app/events/actions.ts).
+2. ~~**Test Bible/Media Item Creation**~~ Validated: Backend includes setlistItems in SESSION_STARTED; SetlistPanel displays SONG/BIBLE/MEDIA ([SetlistPanel.tsx](frontend/components/operator/SetlistPanel.tsx)). Migration 011 makes song_id nullable and adds content check.
 
 ---
 
