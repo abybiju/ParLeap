@@ -24,7 +24,8 @@ export const BIBLE_BOOKS: BibleBook[] = [
   { name: 'Nehemiah', abbrev: 'Neh', order: 16, aliases: ['nehemiah', 'neh', 'ne'] },
   { name: 'Esther', abbrev: 'Esth', order: 17, aliases: ['esther', 'esth', 'es'] },
   { name: 'Job', abbrev: 'Job', order: 18, aliases: ['job', 'jb'] },
-  { name: 'Psalms', abbrev: 'Ps', order: 19, aliases: ['psalms', 'psalm', 'ps', 'psa'] },
+  // Include common STT mis-hearings like "sams" or "salms"
+  { name: 'Psalms', abbrev: 'Ps', order: 19, aliases: ['psalms', 'psalm', 'ps', 'psa', 'sams', 'salms'] },
   { name: 'Proverbs', abbrev: 'Prov', order: 20, aliases: ['proverbs', 'prov', 'pr', 'prv'] },
   { name: 'Ecclesiastes', abbrev: 'Eccl', order: 21, aliases: ['ecclesiastes', 'eccl', 'ecc', 'qohelet'] },
   { name: 'Song of Solomon', abbrev: 'Song', order: 22, aliases: ['song of solomon', 'song', 'songs', 'song of songs', 'canticles'] },
