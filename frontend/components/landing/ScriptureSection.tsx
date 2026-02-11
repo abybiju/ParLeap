@@ -1,23 +1,22 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BookOpen, Mic, LayoutList } from 'lucide-react'
 
 const items = [
   {
-    icon: BookOpen,
     title: 'Verse display',
-    description: 'Display verses on the big screen. Add references to your setlist and follow along.',
+    line: 'Display verses on the big screen. Add references and follow along.',
+    footer: 'Verse 1',
   },
   {
-    icon: Mic,
     title: 'Reference follow',
-    description: 'AI listens and keeps the verse in sync. KJV and ESV supported.',
+    line: 'AI listens and keeps the verse in sync. KJV and ESV supported.',
+    footer: 'KJV',
   },
   {
-    icon: LayoutList,
     title: 'One flow',
-    description: 'Songs and scripture in the same setlist. One operator view, one flow.',
+    line: 'Songs and scripture in the same setlist. One operator view.',
+    footer: 'One setlist',
   },
 ]
 
@@ -36,25 +35,20 @@ export function ScriptureSection() {
         </motion.h2>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {items.map((item, index) => {
-            const Icon = item.icon
-            return (
-              <motion.div
-                key={item.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="glass-card-hover p-8 space-y-4"
-              >
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500/20 to-indigo-500/20 flex items-center justify-center">
-                  <Icon className="h-6 w-6 text-purple-400" />
-                </div>
-                <h3 className="text-2xl font-semibold text-white">{item.title}</h3>
-                <p className="text-gray-300 leading-relaxed">{item.description}</p>
-              </motion.div>
-            )
-          })}
+          {items.map((item, index) => (
+            <motion.div
+              key={item.title}
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              className="glass-card p-8 max-w-md"
+            >
+              <h4 className="text-xl font-semibold text-white mb-4">{item.title}</h4>
+              <p className="text-2xl text-white leading-relaxed">{item.line}</p>
+              <div className="mt-4 text-sm text-gray-400">{item.footer}</div>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>
