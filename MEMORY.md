@@ -1,5 +1,29 @@
 # ParLeap AI - Memory Log
 
+## Session: February 10, 2026 - Smart Audio Decision and Checkpoint Plan
+
+### Decision: Implement Smart Audio Without Stack Change
+**Date/Time recorded:** 2026-02-10 (documented for rollback reference)
+
+**What we decided:**
+- **Keep:** `ws` (native WebSocket) and Supabase client. **Do not** introduce Socket.io or Prisma.
+- **Implement:** Smart Audio behavior (state machine + Gatekeeper + ring buffer) on top of existing stack per [SMART_BIBLE_LISTEN.md](SMART_BIBLE_LISTEN.md).
+- **Tuning choices:** Optional naming (e.g. SERMON for cost-optimized mode); buffer size 3s vs 10s as configurable.
+
+**Rollback safety (if something goes wrong):**
+- Before any Smart Audio implementation: create **CURRENT_STATE_CHECKPOINT.md** and commit it. It must record:
+  - **Git:** Commit hash and branch (e.g. `fdb81de`, `main`). Restore with `git checkout <commit>` or revert.
+  - **Current behavior:** SONG = always stream to ElevenLabs; BIBLE = current Bible follow (no gatekeeper); real-time = ws only.
+  - **Key files:** `backend/src/websocket/handler.ts`, `backend/src/services/sttService.ts`, `frontend/lib/hooks/useAudioCapture.ts`, WebSocket types, operator components.
+  - **Revert:** (1) Code: checkout/revert to checkpoint commit. (2) If Smart Listen is behind a flag: turn it off so "Always Listen" restores current behavior.
+- Implementation must be **additive only**; default = current behavior; one **kill switch** (env or UI) to disable Smart Listen everywhere.
+
+**Plan reference:** `.cursor/plans/smart_audio_architecture_feasibility_456139d2.plan.md` (Sections 6–7: Checkpoint and Implementation outline).
+
+**Next step when implementing:** Create CURRENT_STATE_CHECKPOINT.md first, commit, then implement Smart Audio steps in order.
+
+---
+
 ## Session: February 6, 2026 (Afternoon) - Event Management UI Bug Fixes 🐛
 
 ### Critical Bug Fixes for Polymorphic Setlist Feature
@@ -679,8 +703,8 @@ frontend/tailwind.config.ts               (new animations)
 
 ---
 
-**Last Updated:** January 27, 2026  
-**Status:** Ready for next phase work
+**Last Updated:** February 10, 2026  
+**Status:** Smart Audio direction set; checkpoint-and-implement plan documented. Ready to create checkpoint then implement when prioritized.
 
 ---
 
