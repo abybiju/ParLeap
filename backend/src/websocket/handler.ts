@@ -80,8 +80,8 @@ const BIBLE_FOLLOW_MATCH_MARGIN = parseNumberEnv(process.env.BIBLE_FOLLOW_MATCH_
 const BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS, 1800);
 const BIBLE_FOLLOW_DEBOUNCE_MATCHES = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_MATCHES, 2);
 
-/** Smart Bible Listen: when true, for BIBLE setlist items we wait for STT_WINDOW_REQUEST before starting ElevenLabs. Kill switch: set to false to restore always-on STT. */
-const BIBLE_SMART_LISTEN_ENABLED = process.env.BIBLE_SMART_LISTEN_ENABLED === 'true';
+/** Smart Bible Listen server kill switch: set to 'false' to force-disable Smart Listen for all clients. Defaults to true (allow client to enable). */
+const BIBLE_SMART_LISTEN_KILL_SWITCH = process.env.BIBLE_SMART_LISTEN_ENABLED === 'false';
 /** STT window duration (ms) after wake word. Default 30s. */
 const BIBLE_SMART_LISTEN_WINDOW_MS = parseNumberEnv(process.env.BIBLE_SMART_LISTEN_WINDOW_MS, 30000);
 
@@ -245,7 +245,7 @@ interface SessionState {
   };
   // Audio chunk tracking for logging
   audioChunkCount?: number; // Track number of audio chunks received (for diagnostic logging)
-  // Smart Bible Listen: STT window active until this timestamp (only when BIBLE_SMART_LISTEN_ENABLED and current item is BIBLE)
+  // Smart Bible Listen: STT window active until this timestamp (only when smartListenEnabled and current item is BIBLE)
   sttWindowActiveUntil?: number;
   /** Client opted in to Smart Listen; gate only applies when true. Default false so we never drop audio unless client enables it. */
   smartListenEnabled?: boolean;
@@ -285,10 +285,11 @@ function currentItemIsBible(session: SessionState): boolean {
 
 /**
  * Smart Listen gate: when true, we do not start ElevenLabs on first audio for BIBLE items; we wait for STT_WINDOW_REQUEST.
- * Only active when (1) backend env BIBLE_SMART_LISTEN_ENABLED, (2) client sent smartListenEnabled: true in START_SESSION, (3) current item is BIBLE.
+ * Active when (1) server kill switch is NOT set, (2) client sent smartListenEnabled: true, (3) current item is BIBLE.
  */
 function shouldUseSmartListenGate(session: SessionState): boolean {
-  return BIBLE_SMART_LISTEN_ENABLED === true && session.smartListenEnabled === true && currentItemIsBible(session);
+  if (BIBLE_SMART_LISTEN_KILL_SWITCH) return false; // Server forcibly disabled
+  return session.smartListenEnabled === true && currentItemIsBible(session);
 }
 
 /**
@@ -1538,8 +1539,12 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
     sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
     return;
   }
-  if (!BIBLE_SMART_LISTEN_ENABLED) {
-    sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'Smart Listen is disabled. Set BIBLE_SMART_LISTEN_ENABLED=true to use STT_WINDOW_REQUEST.');
+  if (BIBLE_SMART_LISTEN_KILL_SWITCH) {
+    sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'Smart Listen is disabled by server (BIBLE_SMART_LISTEN_ENABLED=false).');
+    return;
+  }
+  if (!session.smartListenEnabled) {
+    sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'Smart Listen is not enabled for this session.');
     return;
   }
   if (!currentItemIsBible(session)) {
