@@ -9,6 +9,7 @@ const features = [
   'Multi-User Collaboration',
   'MIDI Control',
   'Dark Mode First',
+  'Bible Verses',
 ]
 
 export function FeatureMarquee() {
