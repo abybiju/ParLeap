@@ -20,7 +20,7 @@ const BIBLE_BOOK_ALIASES: string[] = [
   'esther',
   // Wisdom/Poetry
   'job',
-  'psalms', 'psalm', 'ps',
+  'psalms', 'psalm', 'ps', 'sams', 'salms',
   'proverbs', 'prov',
   'ecclesiastes', 'eccl',
   'song of solomon', 'song of songs',
