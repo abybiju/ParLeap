@@ -154,8 +154,6 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
 
   const getMicrophoneStream = useCallback(async (): Promise<MediaStream> => {
     const preferredConstraints: MediaStreamConstraints[] = [
-      { audio: true },
-      { audio: { deviceId: 'default' } as unknown as MediaTrackConstraints },
       {
         audio: {
           sampleRate: 16000,
@@ -172,6 +170,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
           autoGainControl: true,
         },
       },
+      { audio: true },
     ];
 
     let lastError: Error | null = null;
@@ -209,8 +208,6 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
 
     for (const input of inputs) {
       const explicitConstraints: MediaStreamConstraints[] = [
-        { audio: { deviceId: { exact: input.deviceId } } },
-        { audio: { deviceId: { exact: input.deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
         {
           audio: {
             deviceId: { exact: input.deviceId },
@@ -219,6 +216,11 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+          },
+        },
+        {
+          audio: {
+            deviceId: { exact: input.deviceId },
           },
         },
       ];
