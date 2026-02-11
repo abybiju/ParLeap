@@ -901,124 +901,124 @@ async function handleTranscriptionResult(
         return;
       }
 
-      if (!session.bibleFollow || !session.bibleFollowRef) {
-        return;
-      }
+      // Only run bible-follow verse advance when actively following a passage.
+      // When no bible ref in transcript and not following, fall through to song matching.
+      if (session.bibleFollow && session.bibleFollowRef) {
+        if (!session.bibleVersionId) {
+          const fallbackVersionId = await getDefaultBibleVersionId();
+          if (fallbackVersionId) {
+            session.bibleVersionId = fallbackVersionId;
+          } else {
+            console.warn('[WS] Bible mode active but no bibleVersionId set.');
+            return;
+          }
+        }
 
-      if (!session.bibleVersionId) {
-        const fallbackVersionId = await getDefaultBibleVersionId();
-        if (fallbackVersionId) {
-          session.bibleVersionId = fallbackVersionId;
-        } else {
-          console.warn('[WS] Bible mode active but no bibleVersionId set.');
+        const normalizedBuffer = normalizeMatchText(cleanedBuffer);
+        const bufferWordCount = normalizedBuffer.split(/\s+/).filter(Boolean).length;
+        if (bufferWordCount < BIBLE_FOLLOW_MIN_WORDS) {
           return;
         }
-      }
 
-      const normalizedBuffer = normalizeMatchText(cleanedBuffer);
-      const bufferWordCount = normalizedBuffer.split(/\s+/).filter(Boolean).length;
-      if (bufferWordCount < BIBLE_FOLLOW_MIN_WORDS) {
-        return;
-      }
-
-      const followRef = session.bibleFollowRef;
-      const followEndVerse = followRef.endVerse ?? null;
-      if (followEndVerse !== null && followRef.verse >= followEndVerse) {
-        return;
-      }
-
-      const currentVerse = await getBibleVerseCached(session, followRef, session.bibleVersionId);
-      if (!currentVerse) {
-        return;
-      }
-
-      let nextRef: BibleReference = {
-        book: followRef.book,
-        chapter: followRef.chapter,
-        verse: followRef.verse + 1,
-      };
-
-      if (followEndVerse !== null && nextRef.verse > followEndVerse && nextRef.chapter === followRef.chapter) {
-        return;
-      }
-
-      let nextVerse = await getBibleVerseCached(session, nextRef, session.bibleVersionId);
-
-      if (!nextVerse) {
-        if (followEndVerse !== null) {
+          const followRef = session.bibleFollowRef;
+        const followEndVerse = followRef.endVerse ?? null;
+        if (followEndVerse !== null && followRef.verse >= followEndVerse) {
           return;
         }
-        const nextChapterRef: BibleReference = {
+
+        const currentVerse = await getBibleVerseCached(session, followRef, session.bibleVersionId);
+        if (!currentVerse) {
+          return;
+        }
+
+        let nextRef: BibleReference = {
           book: followRef.book,
-          chapter: followRef.chapter + 1,
-          verse: 1,
+          chapter: followRef.chapter,
+          verse: followRef.verse + 1,
         };
-        nextVerse = await getBibleVerseCached(session, nextChapterRef, session.bibleVersionId);
-        if (!nextVerse) {
+
+        if (followEndVerse !== null && nextRef.verse > followEndVerse && nextRef.chapter === followRef.chapter) {
           return;
         }
-        nextRef = nextChapterRef;
+
+        let nextVerse = await getBibleVerseCached(session, nextRef, session.bibleVersionId);
+
+        if (!nextVerse) {
+          if (followEndVerse !== null) {
+            return;
+          }
+          const nextChapterRef: BibleReference = {
+            book: followRef.book,
+            chapter: followRef.chapter + 1,
+            verse: 1,
+          };
+          nextVerse = await getBibleVerseCached(session, nextChapterRef, session.bibleVersionId);
+          if (!nextVerse) {
+            return;
+          }
+          nextRef = nextChapterRef;
+        }
+
+        const currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
+        const nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
+
+        if (nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN) {
+          const now = Date.now();
+          const targetKey = buildBibleRefKey(nextRef, session.bibleVersionId);
+          if (session.bibleFollowHit &&
+              session.bibleFollowHit.targetKey === targetKey &&
+              now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+            session.bibleFollowHit.hitCount += 1;
+            session.bibleFollowHit.lastHitAt = now;
+          } else {
+            session.bibleFollowHit = {
+              targetKey,
+              hitCount: 1,
+              lastHitAt: now,
+            };
+          }
+
+          if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
+            session.bibleFollowHit = undefined;
+            const nextEndVerse =
+              followEndVerse !== null && nextRef.chapter === followRef.chapter ? followEndVerse : null;
+            session.bibleFollowRef = {
+              ...nextRef,
+              endVerse: nextEndVerse,
+            };
+            session.bibleFollow = true;
+
+            const refKey = `${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}:${nextVerse.versionAbbrev}`;
+            session.lastBibleRefKey = refKey;
+            session.lastBibleRefAt = now;
+
+            const verseLines = wrapBibleText(nextVerse.text);
+            const verseTitle = `${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} • ${nextVerse.versionAbbrev}`;
+
+            const displayMsg: DisplayUpdateMessage = {
+              type: 'DISPLAY_UPDATE',
+              payload: {
+                lineText: verseLines[0] ?? nextVerse.text,
+                slideText: verseLines.join('\n'),
+                slideLines: verseLines,
+                slideIndex: 0,
+                songId: `bible:${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}`,
+                songTitle: verseTitle,
+                isAutoAdvance: true,
+              },
+              timing: createTiming(receivedAt, processingStart),
+            };
+
+            broadcastToEvent(session.eventId, displayMsg);
+          }
+        } else if (session.bibleFollowHit) {
+          const now = Date.now();
+          if (now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+            session.bibleFollowHit = undefined;
+          }
+        }
+        return;
       }
-
-      const currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
-      const nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
-
-      if (nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN) {
-        const now = Date.now();
-        const targetKey = buildBibleRefKey(nextRef, session.bibleVersionId);
-        if (session.bibleFollowHit &&
-            session.bibleFollowHit.targetKey === targetKey &&
-            now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
-          session.bibleFollowHit.hitCount += 1;
-          session.bibleFollowHit.lastHitAt = now;
-        } else {
-          session.bibleFollowHit = {
-            targetKey,
-            hitCount: 1,
-            lastHitAt: now,
-          };
-        }
-
-        if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
-          session.bibleFollowHit = undefined;
-          const nextEndVerse =
-            followEndVerse !== null && nextRef.chapter === followRef.chapter ? followEndVerse : null;
-          session.bibleFollowRef = {
-            ...nextRef,
-            endVerse: nextEndVerse,
-          };
-          session.bibleFollow = true;
-
-          const refKey = `${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}:${nextVerse.versionAbbrev}`;
-          session.lastBibleRefKey = refKey;
-          session.lastBibleRefAt = now;
-
-          const verseLines = wrapBibleText(nextVerse.text);
-          const verseTitle = `${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} • ${nextVerse.versionAbbrev}`;
-
-          const displayMsg: DisplayUpdateMessage = {
-            type: 'DISPLAY_UPDATE',
-            payload: {
-              lineText: verseLines[0] ?? nextVerse.text,
-              slideText: verseLines.join('\n'),
-              slideLines: verseLines,
-              slideIndex: 0,
-              songId: `bible:${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}`,
-              songTitle: verseTitle,
-              isAutoAdvance: true,
-            },
-            timing: createTiming(receivedAt, processingStart),
-          };
-
-          broadcastToEvent(session.eventId, displayMsg);
-        }
-      } else if (session.bibleFollowHit) {
-        const now = Date.now();
-        if (now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
-          session.bibleFollowHit = undefined;
-        }
-      }
-      return;
     }
 
     if (!session.songContext) {
