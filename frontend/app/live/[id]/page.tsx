@@ -93,30 +93,32 @@ export default async function LivePage({ params }: LivePageProps) {
     items = oldItems || [];
   }
 
-  // Build initial setlist (only songs for display - BIBLE/MEDIA items are handled separately)
+  // Build initial setlist (polymorphic: songs, Bible, media) for display before session starts
+  type SetlistItemRow = {
+    id: string
+    sequence_order: number
+    item_type?: string | null
+    song_id?: string | null
+    bible_ref?: string | null
+    media_url?: string | null
+    media_title?: string | null
+    songs: { id: string; title: string; artist: string | null } | null
+  }
   const initialSetlist = (items ?? [])
-    .map((item: {
-      id: string
-      sequence_order: number
-      item_type?: string | null
-      song_id?: string | null
-      songs: { id: string; title: string; artist: string | null } | null
-    }) => {
-      // Only include SONG items in the setlist display
-      const itemType = item.item_type || (item.song_id ? 'SONG' : null) || 'SONG';
-      if (itemType !== 'SONG') {
-        return null; // Skip BIBLE and MEDIA items from initial setlist (they're handled in session)
+    .map((item: SetlistItemRow) => {
+      const itemType = item.item_type || (item.song_id ? 'SONG' : null) || (item.bible_ref ? 'BIBLE' : null) || (item.media_url ? 'MEDIA' : null) || 'SONG'
+      if (itemType === 'SONG') {
+        const song = item.songs
+        if (!song) return null
+        return { kind: 'SONG' as const, id: item.id, songId: song.id, title: song.title, artist: song.artist, sequenceOrder: item.sequence_order }
       }
-      const song = item.songs
-      if (!song) {
-        return null
+      if (itemType === 'BIBLE' && item.bible_ref) {
+        return { kind: 'BIBLE' as const, id: item.id, bibleRef: item.bible_ref, sequenceOrder: item.sequence_order }
       }
-      return {
-        id: song.id,
-        title: song.title,
-        artist: song.artist,
-        sequenceOrder: item.sequence_order,
+      if (itemType === 'MEDIA' && item.media_url) {
+        return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.media_title ?? 'Media', mediaUrl: item.media_url, sequenceOrder: item.sequence_order }
       }
+      return null
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
 

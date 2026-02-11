@@ -4,18 +4,19 @@ import { OperatorHUD } from '@/components/operator/OperatorHUD';
 import Link from 'next/link';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 
+/** Polymorphic setlist item for pre-session display */
+type InitialSetlistItem =
+  | { kind: 'SONG'; id: string; songId: string; title: string; artist: string | null; sequenceOrder: number }
+  | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+
 interface LivePageClientProps {
   eventId: string;
   eventName: string;
   projectorFont?: string | null;
   bibleMode?: boolean;
   bibleVersionId?: string | null;
-  initialSetlist: Array<{
-    id: string;
-    title: string;
-    artist: string | null;
-    sequenceOrder: number;
-  }>;
+  initialSetlist: InitialSetlistItem[];
   hasSupabaseMismatch: boolean;
   frontendProjectRef: string | null;
   backendProjectRef: string | null;

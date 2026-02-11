@@ -7,13 +7,14 @@ import { useSlideCache } from '@/lib/stores/slideCache';
 import { isDisplayUpdateMessage, isSessionStartedMessage, type DisplayUpdateMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
 
+/** Polymorphic setlist item for pre-session display */
+type InitialSetlistItem =
+  | { kind: 'SONG'; id: string; songId: string; title: string; artist: string | null; sequenceOrder: number }
+  | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+
 interface SetlistPanelProps {
-  initialSetlist?: Array<{
-    id: string;
-    title: string;
-    artist: string | null;
-    sequenceOrder: number;
-  }>;
+  initialSetlist?: InitialSetlistItem[];
 }
 
 /** Display item for the setlist (unified from setlistItems + songs or legacy songs-only) */
@@ -127,14 +128,16 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
         sequenceOrder: idx + 1,
       }));
     }
-    return initialSetlist.map((s) => ({
-      kind: 'SONG' as const,
-      id: s.id,
-      songId: s.id,
-      title: s.title,
-      artist: s.artist,
-      sequenceOrder: s.sequenceOrder,
-    }));
+    // Pre-session: use polymorphic initialSetlist
+    return initialSetlist.map((item) => {
+      if (item.kind === 'SONG') {
+        return { kind: 'SONG' as const, id: item.id, songId: item.songId, title: item.title, artist: item.artist, sequenceOrder: item.sequenceOrder };
+      }
+      if (item.kind === 'BIBLE') {
+        return { kind: 'BIBLE' as const, id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder };
+      }
+      return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.mediaTitle, mediaUrl: item.mediaUrl, sequenceOrder: item.sequenceOrder };
+    });
   })();
 
   const isUsingCachedSetlist = hasSessionStarted && slideCache.setlist && (slideCache.setlist.songs.length > 0 || (slideCache.setlist.setlistItems?.length ?? 0) > 0);

@@ -22,15 +22,16 @@ import { MicrophoneStatus } from './MicrophoneStatus';
 import { STTStatus } from './STTStatus';
 import { cn } from '@/lib/utils';
 
+/** Polymorphic setlist item for pre-session display */
+type InitialSetlistItem =
+  | { kind: 'SONG'; id: string; songId: string; title: string; artist: string | null; sequenceOrder: number }
+  | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+
 interface OperatorHUDProps {
   eventId: string;
   eventName: string;
-  initialSetlist?: Array<{
-    id: string;
-    title: string;
-    artist: string | null;
-    sequenceOrder: number;
-  }>;
+  initialSetlist?: InitialSetlistItem[];
   initialProjectorFont?: string | null;
   initialBibleMode?: boolean;
   initialBibleVersionId?: string | null;
