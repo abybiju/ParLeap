@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getWakeWordPattern } from '../data/bibleWakeWords';
+import { shouldWakeForBibleTranscript } from '../data/bibleWakeWords';
 
 export interface UseBibleWakeWordOptions {
   /** When true, start listening for wake words. */
@@ -52,18 +52,13 @@ export function useBibleWakeWord(options: UseBibleWakeWordOptions): UseBibleWake
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const cooldownUntilRef = useRef(0);
-  const wakePatternRef = useRef<RegExp | null>(null);
+  const transcriptTailRef = useRef('');
 
   const trigger = useCallback(() => {
     if (Date.now() < cooldownUntilRef.current) return;
     cooldownUntilRef.current = Date.now() + cooldownMs;
     onWake();
   }, [onWake, cooldownMs]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    wakePatternRef.current = getWakeWordPattern();
-  }, []);
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') {
@@ -77,6 +72,7 @@ export function useBibleWakeWord(options: UseBibleWakeWordOptions): UseBibleWake
       }
       setIsListening(false);
       setError(null);
+      transcriptTailRef.current = '';
       return;
     }
 
@@ -90,25 +86,32 @@ export function useBibleWakeWord(options: UseBibleWakeWordOptions): UseBibleWake
     setError(null);
     const recognition = new SpeechRecognitionCtor() as SpeechRecognitionInstance;
     recognition.continuous = true;
-    recognition.interimResults = true;
+    // Use final chunks only to reduce false wakeups from partial/noisy interim tokens.
+    recognition.interimResults = false;
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const pattern = wakePatternRef.current;
-      if (!pattern) return;
       if (Date.now() < cooldownUntilRef.current) return;
-
-      let transcript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      const normalized = transcript.trim().toLowerCase();
-      if (normalized.length === 0) return;
+        const result = event.results[i];
+        if (!result?.isFinal) continue;
+        const transcript = result[0]?.transcript?.trim();
+        if (!transcript) continue;
 
-      pattern.lastIndex = 0;
-      if (pattern.test(normalized)) {
+        const merged = `${transcriptTailRef.current} ${transcript}`.trim();
+        transcriptTailRef.current = merged
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(-24)
+          .join(' ');
+
+        if (!shouldWakeForBibleTranscript(merged)) {
+          continue;
+        }
+
         cooldownUntilRef.current = Date.now() + cooldownMs;
         onWake();
+        break;
       }
     };
 
@@ -147,6 +150,7 @@ export function useBibleWakeWord(options: UseBibleWakeWordOptions): UseBibleWake
       }
       recognitionRef.current = null;
       setIsListening(false);
+      transcriptTailRef.current = '';
     };
   }, [enabled, onWake, cooldownMs]);
 

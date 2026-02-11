@@ -281,19 +281,24 @@ function currentItemType(session: SessionState): 'SONG' | 'BIBLE' | 'MEDIA' | nu
 }
 
 /**
- * Smart Listen gate: when true, we do not start ElevenLabs on first audio for non-SONG items;
- * we wait for STT_WINDOW_REQUEST.
- * Active when:
+ * Smart Listen gate.
+ *
+ * Gate is active when:
  *   (1) server kill switch is NOT set
  *   (2) client opted in via smartListenEnabled: true
- *   (3) current setlist item is non-SONG (BIBLE/MEDIA)
- * Unknown item types fail-safe to SONG-like behavior (no gate) for reliability.
+ *   (3) either:
+ *       - bibleMode is enabled (strict gate, all item types), or
+ *       - current setlist item is non-SONG
+ *
+ * This allows strict Bible-mode cost control while keeping non-Bible sessions reliable.
  */
 function shouldUseSmartListenGate(session: SessionState): boolean {
   if (BIBLE_SMART_LISTEN_KILL_SWITCH) return false; // Server forcibly disabled
+  if (session.smartListenEnabled !== true) return false;
+  if (session.bibleMode === true) return true;
   const type = currentItemType(session);
   if (!type || type === 'SONG') return false;
-  return session.smartListenEnabled === true;
+  return true;
 }
 
 /**
@@ -1561,7 +1566,7 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
     sendError(
       ws,
       'STT_WINDOW_UNSUPPORTED',
-      'STT_WINDOW_REQUEST is only valid when Smart Listen is enabled for a non-SONG setlist item.'
+      'STT_WINDOW_REQUEST is only valid when Smart Listen gate is active (Bible mode or non-SONG item).'
     );
     return;
   }
