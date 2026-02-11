@@ -1518,7 +1518,7 @@ async function handleAudioData(
  * Handle STT_WINDOW_REQUEST (Smart Bible Listen).
  * Opens ElevenLabs STT window; optional catch-up audio from ring buffer.
  */
-function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string }, _receivedAt: number): void {
+function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string }): void {
   const session = sessions.get(ws);
   if (!session || !session.isActive) {
     sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
@@ -1839,7 +1839,7 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
     } else if (isPingMessage(message)) {
       handlePing(ws, receivedAt);
     } else if (isSttWindowRequestMessage(message)) {
-      handleSttWindowRequest(ws, message.payload, receivedAt);
+      handleSttWindowRequest(ws, message.payload);
     } else {
       sendError(ws, 'UNKNOWN_TYPE', `Unknown message type`);
     }
