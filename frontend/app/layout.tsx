@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { Toaster } from 'sonner'
 import { ConditionalHeader } from '@/components/layout/ConditionalHeader'
 import { CommandProvider } from '@/components/providers/CommandProvider'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -50,11 +51,13 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className={inter.className}>
-        <CommandProvider>
-          <ConditionalHeader />
-          {children}
-          <Toaster richColors position="bottom-right" />
-        </CommandProvider>
+        <ErrorBoundary>
+          <CommandProvider>
+            <ConditionalHeader />
+            {children}
+            <Toaster richColors position="bottom-right" />
+          </CommandProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )

@@ -213,8 +213,10 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed step-by-step instructions.
 ### Core Documentation
 - **[PROJECT_STATUS_COMPLETE.md](./PROJECT_STATUS_COMPLETE.md)** - **📊 Master status file** - Complete project status and features
 - [PROJECT_PLAN.md](./PROJECT_PLAN.md) - Detailed project roadmap and phase tracking
+- [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md) - Security, E2E, error handling, and deployment checklist
 - [SETUP_CHECKLIST.md](./SETUP_CHECKLIST.md) - **Start here!** Step-by-step production setup checklist
 - [TECH_STACK.md](./TECH_STACK.md) - **Technology stack documentation** - Why we chose each technology
+- **WebSocket protocol:** Message types and validation are defined in `backend/src/types/websocket.ts` and `frontend/lib/websocket/types.ts`; see handler in `backend/src/websocket/handler.ts`.
 
 ### Bible Mode (KJV Ingestion)
 To ingest the KJV Bible JSON dataset into Supabase:
