@@ -10,11 +10,21 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Landing Page – Scripture & Live Console Showcase ✅
+- ✅ **Scripture section**: New "And scripture too." section between LyricWall and TestimonialWall
+  - Three cards (verse display, reference follow, one flow) with glass-card-hover, purple accents, BookOpen/Mic/LayoutList icons
+  - "Bible Verses" added to FeatureMarquee strip
+- ✅ **Live Console showcase**: New section between AIMoment and FeatureMarquee
+  - Real operator-console screenshot in a 3D tilt card (mouse-follow rotateX/rotateY via framer-motion)
+  - Hover scale + orange glow; click opens lightbox modal (Radix Dialog) for larger view
+  - Asset: `frontend/public/landing/operator-console.png`
+- **Files**: `ScriptureSection.tsx`, `LiveConsoleShowcase.tsx`, `page.tsx`, `FeatureMarquee.tsx`, `public/landing/operator-console.png`
+
 ### February 6, 2026 (Afternoon) - Event Management UI Bug Fixes 🐛
 - ✅ **TypeScript Type-Check Fixes**: Resolved all type-check errors (unused imports, duplicate imports, type casting)
 - ✅ **Duplicate Key Constraint Violation**: Fixed drag-and-drop reordering with two-phase sequential updates + PostgreSQL function
 - ✅ **Null song_id Constraint**: Made `song_id` nullable in migration for polymorphic items
-- ⚠️ **Setlist Items in Live Session**: Partial fix - added `setlistItems` to SESSION_STARTED message (needs further investigation)
+- ✅ **Setlist Items in Live Session**: Fixed - setlist items (songs, Bible, media) now show correctly in live operator view
 - **Commits**: `7688fd6`, `09c3b8f`, `69250ba`, `8d91e41`
 - **See**: `.cursor/SESSION_SUMMARY_FEB_06_2026.md` for details
 
