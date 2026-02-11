@@ -6,6 +6,7 @@ import { FeatureMarquee } from '@/components/landing/FeatureMarquee'
 import { TestimonialWall } from '@/components/landing/TestimonialWall'
 import { Pricing } from '@/components/landing/Pricing'
 import { LyricWall } from '@/components/landing/LyricWall'
+import { ScriptureSection } from '@/components/landing/ScriptureSection'
 import { Footer } from '@/components/layout/Footer'
 
 export default function Home() {
@@ -17,6 +18,7 @@ export default function Home() {
       <AIMoment />
       <FeatureMarquee />
       <LyricWall />
+      <ScriptureSection />
       <TestimonialWall />
       <Pricing />
       <Footer />
