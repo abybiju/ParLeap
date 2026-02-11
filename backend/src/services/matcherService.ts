@@ -78,12 +78,12 @@ const DEFAULT_CONFIG: MatcherConfig = {
   allowBackward: false,
 };
 
-// End-of-line detection configuration
+// End-of-line detection - tuned for reliability across varied songs/accents
 const END_TRIGGER_PERCENTAGE = 0.40; // Last 40% of words trigger advance (adapts to line length)
-const END_TRIGGER_THRESHOLD = 0.58; // Lower threshold for end trigger sensitivity
-const END_TRIGGER_SECONDARY_THRESHOLD = 0.52; // Secondary threshold when next-line is also rising
-const NEXT_LINE_SUPPORT_THRESHOLD = 0.60; // Require a reasonable next-line confidence for hybrid trigger
-const END_TRIGGER_MATCH_GATE = 0.68; // Allow end-trigger even if full-line confidence is lower
+const END_TRIGGER_THRESHOLD = 0.52; // Primary threshold - advance when end-words match
+const END_TRIGGER_SECONDARY_THRESHOLD = 0.48; // Secondary when next-line is also rising
+const NEXT_LINE_SUPPORT_THRESHOLD = 0.55; // Require reasonable next-line confidence for hybrid trigger
+const END_TRIGGER_MATCH_GATE = 0.58; // Allow end-trigger even if full-line confidence is lower
 // Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**

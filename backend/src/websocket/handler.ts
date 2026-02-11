@@ -85,7 +85,8 @@ const BIBLE_SMART_LISTEN_ENABLED = process.env.BIBLE_SMART_LISTEN_ENABLED === 't
 /** STT window duration (ms) after wake word. Default 30s. */
 const BIBLE_SMART_LISTEN_WINDOW_MS = parseNumberEnv(process.env.BIBLE_SMART_LISTEN_WINDOW_MS, 30000);
 
-function preprocessBufferText(text: string, maxWords = 12): string {
+function preprocessBufferText(text: string, maxWords?: number): string {
+  const limit = Math.max(1, maxWords ?? parseNumberEnv(process.env.MATCHER_PREPROCESS_MAX_WORDS, 22));
   const fillers = new Set(['uh', 'um', 'oh', 'ah', 'uhh', 'umm', 'hmm']);
   const words = text
     .toLowerCase()
@@ -101,7 +102,7 @@ function preprocessBufferText(text: string, maxWords = 12): string {
     }
   }
 
-  const sliced = deduped.slice(-maxWords);
+  const sliced = deduped.slice(-limit);
   return sliced.join(' ');
 }
 
@@ -432,13 +433,12 @@ async function handleStartSession(
 
   const sessionId = `session_${Date.now()}`;
   
-  // Initialize matcher configuration
-  // Lower threshold for better matching (0.6 = 60% similarity required)
+  // Initialize matcher configuration - tuned for production reliability
   const matcherConfig: MatcherConfig = validateConfig({
-    similarityThreshold: parseNumberEnv(process.env.MATCHER_SIMILARITY_THRESHOLD, 0.6),
-    minBufferLength: parseNumberEnv(process.env.MATCHER_MIN_BUFFER_LENGTH, 2), // Lower from 3 to 2 words
+    similarityThreshold: parseNumberEnv(process.env.MATCHER_SIMILARITY_THRESHOLD, 0.55),
+    minBufferLength: parseNumberEnv(process.env.MATCHER_MIN_BUFFER_LENGTH, 2),
     bufferWindow: parseNumberEnv(process.env.MATCHER_BUFFER_WINDOW, 100),
-    debug: process.env.DEBUG_MATCHER === 'true' || process.env.NODE_ENV !== 'production', // Enable debug in dev
+    debug: process.env.DEBUG_MATCHER === 'true' || process.env.NODE_ENV !== 'production',
   });
 
   // If there's an existing session, sync to its current state
@@ -781,7 +781,7 @@ async function handleTranscriptionResult(
       }
     }
 
-    const cleanedBuffer = preprocessBufferText(session.rollingBuffer, 15); // Increased from 12 to 15 words
+    const cleanedBuffer = preprocessBufferText(session.rollingBuffer);
     
     if (session.matcherConfig.debug) {
       console.log(`[WS] Rolling buffer updated: "${cleanedBuffer.slice(-50)}..."`);
@@ -1209,9 +1209,9 @@ async function handleTranscriptionResult(
         matchResult.advanceReason === 'end-words' && matchResult.endTriggerScore !== undefined;
       if (matchResult.matchFound && (matchResult.confidence >= session.matcherConfig.similarityThreshold || isEndTriggerMatch)) {
         session.lastStrongMatchAt = Date.now();
-        // END-TRIGGER DEBOUNCE: Require consecutive end-word hits within a short window
+        // END-TRIGGER: Advance when last words of line are heard (1 match = advance for responsiveness)
         const END_TRIGGER_DEBOUNCE_WINDOW_MS = 1800;
-        const END_TRIGGER_DEBOUNCE_MATCHES = 2;
+        const END_TRIGGER_DEBOUNCE_MATCHES = parseNumberEnv(process.env.MATCHER_END_TRIGGER_DEBOUNCE, 1);
         let isLineEndConfirmed = matchResult.isLineEnd ?? false;
 
         if (matchResult.isLineEnd && matchResult.advanceReason === 'end-words' && matchResult.nextLineIndex !== undefined) {
