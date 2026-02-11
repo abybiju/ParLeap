@@ -1,5 +1,27 @@
 # ParLeap AI - Memory Log
 
+## Session: Password Reset / Forgot Password Flow
+
+### What We Shipped
+- **Forgot password page** (`/auth/forgot-password`): Email form → `resetPasswordForEmail(email, { redirectTo: origin + '/auth/reset-password' })`; success message and link back to login.
+- **Reset password page** (`/auth/reset-password`): User lands from email link; Supabase establishes session from URL hash; form for new password + confirm; `updateUser({ password })` then redirect to dashboard with toast.
+- **Login page**: "Forgot your password?" link (below password label) → `/auth/forgot-password`.
+- **Profile Security section**: "Reset Password" button opens dialog; new password + confirm → `updateUser({ password })`; toast and close.
+
+### Supabase URL Configuration (Manual)
+- **Site URL** must be production base (e.g. `https://www.parleap.com`) so recovery emails point there, not localhost.
+- **Redirect URLs** must include `https://www.parleap.com/auth/callback` and `https://www.parleap.com/auth/reset-password` (and optionally `parleap.com` without www, `par-leap.vercel.app`, or `https://par-leap-*.vercel.app/auth/callback` and `.../auth/reset-password` for previews).
+
+### Commit
+- `8c00cf3` — feat: forgot password flow and reset from profile
+
+### Files
+- `frontend/app/auth/forgot-password/page.tsx`, `frontend/app/auth/reset-password/page.tsx`
+- `frontend/app/auth/login/page.tsx` (forgot link)
+- `frontend/components/profile/sections/SecuritySection.tsx` (reset modal)
+
+---
+
 ## Session: February 11, 2026 - Bible in Live Setlist + Smart Listen Gate Fixes
 
 ### Problem: Bible Items Not Showing in Live Setlist
@@ -43,6 +65,15 @@
 - `ce79927` — bible passage auto-follow
 - `47e25c8` — parsing variants
 - `d7be9f5` — eslint regex escape fix
+
+---
+
+## Session: February 11, 2026 - Smart Listen gating, mic fallbacks (reverted), Psalms alias
+
+### Notes
+- Smart Listen: songs stay continuous when Bible mode is off; gate applies only to non-song items when Bible mode is on (`bf08290`).
+- Mic getUserMedia fallbacks (deviceId/default/explicit) were tried and then reverted after “Requested device not found” errors (`a0986ae`, `a66f615`, `8621795`); reverted to prior mic logic.
+- Added Psalms mis-hear aliases (`sams`, `salms`) so STT/wake maps “sams/salms” to Psalms (`b650ba7`).
 
 ---
 
