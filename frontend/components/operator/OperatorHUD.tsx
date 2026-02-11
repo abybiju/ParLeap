@@ -117,9 +117,11 @@ export function OperatorHUD({
   const slideCache = useSlideCache();
   const lastSentSmartListenRef = useRef<boolean | null>(null);
 
-  // Bible mode is strict-gated by design: when enabled, Smart Listen gates STT regardless of SONG/MEDIA/BIBLE item.
+  // Smart Listen gate rules:
+  // - Bible mode ON: gate non-SONG items (Bible/Media) to avoid wake on random speech.
+  // - Bible mode OFF: never gate (songs run continuous; Bible items treated like songs for reliability).
   const effectiveSmartListen =
-    smartListenMasterEnabled && (bibleMode || !isSongLikeItem(activeItemType));
+    smartListenMasterEnabled && bibleMode && !isSongLikeItem(activeItemType);
 
   const audioCapture = useAudioCapture({
     usePcm: sttProvider === 'elevenlabs',
@@ -141,7 +143,7 @@ export function OperatorHUD({
     setCurrentItemIndex(index);
     setActiveItemType(kind);
     console.log(
-      `[OperatorHUD] Item activated: index=${index} kind=${kind} → effectiveSmartListen=${smartListenMasterEnabled && (bibleMode || !isSongLikeItem(kind))}`
+      `[OperatorHUD] Item activated: index=${index} kind=${kind} → effectiveSmartListen=${smartListenMasterEnabled && bibleMode && !isSongLikeItem(kind)}`
     );
   };
 
@@ -627,15 +629,12 @@ export function OperatorHUD({
               onClick={() => {
                 const next = !smartListenMasterEnabled;
                 setSmartListenMasterEnabled(next);
-                if (next) {
-                  toast.success(
-                    bibleMode
-                      ? 'Smart Listen on: Bible mode is strict-gated (wake/manual windows only)'
-                      : 'Smart Listen on: SONG items bypass, non-SONG uses wake/manual windows'
-                  );
-                } else {
-                  toast.info('Smart Listen off: STT stays continuous');
-                }
+                const msg = next
+                  ? bibleMode
+                    ? 'Smart Listen on: Bible items gated; songs stay bypassed'
+                    : 'Smart Listen on: songs stay bypassed'
+                  : 'Smart Listen off: STT stays continuous';
+                toast.info(msg);
               }}
               className={cn(
                 'px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors',
@@ -651,8 +650,8 @@ export function OperatorHUD({
                   : effectiveSmartListen
                   ? 'Smart Listen active for current non-SONG item'
                   : bibleMode
-                  ? 'Bible mode strict-gated'
-                  : `Smart Listen bypassed (${activeItemType})`
+                  ? 'Bible mode gated (non-songs)'
+                  : 'Smart Listen bypassed'
               }
             >
               {!smartListenMasterEnabled ? 'Off' : effectiveSmartListen ? 'On' : 'Bypass'}
