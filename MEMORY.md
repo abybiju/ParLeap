@@ -1,5 +1,35 @@
 # ParLeap AI - Memory Log
 
+## Session: February 11, 2026 - Bible in Live Setlist + Smart Listen Gate Fixes
+
+### Problem: Bible Items Not Showing in Live Setlist
+**Status: ⚠️ Fix deployed but not yet verified working**
+
+**Root Cause Identified**: PostgREST INNER JOIN on `songs()` embed excludes Bible items (song_id IS NULL).
+- Original schema: `song_id NOT NULL`
+- Migration 011 drops NOT NULL, but PostgREST schema cache may still use INNER JOIN
+
+**Fixes Applied**:
+1. **Backend**: Split eventService query — fetch `event_items` and `songs` separately (no embed)
+2. **Backend**: Smart Listen gate no longer requires `BIBLE_SMART_LISTEN_ENABLED` env var; honors client toggle
+3. **Frontend**: SetlistPanel merges missing Bible/Media items from initialSetlist
+4. **Frontend**: OperatorHUD tracks `currentItemIsBible` from local clicks + initialSetlist fallback
+5. **Diagnostic**: Added `/api/debug/event-items/:eventId` endpoint
+
+**Commits**: `3097cd0`, `b435214` (both pushed, CI passed)
+
+**NOT YET VERIFIED** — user reports still not working after deploy. Need to:
+1. Test debug endpoint with actual event ID
+2. Check browser console logs
+3. Possibly run `NOTIFY pgrst, 'reload schema'` in Supabase SQL editor
+
+### Key Technical Lesson
+- PostgREST uses INNER JOIN for `songs()` embed when `song_id` has cached NOT NULL constraint
+- Splitting queries into separate calls avoids this entirely
+- Always add diagnostic endpoints early when debugging production issues
+
+---
+
 ## Session: February 10, 2026 - Smart Audio Decision and Checkpoint Plan
 
 ### Decision: Implement Smart Audio Without Stack Change
@@ -703,8 +733,8 @@ frontend/tailwind.config.ts               (new animations)
 
 ---
 
-**Last Updated:** February 10, 2026  
-**Status:** Smart Audio direction set; checkpoint-and-implement plan documented. Ready to create checkpoint then implement when prioritized.
+**Last Updated:** February 11, 2026  
+**Status:** Bible in live setlist fix deployed (PostgREST INNER JOIN workaround + Smart Listen gate). Not yet verified working — debug endpoint available for next session.
 
 ---
 
