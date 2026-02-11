@@ -144,7 +144,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       media_url?: string | null;
       media_title?: string | null;
     }> | null = null;
-    let songsMap: Map<string, { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig }> = new Map();
+    const songsMap: Map<string, { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig }> = new Map();
 
     // Query 1: Fetch ALL event_items WITHOUT the songs() embed (avoids INNER JOIN issue)
     const { data: allItems, error: itemsError } = await supabase
