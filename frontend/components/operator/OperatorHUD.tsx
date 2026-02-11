@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Zap, ZapOff, Mic } from 'lucide-react';
 import { toast } from 'sonner';
@@ -52,6 +52,31 @@ type BibleVersionOption = {
   is_default: boolean;
 };
 
+type ActiveSetlistItemType = 'SONG' | 'BIBLE' | 'MEDIA';
+
+function isSongLikeItem(type: ActiveSetlistItemType | undefined): boolean {
+  return !type || type === 'SONG';
+}
+
+function resolveActiveItemType(
+  index: number,
+  backendItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' }> | null,
+  cachedItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' }> | null,
+  initialItems?: InitialSetlistItem[]
+): ActiveSetlistItemType {
+  if (backendItems && index >= 0 && index < backendItems.length) {
+    return backendItems[index].type;
+  }
+  if (cachedItems && index >= 0 && index < cachedItems.length) {
+    return cachedItems[index].type;
+  }
+  if (initialItems && index >= 0 && index < initialItems.length) {
+    return initialItems[index].kind;
+  }
+  // Reliability-first fail-safe: unknown item types are treated like SONG (continuous STT).
+  return 'SONG';
+}
+
 export function OperatorHUD({
   eventId,
   eventName,
@@ -84,34 +109,40 @@ export function OperatorHUD({
   const [bibleVersionId, setBibleVersionId] = useState<string | null>(initialBibleVersionId);
   const [bibleFollow, setBibleFollow] = useState<boolean>(false);
   const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
-  const [smartListenEnabled, setSmartListenEnabled] = useState<boolean>(false);
-  const [currentItemIsBible, setCurrentItemIsBible] = useState<boolean>(false);
+  const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
+  const [currentItemIndex, setCurrentItemIndex] = useState<number>(0);
+  const [activeItemType, setActiveItemType] = useState<ActiveSetlistItemType>(
+    resolveActiveItemType(0, undefined, undefined, initialSetlist)
+  );
   const slideCache = useSlideCache();
+  const lastSentSmartListenRef = useRef<boolean | null>(null);
 
-  const useSmartListenGate = smartListenEnabled && currentItemIsBible;
+  const effectiveSmartListen = smartListenMasterEnabled && !isSongLikeItem(activeItemType);
 
   const audioCapture = useAudioCapture({
     usePcm: sttProvider === 'elevenlabs',
     sessionActive: sessionStatus === 'active',
-    smartListenEnabled: useSmartListenGate,
-    smartListenBufferMs: 10000,
+    smartListenEnabled: effectiveSmartListen,
+    smartListenBufferMs: 5000,
   });
 
   const wakeWord = useBibleWakeWord({
-    enabled: sessionStatus === 'active' && useSmartListenGate && !!audioCapture.requestSttWindow,
+    enabled: sessionStatus === 'active' && effectiveSmartListen && !!audioCapture.requestSttWindow,
     onWake: () => audioCapture.requestSttWindow?.(),
     cooldownMs: 3000,
   });
 
   // Callback from SetlistPanel when operator clicks a setlist item.
-  // Immediately updates currentItemIsBible so the Smart Listen gate reacts without waiting for backend.
+  // Immediately updates active item state so Smart Listen switches between
+  // SONG bypass (continuous) and non-SONG gating without waiting for backend.
   const handleItemActivated = (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA') => {
-    setCurrentItemIsBible(kind === 'BIBLE');
-    console.log(`[OperatorHUD] Item activated: index=${index} kind=${kind} → currentItemIsBible=${kind === 'BIBLE'}`);
+    setCurrentItemIndex(index);
+    setActiveItemType(kind);
+    console.log(`[OperatorHUD] Item activated: index=${index} kind=${kind} → effectiveSmartListen=${smartListenMasterEnabled && !isSongLikeItem(kind)}`);
   };
 
-  // Sync currentItemIsBible from backend messages.
-  // Also checks initialSetlist as fallback when backend setlistItems may not include Bible items.
+  // Sync active setlist item from backend messages.
+  // Falls back to cached and initial setlist when needed.
   useEffect(() => {
     if (!lastMessage) return;
     let idx: number | undefined;
@@ -122,23 +153,34 @@ export function OperatorHUD({
     }
     if (idx === undefined || idx < 0) return;
 
-    // Try backend setlistItems first
-    const items =
-      isSessionStartedMessage(lastMessage)
-        ? lastMessage.payload.setlistItems
-        : slideCache.setlist?.setlistItems;
-    if (items && idx < items.length) {
-      setCurrentItemIsBible(items[idx].type === 'BIBLE');
-      return;
-    }
-    // Fallback: check initialSetlist (which always includes Bible items from frontend Supabase)
-    if (initialSetlist && idx < initialSetlist.length) {
-      setCurrentItemIsBible(initialSetlist[idx].kind === 'BIBLE');
-      return;
-    }
-    // When DISPLAY_UPDATE has no currentItemIndex (e.g. bibleMode verse display), do not infer from songId
-    // — we may be on a song with bibleMode showing a verse.
+    const backendItems = isSessionStartedMessage(lastMessage)
+      ? lastMessage.payload.setlistItems
+      : slideCache.setlist?.setlistItems;
+    const resolvedType = resolveActiveItemType(
+      idx,
+      backendItems,
+      slideCache.setlist?.setlistItems,
+      initialSetlist
+    );
+    setCurrentItemIndex(idx);
+    setActiveItemType(resolvedType);
   }, [lastMessage, slideCache.setlist, initialSetlist]);
+
+  // Keep backend smartListenEnabled synced with the effective runtime gate state.
+  useEffect(() => {
+    if (sessionStatus !== 'active') {
+      lastSentSmartListenRef.current = null;
+      return;
+    }
+    if (lastSentSmartListenRef.current === effectiveSmartListen) {
+      return;
+    }
+    updateEventSettings({ smartListenEnabled: effectiveSmartListen });
+    lastSentSmartListenRef.current = effectiveSmartListen;
+    console.log(
+      `[OperatorHUD] Smart Listen sync: effective=${effectiveSmartListen}, master=${smartListenMasterEnabled}, itemType=${activeItemType}, itemIndex=${currentItemIndex}`
+    );
+  }, [sessionStatus, effectiveSmartListen, smartListenMasterEnabled, activeItemType, currentItemIndex, updateEventSettings]);
 
   // Environment variable validation and debug logging
   useEffect(() => {
@@ -368,7 +410,7 @@ export function OperatorHUD({
           clearInterval(checkConnection);
           console.log('[OperatorHUD] WebSocket connected, starting session for event:', eventId);
           setSessionStatus('starting');
-          startSession(eventId, { smartListenEnabled: smartListenEnabled });
+          startSession(eventId, { smartListenEnabled: effectiveSmartListen });
         }
       }, 100);
       // Timeout after 5 seconds
@@ -376,7 +418,7 @@ export function OperatorHUD({
     } else if (isConnected) {
       console.log('[OperatorHUD] Starting session for event:', eventId);
       setSessionStatus('starting');
-      startSession(eventId, { smartListenEnabled: smartListenEnabled });
+      startSession(eventId, { smartListenEnabled: effectiveSmartListen });
     }
   };
 
@@ -574,51 +616,65 @@ export function OperatorHUD({
               </button>
             </div>
           )}
-          {/* Smart Bible Listen: only stream STT when wake word or manual trigger */}
-          {bibleMode && (
-            <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Smart Listen</span>
-              <button
-                onClick={() => {
-                  const next = !smartListenEnabled;
-                  setSmartListenEnabled(next);
-                  if (sessionStatus === 'active') {
-                    updateEventSettings({ smartListenEnabled: next });
-                  }
-                  if (next) toast.success('Smart Listen on: STT only after wake word or Listen now');
-                  else toast.info('Smart Listen off: STT always on for Bible');
-                }}
-                className={cn(
-                  'px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors',
-                  smartListenEnabled ? 'bg-amber-500/20 text-amber-200 border-amber-500/40' : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
-                )}
-              >
-                {smartListenEnabled ? 'On' : 'Off'}
-              </button>
-              {smartListenEnabled && currentItemIsBible && sessionStatus === 'active' && audioCapture.requestSttWindow && (
-                <>
-                  {wakeWord.isListening && (
-                    <span className="text-[10px] text-slate-400" title="Listening for Bible wake words">
-                      Wake
-                    </span>
-                  )}
-                  {wakeWord.error && (
-                    <span className="text-[10px] text-amber-400" title={wakeWord.error}>
-                      No wake
-                    </span>
-                  )}
-                  <button
-                    onClick={() => audioCapture.requestSttWindow?.()}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-sky-500/40 bg-sky-500/20 text-sky-200"
-                    title="Open STT window now (send buffer + next 30s)"
-                  >
-                    <Mic className="inline h-3 w-3 mr-1" />
-                    Listen now
-                  </button>
-                </>
+          {/* Smart Listen v2: default-on master toggle + SONG bypass */}
+          <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Smart Listen</span>
+            <button
+              onClick={() => {
+                const next = !smartListenMasterEnabled;
+                setSmartListenMasterEnabled(next);
+                if (next) {
+                  toast.success('Smart Listen on: SONG items bypass, non-SONG uses wake/manual windows');
+                } else {
+                  toast.info('Smart Listen off: STT stays continuous');
+                }
+              }}
+              className={cn(
+                'px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors',
+                !smartListenMasterEnabled
+                  ? 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                  : effectiveSmartListen
+                  ? 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                  : 'bg-sky-500/20 text-sky-200 border-sky-500/40'
               )}
-            </div>
-          )}
+              title={
+                !smartListenMasterEnabled
+                  ? 'Smart Listen disabled (continuous STT)'
+                  : effectiveSmartListen
+                  ? 'Smart Listen active for current non-SONG item'
+                  : `Smart Listen bypassed (${activeItemType})`
+              }
+            >
+              {!smartListenMasterEnabled ? 'Off' : effectiveSmartListen ? 'On' : 'Bypass'}
+            </button>
+            {smartListenMasterEnabled && !effectiveSmartListen && (
+              <span className="text-[10px] text-sky-300" title={`Current item ${activeItemType} runs continuous STT`}>
+                {activeItemType}
+              </span>
+            )}
+            {effectiveSmartListen && sessionStatus === 'active' && audioCapture.requestSttWindow && (
+              <>
+                {wakeWord.isListening && (
+                  <span className="text-[10px] text-slate-400" title="Listening for Bible wake words">
+                    Wake
+                  </span>
+                )}
+                {wakeWord.error && (
+                  <span className="text-[10px] text-amber-400" title={wakeWord.error}>
+                    No wake
+                  </span>
+                )}
+                <button
+                  onClick={() => audioCapture.requestSttWindow?.()}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-sky-500/40 bg-sky-500/20 text-sky-200"
+                  title="Open STT window now (send pre-roll + next 30s)"
+                >
+                  <Mic className="inline h-3 w-3 mr-1" />
+                  Listen now
+                </button>
+              </>
+            )}
+          </div>
           {/* PHASE 2: Auto-Follow Toggle */}
           <button
             onClick={toggleAutoFollow}
@@ -691,7 +747,11 @@ export function OperatorHUD({
                 requestPermission={audioCapture.requestPermission}
               />
               <AudioLevelMeter state={audioCapture.state} />
-              <STTStatus audioActive={audioCapture.state.isRecording && !audioCapture.state.isPaused} />
+              <STTStatus
+                audioActive={audioCapture.state.isRecording && !audioCapture.state.isPaused}
+                smartListenEnabled={effectiveSmartListen}
+                smartListenWindowOpen={audioCapture.state.smartListenWindowOpen}
+              />
             </div>
           </div>
         </div>

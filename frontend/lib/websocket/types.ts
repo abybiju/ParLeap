@@ -12,7 +12,7 @@ export interface StartSessionMessage {
   type: 'START_SESSION';
   payload: {
     eventId: string;
-    /** When true, backend uses Smart Listen gate for BIBLE items. Default false so matching always works. */
+    /** When true, backend uses Smart Listen gate for non-SONG items. */
     smartListenEnabled?: boolean;
   };
 }

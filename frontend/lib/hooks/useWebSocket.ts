@@ -126,7 +126,7 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
   );
 
   const updateEventSettings = useCallback(
-    (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean }) => {
+    (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean }) => {
       client.updateEventSettings(settings);
     },
     [client]
