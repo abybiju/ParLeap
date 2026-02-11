@@ -29,16 +29,17 @@ type DisplayItem =
  * Uses setlistItems when available (polymorphic), otherwise falls back to songs-only.
  */
 export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
-  const { lastMessage, goToSlide } = useWebSocket(false);
+  const { lastMessage, goToItem } = useWebSocket(false);
   const slideCache = useSlideCache();
   const [currentSongId, setCurrentSongId] = useState<string | null>(null);
   const [currentItemIndex, setCurrentItemIndex] = useState<number>(0);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [hasSessionStarted, setHasSessionStarted] = useState(false);
 
-  const handleSongClick = (songId: string, _songIndex: number) => {
-    goToSlide(0, songId);
-    console.log(`[SetlistPanel] Manual override: Jumping to song "${songId}"`);
+  const handleItemClick = (index: number, item: DisplayItem) => {
+    goToItem(index);
+    const label = item.kind === 'SONG' ? item.title : item.kind === 'BIBLE' ? item.bibleRef : item.mediaTitle;
+    console.log(`[SetlistPanel] Manual override: Jumping to item ${index} (${item.kind}) "${label}"`);
   };
 
   useEffect(() => {
@@ -66,12 +67,16 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
       const songId = displayMsg.payload.songId;
       setCurrentSongId(songId);
       setCurrentSlideIndex(displayMsg.payload.slideIndex);
-      // Sync currentItemIndex so setlist "Current" highlights the right item on AI auto-switch
-      if (slideCache.setlist?.setlistItems && slideCache.setlist.setlistItems.length > 0) {
+      // Prefer currentItemIndex from payload when set; else infer from songId
+      const payloadItemIndex = displayMsg.payload.currentItemIndex;
+      if (payloadItemIndex !== undefined && payloadItemIndex >= 0) {
+        setCurrentItemIndex(payloadItemIndex);
+      } else if (slideCache.setlist?.setlistItems && slideCache.setlist.setlistItems.length > 0) {
         const idx = slideCache.setlist.setlistItems.findIndex(
           (item) =>
             (item.type === 'SONG' && item.songId === songId) ||
-            (songId.startsWith('bible:') && item.type === 'BIBLE')
+            (songId.startsWith('bible:') && item.type === 'BIBLE') ||
+            (songId.startsWith('media:') && item.type === 'MEDIA')
         );
         if (idx >= 0) setCurrentItemIndex(idx);
       } else if (slideCache.setlist?.songs) {
@@ -251,11 +256,11 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
             </>
           );
 
-          if (isSong && hasSessionStarted) {
+          if (hasSessionStarted) {
             return (
               <button
                 key={item.id}
-                onClick={() => handleSongClick(item.songId, index)}
+                onClick={() => handleItemClick(index, item)}
                 disabled={isCurrent}
                 className={cn(
                   'w-full rounded-lg border p-3 transition-all text-left',
@@ -263,7 +268,7 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
                   'focus:outline-none focus:ring-2 focus:ring-indigo-500/50',
                   'disabled:cursor-default disabled:hover:border-indigo-500/50 disabled:hover:bg-indigo-500/10',
                   borderColor,
-                  !hasSessionStarted && 'opacity-75'
+                  'opacity-90'
                 )}
               >
                 {content}
@@ -274,11 +279,7 @@ export function SetlistPanel({ initialSetlist = [] }: SetlistPanelProps) {
           return (
             <div
               key={item.id}
-              className={cn(
-                'w-full rounded-lg border p-3 transition-all text-left cursor-default',
-                borderColor,
-                !hasSessionStarted && 'opacity-75'
-              )}
+              className={cn('w-full rounded-lg border p-3 transition-all text-left cursor-default opacity-75', borderColor)}
             >
               {content}
             </div>

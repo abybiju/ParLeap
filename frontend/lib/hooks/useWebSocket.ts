@@ -15,11 +15,13 @@ export interface UseWebSocketReturn {
   isConnected: boolean;
   sendMessage: (message: ClientMessage) => void;
   startSession: (eventId: string, options?: { smartListenEnabled?: boolean }) => void;
-  updateEventSettings: (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean }) => void;
+  updateEventSettings: (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean }) => void;
   stopSession: () => void;
   nextSlide: () => void;
   prevSlide: () => void;
   goToSlide: (slideIndex: number, songId?: string) => void;
+  /** Jump to setlist item by index (songs, Bible, media). Prefer over goToSlide when using polymorphic setlist. */
+  goToItem: (itemIndex: number) => void;
   ping: () => void;
   connect: () => void;
   disconnect: () => void;
@@ -149,6 +151,13 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
     [client]
   );
 
+  const goToItem = useCallback(
+    (itemIndex: number) => {
+      client.manualOverride('GO_TO_ITEM', undefined, undefined, itemIndex);
+    },
+    [client]
+  );
+
   const ping = useCallback(() => {
     client.ping();
   }, [client]);
@@ -171,6 +180,7 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
     nextSlide,
     prevSlide,
     goToSlide,
+    goToItem,
     ping,
     connect,
     disconnect,

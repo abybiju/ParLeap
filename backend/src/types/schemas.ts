@@ -25,6 +25,7 @@ export const UpdateEventSettingsSchema = z.object({
     bibleMode: z.boolean().optional(),
     bibleVersionId: z.string().uuid().nullable().optional(),
     bibleFollow: z.boolean().optional(),
+    smartListenEnabled: z.boolean().optional(),
   }),
 });
 
@@ -45,9 +46,10 @@ export const AudioDataSchema = z.object({
 export const ManualOverrideSchema = z.object({
   type: z.literal('MANUAL_OVERRIDE'),
   payload: z.object({
-    action: z.enum(['NEXT_SLIDE', 'PREV_SLIDE', 'GO_TO_SLIDE']),
+    action: z.enum(['NEXT_SLIDE', 'PREV_SLIDE', 'GO_TO_SLIDE', 'GO_TO_ITEM']),
     slideIndex: z.number().optional(),
     songId: z.string().uuid().optional(),
+    itemIndex: z.number().optional(),
   }),
 });
 
