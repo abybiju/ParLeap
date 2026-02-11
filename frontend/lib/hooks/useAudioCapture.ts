@@ -152,48 +152,95 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     pausedRef.current = state.isPaused;
   }, [state.isRecording, state.isPaused]);
 
+  const getMicrophoneStream = useCallback(async (): Promise<MediaStream> => {
+    const preferredConstraints: MediaStreamConstraints[] = [
+      {
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      },
+      {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      },
+      { audio: true },
+    ];
+
+    let lastError: Error | null = null;
+
+    const tryConstraints = async (constraintsList: MediaStreamConstraints[]): Promise<MediaStream | null> => {
+      for (const constraints of constraintsList) {
+        try {
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+          lastError = error as Error;
+        }
+      }
+      return null;
+    };
+
+    const directStream = await tryConstraints(preferredConstraints);
+    if (directStream) {
+      return directStream;
+    }
+
+    // Device-level fallback: if browser default input is stale, retry with explicit audioinput deviceId(s).
+    let inputs: MediaDeviceInfo[] = [];
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      inputs = devices.filter((device) => device.kind === 'audioinput' && !!device.deviceId);
+      if (inputs.length === 0) {
+        console.warn('[AudioCapture] No audioinput devices listed by enumerateDevices()');
+      } else {
+        console.warn(`[AudioCapture] Retrying mic with explicit deviceId fallback (${inputs.length} device(s))`);
+      }
+    } catch (error) {
+      lastError = error as Error;
+      console.warn('[AudioCapture] Failed to enumerate devices for fallback:', error);
+    }
+
+    for (const input of inputs) {
+      const explicitConstraints: MediaStreamConstraints[] = [
+        {
+          audio: {
+            deviceId: { exact: input.deviceId },
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        },
+        {
+          audio: {
+            deviceId: { exact: input.deviceId },
+          },
+        },
+      ];
+
+      const explicitStream = await tryConstraints(explicitConstraints);
+      if (explicitStream) {
+        return explicitStream;
+      }
+    }
+
+    throw lastError ?? new Error('Failed to access microphone');
+  }, []);
+
   /**
    * Request microphone permission
    */
   const requestPermission = useCallback(async (): Promise<boolean> => {
     try {
       setState((prev) => ({ ...prev, error: null }));
-
-      const preferredConstraints: MediaStreamConstraints[] = [
-        {
-          audio: {
-            sampleRate: 16000, // Preferred for STT
-            channelCount: 1, // Preferred mono
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        },
-        {
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        },
-        { audio: true },
-      ];
-
-      let stream: MediaStream | null = null;
-      let lastError: Error | null = null;
-
-      for (const constraints of preferredConstraints) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-          break;
-        } catch (error) {
-          lastError = error as Error;
-        }
-      }
-
-      if (!stream) {
-        throw lastError ?? new Error('Failed to access microphone');
-      }
+      const stream = await getMicrophoneStream();
 
       // Permission granted
       setState((prev) => ({ ...prev, permissionState: 'granted' }));
@@ -222,13 +269,16 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
 
       setState((prev) => ({
         ...prev,
-        permissionState: 'denied',
+        permissionState:
+          err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+            ? 'denied'
+            : prev.permissionState,
         error: errorMessage,
       }));
 
       return false;
     }
-  }, []);
+  }, [getMicrophoneStream]);
 
   const ensureAudioContext = useCallback((sampleRate: number) => {
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -532,40 +582,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         }
       }
 
-      const preferredConstraints: MediaStreamConstraints[] = [
-        {
-          audio: {
-            sampleRate: 16000,
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        },
-        {
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        },
-        { audio: true },
-      ];
-
-      let stream: MediaStream | null = null;
-      let lastError: Error | null = null;
-      for (const constraints of preferredConstraints) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-          break;
-        } catch (error) {
-          lastError = error as Error;
-        }
-      }
-
-      if (!stream) {
-        throw lastError ?? new Error('Failed to start microphone stream');
-      }
+      const stream = await getMicrophoneStream();
 
       mediaStreamRef.current = stream;
 
@@ -639,7 +656,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
         isRecording: false,
       }));
     }
-  }, [state.permissionState, requestPermission, startAudioLevelMonitoring, stopAudioLevelMonitoring, sendAudioChunk, usePcm, startPcmProcessing]);
+  }, [state.permissionState, requestPermission, startAudioLevelMonitoring, stopAudioLevelMonitoring, sendAudioChunk, usePcm, startPcmProcessing, getMicrophoneStream]);
 
   /**
    * Smart Bible Listen: open STT window, send ring-buffer catch-up, then send live audio for STT_WINDOW_MS.
