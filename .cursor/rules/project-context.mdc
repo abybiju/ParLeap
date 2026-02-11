@@ -5,7 +5,7 @@ alwaysApply: true
 
 # ParLeap Project Context
 
-## Current Status (January 27, 2026)
+## Current Status (February 2026)
 
 ParLeap is a **real-time AI-powered presentation orchestration platform** for live events. It automates slide switching by listening to speakers/singers and matching audio to pre-loaded content.
 
@@ -40,9 +40,13 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 5. **Audio Format**: PCM for ElevenLabs, WebM Opus for Google
 6. **Matching Philosophy**: Single source of truth (backend only, no client-side matching)
 
-### Recent Features (January 27, 2026)
+### Recent Features
 
-**Adaptive Live Mode**
+**Landing page** – Scripture section ("And scripture too." with three cards, Bible Verses in marquee) and Live Console showcase (operator screenshot with 3D tilt, hover glow, click-to-open lightbox).
+
+**Polymorphic setlist in live** – Setlist items (songs, Bible, media) display correctly in the live operator view; SESSION_STARTED includes setlistItems and frontend renders them.
+
+**Adaptive Live Mode** (January 27, 2026)
 - Multi-song matching: AI detects when singer jumps to different song
 - Debouncing: Requires 2 sustained matches before auto-switch
 - Auto-follow toggle: Operator can disable AI and take manual control
@@ -52,7 +56,7 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Session Summaries Location
 Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
-- **Latest**: `SESSION_SUMMARY_JAN_27_2026.md` - Adaptive Live Mode implementation
+- **Latest**: `SESSION_SUMMARY_FEB_06_2026.md` - Event Management UI fixes; setlist in live confirmed working
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap

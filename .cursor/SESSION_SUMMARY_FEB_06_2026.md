@@ -73,7 +73,7 @@ Added `ALTER TABLE event_items ALTER COLUMN song_id DROP NOT NULL;` to migration
 ---
 
 ### 4. Setlist Items Not Loading in Live Session
-**Status**: ⚠️ Partial Fix (Needs Further Investigation)
+**Status**: ✅ Complete (User confirmed working)
 
 **Problem**: 
 Setlist items (SONG, BIBLE, MEDIA) saved in event not appearing in live session.
@@ -97,12 +97,7 @@ Backend fetched `setlistItems` correctly but didn't include them in `SESSION_STA
 
 **Commit**: `8d91e41` - "fix: include polymorphic setlistItems in live session"
 
-**Status Note**: 
-User reports fix not working. Needs investigation:
-- Verify migration was run
-- Check browser console for `setlistItems` in SESSION_STARTED message
-- Verify `slideCache.setlist.setlistItems` contains data
-- Check if `SetlistPanel` component needs update to display non-song items
+**Status Note**: User confirmed setlist (songs) now shows correctly in live session.
 
 ---
 
@@ -171,41 +166,22 @@ RETURNS void
 
 ## 🐛 Known Issues
 
-1. **Setlist Items Not Showing in Live Session** ⚠️
-   - Fix applied but user reports still not working
-   - Needs investigation tomorrow
-   - Possible causes:
-     - Migration not run
-     - Frontend display logic not updated
-     - Data not flowing through correctly
+1. ~~**Setlist Items Not Showing in Live Session**~~ ✅ Resolved – user confirmed setlist (songs) now shows in live session.
 
 ---
 
 ## 📝 Next Steps
 
-1. **Debug Setlist Items Issue** (Priority: High)
-   - Verify migration `011_add_polymorphic_setlist_items.sql` was run in Supabase
-   - Check browser console logs for `setlistItems` in SESSION_STARTED message
-   - Verify `slideCache.setlist.setlistItems` contains data after session starts
-   - Check if `SetlistPanel` component needs update to display BIBLE/MEDIA items
-   - Add debug logging to trace data flow
-
-2. **Test Drag-and-Drop** (Priority: Medium)
+1. **Test Drag-and-Drop** (Priority: Medium)
    - Verify duplicate key error is resolved
    - Test reordering with multiple items
    - Verify PostgreSQL function works (if migration run)
 
-3. **Test Bible/Media Item Creation** (Priority: Medium)
+2. **Test Bible/Media Item Creation** (Priority: Medium)
    - Verify null song_id error is resolved
    - Test adding Bible references
    - Test adding Media items
    - Verify items persist correctly
-
-4. **Update SetlistPanel Component** (Priority: Low)
-   - Currently only displays songs
-   - Should display all item types (SONG, BIBLE, MEDIA)
-   - Show appropriate icons/colors for each type
-   - Handle click actions for each type
 
 ---
 
