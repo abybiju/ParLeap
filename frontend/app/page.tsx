@@ -2,6 +2,7 @@ import { HeroSection } from '@/components/landing/HeroSection'
 import { ProblemFraming } from '@/components/landing/ProblemFraming'
 import { FeatureGrid } from '@/components/landing/FeatureGrid'
 import { AIMoment } from '@/components/landing/AIMoment'
+import { LiveConsoleShowcase } from '@/components/landing/LiveConsoleShowcase'
 import { FeatureMarquee } from '@/components/landing/FeatureMarquee'
 import { TestimonialWall } from '@/components/landing/TestimonialWall'
 import { Pricing } from '@/components/landing/Pricing'
@@ -16,6 +17,7 @@ export default function Home() {
       <ProblemFraming />
       <FeatureGrid />
       <AIMoment />
+      <LiveConsoleShowcase />
       <FeatureMarquee />
       <LyricWall />
       <ScriptureSection />
