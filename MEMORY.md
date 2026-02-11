@@ -30,6 +30,22 @@
 
 ---
 
+## Session: February 11, 2026 - Bible Follow + STT Stability Improvements
+
+### What We Shipped
+- **Bible passage auto-follow** after an explicit reference, with a **Following badge + Stop** control in Operator HUD.
+- **Matcher recovery** when transcripts stall: temporary backward window to re-lock the song.
+- **GhostText confidence guard** to avoid 0% stickiness on partial transcripts.
+- **Expanded Bible reference parsing** for natural phrasing (e.g., “Luke chapter 2 verse 1”, “Romans chapter 4 verse 5 to 15”).
+
+### Commits
+- `a60e359` — matcher recovery + STT 0% guard
+- `ce79927` — bible passage auto-follow
+- `47e25c8` — parsing variants
+- `d7be9f5` — eslint regex escape fix
+
+---
+
 ## Session: February 10, 2026 - Smart Audio Decision and Checkpoint Plan
 
 ### Decision: Implement Smart Audio Without Stack Change
