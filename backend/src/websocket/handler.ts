@@ -631,7 +631,7 @@ async function handleStartSession(
  */
 function handleUpdateEventSettings(
   ws: WebSocket,
-  settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean },
+  settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean },
   receivedAt: number
 ): void {
   const processingStart = Date.now();
@@ -643,6 +643,9 @@ function handleUpdateEventSettings(
 
   if (settings.projectorFont) {
     session.projectorFont = settings.projectorFont;
+  }
+  if (settings.smartListenEnabled !== undefined) {
+    session.smartListenEnabled = settings.smartListenEnabled;
   }
   const previousBibleMode = session.bibleMode ?? false;
   if (settings.bibleMode !== undefined) {
@@ -1562,15 +1565,89 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
  */
 function handleManualOverride(
   ws: WebSocket,
-  action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE',
+  action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE' | 'GO_TO_ITEM',
   receivedAt: number,
   slideIndex?: number,
-  songId?: string
+  songId?: string,
+  itemIndex?: number
 ): void {
   const processingStart = Date.now();
   const session = sessions.get(ws);
   if (!session || !session.isActive) {
     sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
+    return;
+  }
+
+  const setlistItems = session.setlistItems ?? [];
+  const currentItemIdx = session.currentItemIndex ?? 0;
+
+  // GO_TO_ITEM: Jump to setlist item by index (enables clicking Bible/Media in setlist)
+  if (action === 'GO_TO_ITEM' && itemIndex !== undefined && setlistItems.length > 0) {
+    if (itemIndex < 0 || itemIndex >= setlistItems.length) {
+      sendError(ws, 'INVALID_ITEM', `itemIndex ${itemIndex} out of range (0-${setlistItems.length - 1})`);
+      return;
+    }
+    const targetItem = setlistItems[itemIndex];
+    session.currentItemIndex = itemIndex;
+    session.isAutoFollowing = false;
+    session.suggestedSongSwitch = undefined;
+
+    if (targetItem.type === 'BIBLE' && targetItem.bibleRef) {
+      const placeholderId = `bible:${targetItem.bibleRef.replace(/\s+/g, ':')}`;
+      const displayUpdate: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: targetItem.bibleRef,
+          slideText: targetItem.bibleRef,
+          slideLines: [targetItem.bibleRef],
+          slideIndex: 0,
+          lineIndex: 0,
+          songId: placeholderId,
+          songTitle: targetItem.bibleRef,
+          isAutoAdvance: false,
+          currentItemIndex: itemIndex,
+        },
+        timing: createTiming(receivedAt, Date.now()),
+      };
+      broadcastToEvent(session.eventId, displayUpdate);
+      console.log(`[WS] Manual override: GO_TO_ITEM -> Bible "${targetItem.bibleRef}" (item ${itemIndex})`);
+      return;
+    }
+    if (targetItem.type === 'SONG' && targetItem.songId) {
+      const targetSongIndex = session.songs.findIndex((s) => s.id === targetItem.songId);
+      if (targetSongIndex >= 0) {
+        const targetSong = session.songs[targetSongIndex];
+        session.currentSongIndex = targetSongIndex;
+        session.currentSlideIndex = 0;
+        session.currentLineIndex = 0;
+        session.songContext = createSongContext(
+          { id: targetSong.id, sequence_order: targetSongIndex + 1 },
+          targetSong,
+          0
+        );
+        session.rollingBuffer = '';
+        const slideText = targetSong.slides?.[0]?.slideText ?? targetSong.lines[0] ?? '';
+        const slideLines = targetSong.slides?.[0]?.lines ?? [slideText];
+        const displayUpdate: DisplayUpdateMessage = {
+          type: 'DISPLAY_UPDATE',
+          payload: {
+            lineText: slideLines[0] ?? '',
+            slideText,
+            slideLines,
+            slideIndex: 0,
+            lineIndex: 0,
+            songId: targetSong.id,
+            songTitle: targetSong.title,
+            isAutoAdvance: false,
+            currentItemIndex: itemIndex,
+          },
+          timing: createTiming(receivedAt, Date.now()),
+        };
+        broadcastToEvent(session.eventId, displayUpdate);
+        console.log(`[WS] Manual override: GO_TO_ITEM -> Song "${targetSong.title}" (item ${itemIndex})`);
+        return;
+      }
+    }
     return;
   }
 
@@ -1582,6 +1659,7 @@ function handleManualOverride(
 
   let newSlideIndex = session.currentSlideIndex;
   let newSongIndex = session.currentSongIndex;
+  let newItemIndex = currentItemIdx;
 
   // Helper to get slide count for a song
   const getSlideCount = (song: SongData): number => {
@@ -1593,8 +1671,19 @@ function handleManualOverride(
       const slideCount = getSlideCount(currentSong);
       if (session.currentSlideIndex < slideCount - 1) {
         newSlideIndex = session.currentSlideIndex + 1;
+      } else if (setlistItems.length > 0 && currentItemIdx < setlistItems.length - 1) {
+        // Advance to next setlist item (may be Bible/Media)
+        newItemIndex = currentItemIdx + 1;
+        const nextItem = setlistItems[newItemIndex];
+        if (nextItem.type === 'SONG' && nextItem.songId) {
+          const idx = session.songs.findIndex((s) => s.id === nextItem.songId);
+          if (idx >= 0) {
+            newSongIndex = idx;
+            newSlideIndex = 0;
+          }
+        }
+        // Else next item is BIBLE/MEDIA - handled below
       } else if (session.currentSongIndex < session.songs.length - 1) {
-        // Move to next song
         newSongIndex = session.currentSongIndex + 1;
         newSlideIndex = 0;
       }
@@ -1604,8 +1693,18 @@ function handleManualOverride(
     case 'PREV_SLIDE': {
       if (session.currentSlideIndex > 0) {
         newSlideIndex = session.currentSlideIndex - 1;
+      } else if (setlistItems.length > 0 && currentItemIdx > 0) {
+        newItemIndex = currentItemIdx - 1;
+        const prevItem = setlistItems[newItemIndex];
+        if (prevItem.type === 'SONG' && prevItem.songId) {
+          const idx = session.songs.findIndex((s) => s.id === prevItem.songId);
+          if (idx >= 0) {
+            newSongIndex = idx;
+            const prevSong = session.songs[idx];
+            newSlideIndex = getSlideCount(prevSong) - 1;
+          }
+        }
       } else if (session.currentSongIndex > 0) {
-        // Move to previous song
         newSongIndex = session.currentSongIndex - 1;
         const prevSong = session.songs[newSongIndex];
         newSlideIndex = getSlideCount(prevSong) - 1;
@@ -1632,12 +1731,66 @@ function handleManualOverride(
 
   // Check if anything actually changed
   const songChanged = newSongIndex !== session.currentSongIndex;
+  const itemChanged = newItemIndex !== currentItemIdx;
   const slideChanged = newSlideIndex !== session.currentSlideIndex || songChanged;
 
-  if (!slideChanged) {
-    // Nothing changed, don't send update
+  // When advancing to BIBLE/MEDIA via NEXT_SLIDE, itemChanged but song may not change
+  if (!slideChanged && !itemChanged) {
     console.log(`[WS] Manual override: ${action} -> No change (already at Song ${newSongIndex}, Slide ${newSlideIndex})`);
     return;
+  }
+
+  // Handle advancing to BIBLE or MEDIA item (NEXT_SLIDE/PREV_SLIDE when target is non-SONG)
+  if (itemChanged && setlistItems.length > 0) {
+    const targetItem = setlistItems[newItemIndex];
+    if (targetItem.type === 'BIBLE' && targetItem.bibleRef) {
+      session.currentItemIndex = newItemIndex;
+      session.isAutoFollowing = false;
+      session.suggestedSongSwitch = undefined;
+      const placeholderId = `bible:${targetItem.bibleRef.replace(/\s+/g, ':')}`;
+      const displayUpdate: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: targetItem.bibleRef,
+          slideText: targetItem.bibleRef,
+          slideLines: [targetItem.bibleRef],
+          slideIndex: 0,
+          lineIndex: 0,
+          songId: placeholderId,
+          songTitle: targetItem.bibleRef,
+          isAutoAdvance: false,
+          currentItemIndex: newItemIndex,
+        },
+        timing: createTiming(receivedAt, processingStart),
+      };
+      broadcastToEvent(session.eventId, displayUpdate);
+      console.log(`[WS] Manual override: ${action} -> Bible "${targetItem.bibleRef}" (item ${newItemIndex})`);
+      return;
+    }
+    if (targetItem.type === 'MEDIA') {
+      session.currentItemIndex = newItemIndex;
+      session.isAutoFollowing = false;
+      session.suggestedSongSwitch = undefined;
+      const placeholderId = `media:${targetItem.mediaUrl ?? 'placeholder'}`;
+      const displayUpdate: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: 'Media',
+          slideText: 'Media',
+          slideLines: ['Media'],
+          slideIndex: 0,
+          lineIndex: 0,
+          songId: placeholderId,
+          songTitle: 'Media',
+          isAutoAdvance: false,
+          currentItemIndex: newItemIndex,
+        },
+        timing: createTiming(receivedAt, processingStart),
+      };
+      broadcastToEvent(session.eventId, displayUpdate);
+      console.log(`[WS] Manual override: ${action} -> Media (item ${newItemIndex})`);
+      return;
+    }
   }
 
   // PHASE 1: Manual override disables auto-following temporarily
@@ -1665,6 +1818,7 @@ function handleManualOverride(
   }
 
   // Update session state
+  session.currentItemIndex = newItemIndex;
   session.currentSongIndex = newSongIndex;
   session.currentSlideIndex = newSlideIndex;
   session.currentLineIndex = newLineIndex;
@@ -1724,6 +1878,7 @@ function handleManualOverride(
       songId: targetSong.id,
       songTitle: targetSong.title,
       isAutoAdvance: false,
+      currentItemIndex: newItemIndex,
     },
     timing,
   };
@@ -1832,7 +1987,8 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
         message.payload.action,
         receivedAt,
         message.payload.slideIndex,
-        message.payload.songId
+        message.payload.songId,
+        message.payload.itemIndex
       );
     } else if (isStopSessionMessage(message)) {
       handleStopSession(ws, receivedAt);

@@ -204,15 +204,18 @@ class WebSocketClient {
   /**
    * Send UPDATE_EVENT_SETTINGS message
    */
-  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean }): void {
+  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean }): void {
     this.send({ type: 'UPDATE_EVENT_SETTINGS', payload: settings });
   }
 
   /**
    * Send MANUAL_OVERRIDE message
+   * - NEXT_SLIDE / PREV_SLIDE: no extra params
+   * - GO_TO_SLIDE: slideIndex, songId (for songs)
+   * - GO_TO_ITEM: itemIndex (for setlist items: song, Bible, media)
    */
-  manualOverride(action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE', slideIndex?: number, songId?: string): void {
-    this.send({ type: 'MANUAL_OVERRIDE', payload: { action, slideIndex, songId } });
+  manualOverride(action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE' | 'GO_TO_ITEM', slideIndex?: number, songId?: string, itemIndex?: number): void {
+    this.send({ type: 'MANUAL_OVERRIDE', payload: { action, slideIndex, songId, itemIndex } });
   }
 
   /**

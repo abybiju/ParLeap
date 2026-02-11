@@ -24,6 +24,7 @@ export interface UpdateEventSettingsMessage {
     bibleMode?: boolean;
     bibleVersionId?: string | null;
     bibleFollow?: boolean;
+    smartListenEnabled?: boolean;
   };
 }
 
@@ -42,9 +43,10 @@ export interface AudioDataMessage {
 export interface ManualOverrideMessage {
   type: 'MANUAL_OVERRIDE';
   payload: {
-    action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE';
+    action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE' | 'GO_TO_ITEM';
     slideIndex?: number;
     songId?: string;
+    itemIndex?: number;
   };
 }
 
@@ -157,6 +159,7 @@ export interface DisplayUpdateMessage {
     songTitle: string;
     matchConfidence?: number;
     isAutoAdvance: boolean;
+    currentItemIndex?: number; // Index in polymorphic setlist (songs, Bible, media)
   };
   timing?: TimingMetadata;
 }

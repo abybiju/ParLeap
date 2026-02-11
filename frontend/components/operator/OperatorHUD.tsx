@@ -555,8 +555,12 @@ export function OperatorHUD({
               <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Smart Listen</span>
               <button
                 onClick={() => {
-                  setSmartListenEnabled((v) => !v);
-                  if (!smartListenEnabled) toast.success('Smart Listen on: STT only after wake word or Listen now');
+                  const next = !smartListenEnabled;
+                  setSmartListenEnabled(next);
+                  if (sessionStatus === 'active') {
+                    updateEventSettings({ smartListenEnabled: next });
+                  }
+                  if (next) toast.success('Smart Listen on: STT only after wake word or Listen now');
                   else toast.info('Smart Listen off: STT always on for Bible');
                 }}
                 className={cn(
