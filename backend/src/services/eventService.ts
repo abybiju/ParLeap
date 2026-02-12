@@ -12,6 +12,7 @@ import {
   type SlideConfig,
   type SlideCompilationResult,
 } from './slideService';
+import { fetchTemplates, applyTemplateToLines, incrementTemplateUsage } from './templateService';
 
 export interface SongData {
   id: string;
@@ -144,7 +145,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       media_url?: string | null;
       media_title?: string | null;
     }> | null = null;
-    const songsMap: Map<string, { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig }> = new Map();
+    const songsMap: Map<string, { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig; ccli_number?: string | null }> = new Map();
 
     // Query 1: Fetch ALL event_items WITHOUT the songs() embed (avoids INNER JOIN issue)
     const { data: allItems, error: itemsError } = await supabase
@@ -212,7 +213,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       // Try with slide_config first
       const { data: songsData, error: songsError } = await supabase
         .from('songs')
-        .select('id, title, artist, lyrics, slide_config')
+        .select('id, title, artist, lyrics, slide_config, ccli_number')
         .in('id', songIds);
 
       if (songsError && songsError.code === '42703') {
@@ -220,15 +221,15 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         console.warn('[EventService] songs.slide_config not found, using fallback.');
         const { data: songsDataOld } = await supabase
           .from('songs')
-          .select('id, title, artist, lyrics')
+          .select('id, title, artist, lyrics, ccli_number')
           .in('id', songIds);
         if (songsDataOld) {
-          for (const s of songsDataOld as Array<{ id: string; title: string; artist: string | null; lyrics: string }>) {
+          for (const s of songsDataOld as Array<{ id: string; title: string; artist: string | null; lyrics: string; ccli_number?: string | null }>) {
             songsMap.set(s.id, s);
           }
         }
       } else if (songsData) {
-        for (const s of songsData as Array<{ id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig }>) {
+        for (const s of songsData as Array<{ id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig; ccli_number?: string | null }>) {
           songsMap.set(s.id, s);
         }
       }
@@ -257,40 +258,58 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       setlistItems.map((i) => `${i.type} id=${i.id.slice(0, 8)} songId=${i.songId?.slice(0, 8) ?? '-'} bibleRef=${i.bibleRef ?? '-'}`));
 
     // 3. Parse lyrics into lines and compile slides for each song (only SONG items)
-    const songs = rawItems
-      .filter((item) => {
-        const itemType = item.item_type || (item.song_id ? 'SONG' : null);
-        return !itemType || itemType === 'SONG';
-      })
-      .map((item) => {
-        const songInfo = item.song_id ? songsMap.get(item.song_id) : null;
-        if (!songInfo) {
-          console.warn(`[EventService] Song data is null for event item ${item.id} (song_id: ${item.song_id})`);
-          return null;
+    const songs: SongData[] = [];
+    for (const item of rawItems) {
+      const itemType = item.item_type || (item.song_id ? 'SONG' : null);
+      if (itemType && itemType !== 'SONG') continue;
+
+      const songInfo = item.song_id ? songsMap.get(item.song_id) : null;
+      if (!songInfo) {
+        console.warn(`[EventService] Song data is null for event item ${item.id} (song_id: ${item.song_id})`);
+        continue;
+      }
+
+      // Merge song default config with event override
+      const songSlideConfig = songInfo.slide_config;
+      const eventOverride = item.slide_config_override ?? undefined;
+      const mergedConfig = mergeSlideConfig(songSlideConfig, eventOverride);
+
+      // Compile slides
+      const compilation = compileSlides(songInfo.lyrics, mergedConfig);
+      console.log(
+        `[EventService] Compiled song "${songInfo.title}": ${compilation.slides.length} slides from ${compilation.lines.length} lines (config: ${mergedConfig.linesPerSlide} lines/slide)`
+      );
+
+      let slides = compilation.slides;
+      let lineToSlideIndex = compilation.lineToSlideIndex;
+
+      // Try community template if CCLI present
+      if (songInfo.ccli_number && compilation.lines.length > 0) {
+        const templates = await fetchTemplates(songInfo.ccli_number, compilation.lines.length);
+        const best = templates.find((t) => t.score >= -5) ?? templates[0];
+        if (best) {
+          const applied = applyTemplateToLines(compilation.lines, best.slides as Array<{ start_line: number; end_line: number }>);
+          if (applied) {
+            slides = applied.slides;
+            lineToSlideIndex = applied.lineToSlideIndex;
+            void incrementTemplateUsage(best.id);
+            console.log(`[EventService] Applied community template ${best.id} for CCLI ${songInfo.ccli_number}`);
+          }
         }
+      }
 
-        // Merge song default config with event override
-        const songSlideConfig = songInfo.slide_config;
-        const eventOverride = item.slide_config_override ?? undefined;
-        const mergedConfig = mergeSlideConfig(songSlideConfig, eventOverride);
-
-        // Compile slides
-        const compilation = compileSlides(songInfo.lyrics, mergedConfig);
-        console.log(`[EventService] Compiled song "${songInfo.title}": ${compilation.slides.length} slides from ${compilation.lines.length} lines (config: ${mergedConfig.linesPerSlide} lines/slide)`);
-
-        const songData: SongData = {
-          id: songInfo.id,
-          title: songInfo.title,
-          artist: songInfo.artist || undefined,
-          lyrics: songInfo.lyrics, // Keep full lyrics for reference
-          lines: compilation.lines, // Non-empty lines for matching
-          slides: compilation.slides, // Compiled multi-line slides
-          lineToSlideIndex: compilation.lineToSlideIndex, // Mapping for slide lookups
-          slideConfig: mergedConfig, // Applied config
-        };
-        return songData;
-      })
-      .filter((song): song is SongData => song !== null);
+      const songData: SongData = {
+        id: songInfo.id,
+        title: songInfo.title,
+        artist: songInfo.artist || undefined,
+        lyrics: songInfo.lyrics, // Keep full lyrics for reference
+        lines: compilation.lines, // Non-empty lines for matching
+        slides,
+        lineToSlideIndex,
+        slideConfig: mergedConfig, // Applied config
+      };
+      songs.push(songData);
+    }
 
     return {
       id: eventData.id,
