@@ -60,7 +60,7 @@ export function SongPreviewCards({
       const fetched = await fetchTemplates(ccliNumber, lines.length);
       if (cancelled) return;
       setTemplates(fetched);
-      const best = fetched.find((t) => (t.score ?? 0) >= -5) ?? fetched[0];
+      const best = fetched.find((t) => (t.score ?? 0) >= 0) ?? fetched.find((t) => (t.score ?? 0) >= -5) ?? fetched[0];
       if (!best) return;
       const applied = applyTemplate(lines, best);
       if (applied && !cancelled) {
@@ -170,6 +170,7 @@ export function SongPreviewCards({
                       Score {tpl.score ?? 0} • Uses {tpl.usage_count ?? 0} • Slides {tpl.slides.length}
                     </div>
                     {!valid && <div className="text-amber-400 text-xs">Line count mismatch; cannot apply.</div>}
+                    {(tpl.score ?? 0) < 0 && <div className="text-amber-400 text-xs">Low score; not auto-applied.</div>}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button

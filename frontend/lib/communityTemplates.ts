@@ -1,5 +1,5 @@
 import { getBackendHttpUrl } from './utils/backendUrl';
-import { getStructureHash, TemplateStructure } from './templateHash';
+import { TemplateStructure } from './templateHash';
 
 export async function upsertCommunityTemplate(structure: TemplateStructure): Promise<void> {
   const backend = getBackendHttpUrl();
