@@ -1,15 +1,19 @@
 # CCLI SongSelect API Integration - Feature Specification
 
-**Status:** Future Feature (Post-Launch)  
-**Priority:** High  
-**Estimated Timeline:** 2-3 weeks after MVP stabilization  
-**Last Updated:** January 25, 2026
+**Status:** ⚠️ API Partner Program closed for new apps — pivoting to file import  
+**Priority:** High (via file import), API is exploratory only  
+**Estimated Timeline:** File import shipped Feb 12, 2026; API blocked by CCLI partner access  
+**Last Updated:** February 12, 2026
 
 ---
 
 ## Executive Summary
 
-Integrate CCLI SongSelect API to allow churches to search and import songs directly from the CCLI catalog, eliminating manual lyric entry and automatically formatting lyrics with proper stanza breaks.
+Integrate CCLI SongSelect data legally and safely. The official API is **not available to new partners**; current path is:
+
+1) **File import** (shipped): users drop their SongSelect `.usr` or `.txt` exports, we parse locally, auto-fill title/artist/CCLI/lyrics, and auto-apply community formatting.  
+2) **(Optional) Credential-based scraper**: only if user-provided, encrypted credentials and compliant with CCLI ToS. Needs rotating IP + Playwright hardening.  
+3) **Official API**: only if CCLI reopens the partner program; keep this doc as the design reference.
 
 ---
 
@@ -17,13 +21,11 @@ Integrate CCLI SongSelect API to allow churches to search and import songs direc
 
 ### Why This Feature Matters
 
-1. **Market Fit**: Most churches already use CCLI and have SongSelect accounts
-2. **Pain Point Solution**: Eliminates manual lyric entry (major time saver)
-3. **Automatic Formatting**: Lyrics come pre-formatted with proper stanza breaks (solves current parsing issues)
-4. **Legal Compliance**: CCLI licensing already handled by churches
-5. **Professional Standard**: Industry-standard tool churches trust
-6. **Metadata Rich**: Includes artist, title, CCLI number automatically
-7. **Competitive Advantage**: Differentiates ParLeap from competitors
+1. **Market Fit**: Most churches already use CCLI and have SongSelect accounts.  
+2. **Pain Point Solution**: File import removes manual lyric entry; community templates auto-format slides.  
+3. **Legal Compliance**: Users must already have a SongSelect license and the downloaded file.  
+4. **Metadata Rich**: `.usr` contains title/artist/CCLI for free.  
+5. **Competitive Advantage**: Crowdsourced formatting + zero-setup import (no scraping credentials if user uses files).
 
 ### Business Impact
 

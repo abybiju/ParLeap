@@ -1,5 +1,22 @@
 # ParLeap AI - Memory Log
 
+## Session: February 12, 2026 - Community Templates & File Import
+
+### What We Shipped
+- Structure-only **community templates** in Supabase (`community_templates`, `template_votes`, `template_stats` view) with unique `(ccli_number, structure_hash)` and `usage_count` increments on upsert.
+- **Auto-apply** templates when `ccli_number` + `line_count` match; prefer `score >= 0` (fallback to `>= -5` if nothing better). Low-score templates effectively suppressed.
+- **Swap Template dialog** in Song Editor listing templates (score/usage/slide count) with apply + warning for low scores.
+- **Silent auto-submit on save**: when a song with CCLI is saved, current slides/sections are hashed and upserted in the background; matching hashes only bump usage.
+- **File import** for SongSelect `.usr` / `.txt`: client-side parser fills title/artist/CCLI/lyrics and immediately auto-applies templates. PDF intentionally unsupported.
+
+### Docs Updated
+- New `COMMUNITY_TEMPLATES.md` (current behavior, APIs, testing, limits).
+- `CCLI_SONGSELECT_INTEGRATION.md` now notes SongSelect API program is closed; active path is file import + community templates (scraper/API only if CCLI reopens).
+
+### Risks / Follow-ups
+- Verify Next.js build stability for `slideServiceProxy` importing backend service directly.
+- Need E2E pass: auto-apply, swap dialog, auto-submit upsert, `.usr` parse, usage increment in Supabase.
+
 ## Session: Password Reset / Forgot Password Flow
 
 ### What We Shipped
