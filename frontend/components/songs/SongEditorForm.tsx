@@ -15,6 +15,7 @@ import { useSongDraft } from '@/lib/hooks/useSongDraft'
 import { songSchema, type SongFormData } from '@/lib/schemas/song'
 import { createSong, updateSong } from '@/app/songs/actions'
 import type { Database } from '@/lib/supabase/types'
+import { parseSongSelectFile } from '@/lib/parsers/songselect'
 type Song = Database['public']['Tables']['songs']['Row']
 
 interface SongEditorFormProps {
@@ -65,6 +66,7 @@ export function SongEditorForm({
   const ccliValue = watch('ccli_number') || ''
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
   const [swapOpen, setSwapOpen] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
   const formValues = watch()
 
   // Initialize form with song data or draft
@@ -108,6 +110,36 @@ export function SongEditorForm({
   const handleDiscardDraft = () => {
     clearDraft()
     onDiscardDraft?.()
+  }
+
+  const handleFileImport = async (file: File) => {
+    setImportError(null)
+    try {
+      const parsed = await parseSongSelectFile(file)
+      if (!parsed) throw new Error('Unable to parse file')
+      if (parsed.title) setValue('title', parsed.title, { shouldDirty: true })
+      if (parsed.artist) setValue('artist', parsed.artist, { shouldDirty: true })
+      if (parsed.ccli) setValue('ccli_number', parsed.ccli, { shouldDirty: true })
+      setValue('lyrics', parsed.lyrics, { shouldDirty: true })
+      toast.success('Imported from file')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Import failed'
+      setImportError(msg)
+      toast.error(msg)
+    }
+  }
+
+  const onDropFiles = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    await handleFileImport(file)
+  }
+
+  const onSelectFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await handleFileImport(file)
   }
 
   const onSubmit = handleSubmit((data) => {
@@ -214,7 +246,11 @@ export function SongEditorForm({
         </div>
 
         {/* Split view: Lyrics input | Preview */}
-        <div className={mode === 'page' ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'flex-1 grid grid-cols-1 md:grid-cols-2 gap-0 overflow-hidden'}>
+        <div
+          className={mode === 'page' ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'flex-1 grid grid-cols-1 md:grid-cols-2 gap-0 overflow-hidden'}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDropFiles}
+        >
           {/* Left: Raw lyrics input */}
           <div className={mode === 'page' ? 'space-y-2' : 'flex flex-col border-r border-white/10 overflow-hidden'}>
             {mode === 'modal' && (
@@ -230,6 +266,13 @@ export function SongEditorForm({
               </label>
             )}
             <div className={mode === 'page' ? '' : 'flex-1 p-4 overflow-hidden'}>
+              <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span>Drag a SongSelect .usr or .txt file here to auto-import.</span>
+                <label className="cursor-pointer text-indigo-300 hover:text-white">
+                  <input type="file" accept=".usr,.txt" className="hidden" onChange={onSelectFile} />
+                  Browse file
+                </label>
+              </div>
               <Textarea
                 id="lyrics"
                 placeholder="Paste or type your lyrics here...
@@ -250,6 +293,9 @@ The hour I first believed"
               />
               {errors.lyrics && (
                 <p className="text-xs text-orange-500 mt-2">{errors.lyrics.message}</p>
+              )}
+              {importError && (
+                <p className="text-xs text-amber-400 mt-2">{importError}</p>
               )}
             </div>
           </div>
