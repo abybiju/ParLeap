@@ -1,16 +1,69 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { parseStanzas } from '@/lib/schemas/song';
 import { Badge } from '@/components/ui/badge';
+import { fetchTemplates, CommunityTemplate } from '@/lib/api/templates';
+import { toast } from 'sonner';
 
 interface SongPreviewCardsProps {
   lyrics: string;
+  ccliNumber?: string;
   className?: string;
 }
 
-export function SongPreviewCards({ lyrics, className = '' }: SongPreviewCardsProps) {
-  const stanzas = useMemo(() => parseStanzas(lyrics), [lyrics]);
+function parseLyricLines(lyrics: string): string[] {
+  return lyrics
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+}
+
+function applyTemplate(lines: string[], tpl: CommunityTemplate) {
+  if (tpl.line_count !== lines.length) return null;
+  const slides = tpl.slides.map((s) => {
+    const segment = lines.slice(s.start_line, s.end_line + 1);
+    return segment;
+  });
+  return slides;
+}
+
+export function SongPreviewCards({ lyrics, ccliNumber, className = '' }: SongPreviewCardsProps) {
+  const [appliedTemplate, setAppliedTemplate] = useState<CommunityTemplate | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setAppliedTemplate(null);
+      if (!ccliNumber || !lyrics.trim()) return;
+      const lines = parseLyricLines(lyrics);
+      if (lines.length === 0) return;
+      const templates = await fetchTemplates(ccliNumber, lines.length);
+      const best = templates.find((t) => (t.score ?? 0) >= -5) ?? templates[0];
+      if (!best) return;
+      const applied = applyTemplate(lines, best);
+      if (applied && !cancelled) {
+        setAppliedTemplate(best);
+        toast.success(`Applied Community Version`, {
+          description: `Score ${best.score ?? 0}${best.usage_count ? ` • ${best.usage_count} uses` : ''}`,
+        });
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [ccliNumber, lyrics]);
+
+  const stanzas = useMemo(() => {
+    if (appliedTemplate) {
+      const lines = parseLyricLines(lyrics);
+      const slides = applyTemplate(lines, appliedTemplate);
+      if (slides) return slides;
+    }
+    return parseStanzas(lyrics);
+  }, [appliedTemplate, lyrics]);
 
   if (stanzas.length === 0) {
     return (

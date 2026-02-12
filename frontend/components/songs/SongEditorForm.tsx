@@ -266,10 +266,14 @@ The hour I first believed"
                 Slide Preview
               </label>
             )}
-            <div className={mode === 'page' ? '' : 'flex-1 p-4 overflow-hidden'}>
-              <SongPreviewCards lyrics={lyricsValue} className={mode === 'page' ? 'min-h-[400px]' : 'h-full'} />
-            </div>
+          <div className={mode === 'page' ? '' : 'flex-1 p-4 overflow-hidden'}>
+            <SongPreviewCards
+              lyrics={lyricsValue}
+              ccliNumber={watch('ccli_number') || undefined}
+              className={mode === 'page' ? 'min-h-[400px]' : 'h-full'}
+            />
           </div>
+        </div>
         </div>
 
         {/* Footer */}
