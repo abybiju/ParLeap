@@ -5,6 +5,13 @@ import { handleMessage, handleClose, getSessionCount } from './websocket/handler
 import { searchByHum, SearchResult } from './services/humSearchService';
 import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
 import { supabase, isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
+import {
+  submitTemplate,
+  fetchTemplates,
+  voteTemplate,
+  incrementTemplateUsage,
+  getStructureHash,
+} from './services/templateService';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -127,6 +134,68 @@ app.get('/api/debug/event-items/:eventId', async (req, res) => {
     .eq('event_id', eventId)
     .order('sequence_order', { ascending: true });
   res.json({ eventId, itemCount: data?.length ?? 0, items: data, error });
+});
+
+// Community template endpoints (structure-only)
+app.post('/api/templates', async (req, res) => {
+  const { ccliNumber, lineCount, sections = [], slides = [], linesPerSlide, sourceVersion, userId } = req.body || {};
+  if (!ccliNumber || !lineCount || !Array.isArray(slides)) {
+    res.status(400).json({ error: 'ccliNumber, lineCount, slides are required' });
+    return;
+  }
+  const result = await submitTemplate(
+    {
+      ccliNumber,
+      lineCount,
+      linesPerSlide,
+      sections,
+      slides,
+      sourceVersion,
+    },
+    userId
+  );
+  if (result.error) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true, id: result.id, structureHash: result.id ? getStructureHash({ ccliNumber, lineCount, linesPerSlide, sections, slides, sourceVersion }) : null });
+});
+
+app.get('/api/templates', async (req, res) => {
+  const ccli = req.query.ccli as string | undefined;
+  const lineCount = req.query.lineCount ? Number(req.query.lineCount) : undefined;
+  if (!ccli) {
+    res.status(400).json({ error: 'ccli query param required' });
+    return;
+  }
+  const templates = await fetchTemplates(ccli, lineCount);
+  res.json({ templates });
+});
+
+app.post('/api/templates/:id/vote', async (req, res) => {
+  const { id } = req.params;
+  const { userId, vote } = req.body || {};
+  if (!id || !vote) {
+    res.status(400).json({ error: 'template id and vote required' });
+    return;
+  }
+  const numericVote = Number(vote) === -1 ? -1 : 1;
+  const result = await voteTemplate(id, userId ?? null, numericVote as 1 | -1);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true });
+});
+
+app.post('/api/templates/:id/usage', async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    res.status(400).json({ error: 'template id required' });
+    return;
+  }
+  await incrementTemplateUsage(id);
+  res.json({ success: true });
 });
 
 // Hum-to-Search endpoint
@@ -286,4 +355,3 @@ wss.on('connection', (ws) => {
     console.error('[WS] Error:', error);
   });
 });
-
