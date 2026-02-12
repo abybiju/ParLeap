@@ -70,7 +70,13 @@ export async function submitTemplate(structure: TemplateStructure, createdBy?: s
     .select('id')
     .single();
 
-  return { id: (data as { id: string } | null)?.id ?? null, error: error?.message };
+  const id = (data as { id: string } | null)?.id ?? null;
+  if (id) {
+    // increment usage on every submit (works for insert or conflict)
+    await incrementTemplateUsage(id);
+  }
+
+  return { id, error: error?.message };
 }
 
 export async function fetchTemplates(ccliNumber: string, lineCount?: number): Promise<CommunityTemplate[]> {
