@@ -3,6 +3,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { songSchema } from '@/lib/schemas/song';
+import { parseLyricLines, compileSlides, mergeSlideConfig } from '@/lib/slideCompiler';
+import { upsertCommunityTemplate } from '@/lib/communityTemplates';
 
 export interface ActionResult {
   success: boolean;
@@ -52,6 +54,25 @@ export async function createSong(formData: FormData): Promise<ActionResult> {
     return { success: false, error: error.message };
   }
 
+  // Fire-and-forget community template upsert
+  if (result.data.ccli_number && result.data.lyrics) {
+    const lines = parseLyricLines(result.data.lyrics);
+    if (lines.length > 0) {
+      const compilation = compileSlides(result.data.lyrics, mergeSlideConfig(null, null));
+      const slides = compilation.slides.map((s) => ({
+        start_line: s.startLineIndex,
+        end_line: s.endLineIndex,
+      }));
+      upsertCommunityTemplate({
+        ccliNumber: result.data.ccli_number,
+        lineCount: lines.length,
+        linesPerSlide: 4,
+        slides,
+        sections: [],
+      }).catch(() => {});
+    }
+  }
+
   revalidatePath('/songs');
   return { success: true, id: (data as { id: string } | null)?.id };
 }
@@ -95,6 +116,25 @@ export async function updateSong(id: string, formData: FormData): Promise<Action
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  // Fire-and-forget community template upsert
+  if (result.data.ccli_number && result.data.lyrics) {
+    const lines = parseLyricLines(result.data.lyrics);
+    if (lines.length > 0) {
+      const compilation = compileSlides(result.data.lyrics, mergeSlideConfig(null, null));
+      const slides = compilation.slides.map((s) => ({
+        start_line: s.startLineIndex,
+        end_line: s.endLineIndex,
+      }));
+      upsertCommunityTemplate({
+        ccliNumber: result.data.ccli_number,
+        lineCount: lines.length,
+        linesPerSlide: 4,
+        slides,
+        sections: [],
+      }).catch(() => {});
+    }
   }
 
   revalidatePath('/songs');
