@@ -15,7 +15,6 @@ import { useSongDraft } from '@/lib/hooks/useSongDraft'
 import { songSchema, type SongFormData } from '@/lib/schemas/song'
 import { createSong, updateSong } from '@/app/songs/actions'
 import type { Database } from '@/lib/supabase/types'
-
 type Song = Database['public']['Tables']['songs']['Row']
 
 interface SongEditorFormProps {
@@ -65,6 +64,7 @@ export function SongEditorForm({
   const lyricsValue = watch('lyrics')
   const ccliValue = watch('ccli_number') || ''
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
+  const [swapOpen, setSwapOpen] = useState(false)
   const formValues = watch()
 
   // Initialize form with song data or draft
@@ -261,16 +261,14 @@ The hour I first believed"
                 <span className="font-medium">Community Template</span>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400">
-                    {appliedTemplateId ? 'Applied (auto)' : 'None applied'}
+                    {appliedTemplateId ? `Applied ${appliedTemplateId.slice(0, 8)}` : 'None applied'}
                   </span>
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
                     className="bg-indigo-500/20 border-indigo-500/40 text-indigo-200"
-                    onClick={() => {
-                      setAppliedTemplateId(null)
-                    }}
+                    onClick={() => setSwapOpen(true)}
                   >
                     Swap Template
                   </Button>
@@ -294,6 +292,9 @@ The hour I first believed"
                 lyrics={lyricsValue}
                 ccliNumber={ccliValue || undefined}
                 onTemplateApplied={(id) => setAppliedTemplateId(id)}
+                swapOpen={swapOpen}
+                onSwapClose={() => setSwapOpen(false)}
+                offerSubmit
                 className={mode === 'page' ? 'min-h-[400px]' : 'h-full'}
               />
             </div>
