@@ -42,6 +42,11 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Recent Features
 
+**Password reset / Forgot password**
+- `/auth/forgot-password`: request reset link; `/auth/reset-password`: set new password from email link
+- Login page has "Forgot your password?"; Profile Security has "Reset Password" modal
+- Supabase Site URL and Redirect URLs must use production domain (e.g. www.parleap.com) for recovery emails
+
 **Smart Bible Listen** (February 11, 2026) — IN PROGRESS
 - Smart Listen toggle in operator HUD gates STT for Bible items
 - Frontend: audio buffered until wake word or "Listen now" triggers STT window
@@ -67,7 +72,8 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Session Summaries Location
 Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
-- **Latest**: `SESSION_SUMMARY_FEB_11_2026.md` - Bible in live setlist + Smart Listen gate fixes
+- **Password reset**: `SESSION_SUMMARY_PASSWORD_RESET.md`
+- **Bible/Smart Listen**: `SESSION_SUMMARY_FEB_11_2026.md`
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap

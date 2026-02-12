@@ -10,6 +10,14 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Password Reset / Forgot Password ✅
+- **Forgot password**: `/auth/forgot-password` — email form, `resetPasswordForEmail` with `redirectTo` to `/auth/reset-password`
+- **Reset password**: `/auth/reset-password` — handles recovery link (hash-based session), new password + confirm, `updateUser({ password })`, redirect to dashboard
+- **Login**: "Forgot your password?" link to `/auth/forgot-password`
+- **Profile**: Security section "Reset Password" opens dialog; `updateUser({ password })` when authenticated
+- **Supabase**: Site URL and Redirect URLs must be set to production (e.g. `https://www.parleap.com`) so recovery emails do not point to localhost
+- **Commit**: `8c00cf3`
+
 ### February 11, 2026 - Bible in Live Setlist + Smart Listen Gate ⚠️
 - ⚠️ **PostgREST INNER JOIN Fix**: Backend eventService split into separate queries (event_items + songs) to avoid INNER JOIN filtering out Bible items when `song_id IS NULL`
 - ✅ **Smart Listen Gate**: No longer requires `BIBLE_SMART_LISTEN_ENABLED` env var; honors client toggle directly
