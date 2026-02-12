@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useTransition } from 'react'
+import { useEffect, useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -63,6 +63,8 @@ export function SongEditorForm({
   })
 
   const lyricsValue = watch('lyrics')
+  const ccliValue = watch('ccli_number') || ''
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
   const formValues = watch()
 
   // Initialize form with song data or draft
@@ -254,6 +256,27 @@ The hour I first believed"
 
           {/* Right: Live preview */}
           <div className={mode === 'page' ? 'space-y-2' : 'flex flex-col overflow-hidden'}>
+            {ccliValue && (
+              <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-white/5 text-xs text-slate-200">
+                <span className="font-medium">Community Template</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">
+                    {appliedTemplateId ? 'Applied (auto)' : 'None applied'}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="bg-indigo-500/20 border-indigo-500/40 text-indigo-200"
+                    onClick={() => {
+                      setAppliedTemplateId(null)
+                    }}
+                  >
+                    Swap Template
+                  </Button>
+                </div>
+              </div>
+            )}
             {mode === 'modal' && (
               <div className="px-4 py-2 border-b border-white/10 bg-white/5">
                 <span className="text-xs font-medium text-white uppercase tracking-wider">
@@ -266,14 +289,15 @@ The hour I first believed"
                 Slide Preview
               </label>
             )}
-          <div className={mode === 'page' ? '' : 'flex-1 p-4 overflow-hidden'}>
-            <SongPreviewCards
-              lyrics={lyricsValue}
-              ccliNumber={watch('ccli_number') || undefined}
-              className={mode === 'page' ? 'min-h-[400px]' : 'h-full'}
-            />
+            <div className={mode === 'page' ? '' : 'flex-1 p-4 overflow-hidden'}>
+              <SongPreviewCards
+                lyrics={lyricsValue}
+                ccliNumber={ccliValue || undefined}
+                onTemplateApplied={(id) => setAppliedTemplateId(id)}
+                className={mode === 'page' ? 'min-h-[400px]' : 'h-full'}
+              />
+            </div>
           </div>
-        </div>
         </div>
 
         {/* Footer */}
