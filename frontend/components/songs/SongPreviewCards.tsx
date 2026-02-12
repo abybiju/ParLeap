@@ -10,6 +10,7 @@ interface SongPreviewCardsProps {
   lyrics: string;
   ccliNumber?: string;
   className?: string;
+  onTemplateApplied?: (templateId: string | null) => void;
 }
 
 function parseLyricLines(lyrics: string): string[] {
@@ -29,13 +30,14 @@ function applyTemplate(lines: string[], tpl: CommunityTemplate) {
   return slides;
 }
 
-export function SongPreviewCards({ lyrics, ccliNumber, className = '' }: SongPreviewCardsProps) {
+export function SongPreviewCards({ lyrics, ccliNumber, className = '', onTemplateApplied }: SongPreviewCardsProps) {
   const [appliedTemplate, setAppliedTemplate] = useState<CommunityTemplate | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       setAppliedTemplate(null);
+      onTemplateApplied?.(null);
       if (!ccliNumber || !lyrics.trim()) return;
       const lines = parseLyricLines(lyrics);
       if (lines.length === 0) return;
@@ -48,6 +50,7 @@ export function SongPreviewCards({ lyrics, ccliNumber, className = '' }: SongPre
         toast.success(`Applied Community Version`, {
           description: `Score ${best.score ?? 0}${best.usage_count ? ` • ${best.usage_count} uses` : ''}`,
         });
+        onTemplateApplied?.(best.id);
       }
     };
     run();
