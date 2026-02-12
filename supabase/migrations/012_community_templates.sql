@@ -68,30 +68,37 @@ GROUP BY t.id;
 ALTER TABLE public.community_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.template_votes ENABLE ROW LEVEL SECURITY;
 
--- Allow authenticated users to select templates and votes
-CREATE POLICY IF NOT EXISTS community_templates_select ON public.community_templates
-  FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY IF NOT EXISTS template_votes_select ON public.template_votes
+-- RLS policies (PostgreSQL doesn't support IF NOT EXISTS for policies; drop if present then create)
+DROP POLICY IF EXISTS community_templates_select ON public.community_templates;
+CREATE POLICY community_templates_select ON public.community_templates
   FOR SELECT USING (auth.role() = 'authenticated');
 
--- Inserts: any authenticated user can submit templates and votes
-CREATE POLICY IF NOT EXISTS community_templates_insert ON public.community_templates
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY IF NOT EXISTS template_votes_insert ON public.template_votes
+DROP POLICY IF EXISTS template_votes_select ON public.template_votes;
+CREATE POLICY template_votes_select ON public.template_votes
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS community_templates_insert ON public.community_templates;
+CREATE POLICY community_templates_insert ON public.community_templates
   FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
--- Updates: allow creator to update status/usage (for now) or service role bypasses RLS
-CREATE POLICY IF NOT EXISTS community_templates_update_owner ON public.community_templates
+DROP POLICY IF EXISTS template_votes_insert ON public.template_votes;
+CREATE POLICY template_votes_insert ON public.template_votes
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS community_templates_update_owner ON public.community_templates;
+CREATE POLICY community_templates_update_owner ON public.community_templates
   FOR UPDATE USING (auth.uid() = created_by);
 
--- Deletes: allow creator to delete
-CREATE POLICY IF NOT EXISTS community_templates_delete_owner ON public.community_templates
+DROP POLICY IF EXISTS community_templates_delete_owner ON public.community_templates;
+CREATE POLICY community_templates_delete_owner ON public.community_templates
   FOR DELETE USING (auth.uid() = created_by);
 
--- Votes update/delete by owner
-CREATE POLICY IF NOT EXISTS template_votes_update_owner ON public.template_votes
+DROP POLICY IF EXISTS template_votes_update_owner ON public.template_votes;
+CREATE POLICY template_votes_update_owner ON public.template_votes
   FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY IF NOT EXISTS template_votes_delete_owner ON public.template_votes
+
+DROP POLICY IF EXISTS template_votes_delete_owner ON public.template_votes;
+CREATE POLICY template_votes_delete_owner ON public.template_votes
   FOR DELETE USING (auth.uid() = user_id);
 
 -- Usage increment helper
