@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { songSchema } from '@/lib/schemas/song';
-import { parseLyricLines, compileSlides, mergeSlideConfig } from '@/lib/slideCompiler';
+import { compileSlides, mergeSlideConfig, parseLyricLines } from '@/lib/slideServiceProxy';
 import { upsertCommunityTemplate } from '@/lib/communityTemplates';
 
 export interface ActionResult {
@@ -59,7 +59,7 @@ export async function createSong(formData: FormData): Promise<ActionResult> {
     const lines = parseLyricLines(result.data.lyrics);
     if (lines.length > 0) {
       const compilation = compileSlides(result.data.lyrics, mergeSlideConfig(null, null));
-      const slides = compilation.slides.map((s) => ({
+      const slides = compilation.slides.map((s: { startLineIndex: number; endLineIndex: number }) => ({
         start_line: s.startLineIndex,
         end_line: s.endLineIndex,
       }));
