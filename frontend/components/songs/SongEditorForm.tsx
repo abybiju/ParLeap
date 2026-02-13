@@ -176,7 +176,7 @@ export function SongEditorForm({
   }
 
   return (
-    <div className={mode === 'page' ? 'space-y-6' : ''}>
+    <div className={mode === 'page' ? 'space-y-6' : 'flex-1 min-h-0 overflow-y-auto flex flex-col'}>
       {/* Draft recovery prompt */}
       {showDraftPrompt && (
         <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between">
@@ -202,7 +202,7 @@ export function SongEditorForm({
         </div>
       )}
 
-      <form onSubmit={onSubmit} className={mode === 'page' ? 'space-y-6' : 'flex flex-col flex-1 overflow-hidden'}>
+      <form onSubmit={onSubmit} className={mode === 'page' ? 'space-y-6' : 'flex flex-col flex-1 min-h-0'}>
         {/* Metadata fields */}
         <div className={mode === 'page' ? 'space-y-4' : 'px-6 py-4 space-y-4 border-b border-white/10'}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
