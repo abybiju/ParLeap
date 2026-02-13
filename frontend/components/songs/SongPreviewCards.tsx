@@ -26,12 +26,26 @@ function parseLyricLines(lyrics: string): string[] {
     .filter((l) => l.length > 0);
 }
 
+function isUsableTemplate(tpl: CommunityTemplate) {
+  if (!tpl) return false;
+  if (!Array.isArray(tpl.slides) || tpl.slides.length === 0) return false;
+  if (typeof tpl.line_count !== 'number' || tpl.line_count <= 0) return false;
+  return tpl.slides.every(
+    (s) =>
+      s &&
+      typeof s.start_line === 'number' &&
+      typeof s.end_line === 'number' &&
+      s.start_line >= 0 &&
+      s.end_line >= s.start_line,
+  );
+}
+
 function applyTemplate(lines: string[], tpl: CommunityTemplate) {
+  if (!isUsableTemplate(tpl)) return null;
   if (tpl.line_count !== lines.length) return null;
-  const slides = tpl.slides.map((s) => {
-    const segment = lines.slice(s.start_line, s.end_line + 1);
-    return segment;
-  });
+  const slides = tpl.slides.map((s) => lines.slice(s.start_line, s.end_line + 1));
+  // guard against empty slices
+  if (slides.some((seg) => seg.length === 0)) return null;
   return slides;
 }
 
@@ -57,7 +71,7 @@ export function SongPreviewCards({
       if (!ccliNumber || !lyrics.trim()) return;
       const lines = parseLyricLines(lyrics);
       if (lines.length === 0) return;
-      const fetched = await fetchTemplates(ccliNumber, lines.length);
+      const fetched = (await fetchTemplates(ccliNumber, lines.length)).filter(isUsableTemplate);
       if (cancelled) return;
       setTemplates(fetched);
       const best = fetched.find((t) => (t.score ?? 0) >= 0) ?? fetched.find((t) => (t.score ?? 0) >= -5) ?? fetched[0];
