@@ -269,7 +269,13 @@ export function SongEditorForm({
               <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
                 <span>Drag a SongSelect .usr or .txt file here to auto-import.</span>
                 <label className="cursor-pointer text-indigo-300 hover:text-white">
-                  <input type="file" accept=".usr,.txt" className="hidden" onChange={onSelectFile} />
+                  <input
+                    type="file"
+                    name="songselect_file"
+                    accept=".usr,.txt"
+                    className="hidden"
+                    onChange={onSelectFile}
+                  />
                   Browse file
                 </label>
               </div>
