@@ -28,6 +28,7 @@ function parseLyricLines(lyrics: string): string[] {
 
 function isUsableTemplate(tpl: CommunityTemplate) {
   if (!tpl) return false;
+  if (typeof tpl.id !== 'string' || tpl.id.length === 0) return false;
   if (!Array.isArray(tpl.slides) || tpl.slides.length === 0) return false;
   if (typeof tpl.line_count !== 'number' || tpl.line_count <= 0) return false;
   return tpl.slides.every(
@@ -101,7 +102,7 @@ export function SongPreviewCards({
     if (templates.length === 0 && !loadingTemplates) {
       setLoadingTemplates(true);
       fetchTemplates(ccliNumber, parseLyricLines(lyrics).length)
-        .then((tpls) => setTemplates(tpls))
+        .then((tpls) => setTemplates(tpls.filter(isUsableTemplate)))
         .finally(() => setLoadingTemplates(false));
     }
   }, [swapOpen, ccliNumber, lyrics, templates.length, loadingTemplates, onSwapClose]);
@@ -176,10 +177,11 @@ export function SongPreviewCards({
             {!loadingTemplates && templates.map((tpl) => {
               const slidesApplied = applyTemplate(parseLyricLines(lyrics), tpl);
               const valid = !!slidesApplied;
+              const templateLabel = typeof tpl.id === 'string' ? tpl.id.slice(0, 8) : 'unknown';
               return (
                 <div key={tpl.id} className="rounded-lg border border-white/10 p-3 bg-white/5 flex items-center justify-between">
                   <div className="space-y-1 text-sm">
-                    <div className="font-semibold">Template {tpl.id.slice(0, 8)}</div>
+                    <div className="font-semibold">Template {templateLabel}</div>
                     <div className="text-slate-400">
                       Score {tpl.score ?? 0} • Uses {tpl.usage_count ?? 0} • Slides {tpl.slides.length}
                     </div>
