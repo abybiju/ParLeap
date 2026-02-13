@@ -43,9 +43,12 @@
 - Templates are single-language; no locale dimension yet.
 - PDF import intentionally out-of-scope.
 - No UI yet to flag/report bad templates (score downvotes handle this partially).
+- Active issue (Feb 13, 2026): in production, some CCLI+lyrics inputs still show `None applied` even when template data exists. Crash is fixed, but auto-format behavior is not consistently applying in Song Editor preview.
+  - Recent hardening commits: `033b75c`, `e2aaf79`.
+  - Backend normalization commit: `1de8451` (maps `template_id -> id` and normalizes legacy `slides` payloads).
+  - Next debug step: compare `GET /api/templates?ccli=<id>&lineCount=<n>` response shape against the exact editor lyric line count at runtime.
 
 ## Quick Supabase References
 - Tables: `community_templates`, `template_votes`; view `template_stats`.
 - Policies: RLS enabled; select allowed for authenticated users. Upserts go through backend API (service key).
 - Unique index: `(ccli_number, structure_hash)` prevents duplicates; `structure_hash` = hashed slides/sections blob.
-
