@@ -34,3 +34,14 @@ Skills are shared. Your setup is yours. Keeping them apart means you can update 
 ---
 
 Add whatever helps you do your job. This is your cheat sheet.
+
+## Workspace-Specific Notes
+
+### Git / SSH
+- Repo path: `/Users/abybiju/ParLeap-AI`
+- Remote: `origin = git@github.com:abybiju/ParLeap.git`
+- Working push command:
+  - `GIT_SSH_COMMAND='ssh -i ~/.ssh/id_parleap -o IdentitiesOnly=yes' git push`
+- Key used for this machine:
+  - Private: `~/.ssh/id_parleap`
+  - Public: `~/.ssh/id_parleap.pub`

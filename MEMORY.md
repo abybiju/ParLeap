@@ -1,5 +1,28 @@
 # ParLeap AI - Memory Log
 
+## Session: February 13, 2026 - Community Template Stability and Remaining Apply Gap
+
+### Shipped Today
+- Frontend template safety hardening:
+  - Guard template payloads before apply/render (`id`, `slides`, `line_count`, range checks).
+  - Prevented `slice` runtime errors from malformed templates.
+- Backend template normalization:
+  - `template_stats.template_id` now mapped to `id`.
+  - Added legacy `slides` normalization to indexed ranges.
+- Form warning cleanup:
+  - Added explicit file input `name`.
+  - Removed duplicate `name` collision on lyrics textarea.
+
+### Commits
+- `e2aaf79` — fix: harden template rendering against malformed ids
+- `1de8451` — fix: normalize template_stats rows and legacy slide payloads
+- `d40520e` — chore: add name to file input, drop duplicate name on lyrics
+
+### Current Reality
+- Crash is fixed.
+- Auto-apply still inconsistent in production for some CCLI+lyrics combinations; UI may show `None applied` and keep raw pasted formatting.
+- Next resume point: validate runtime line-count parity and API response shape for `GET /api/templates`.
+
 ## Session: February 12, 2026 - Community Templates & File Import
 
 ### What We Shipped
