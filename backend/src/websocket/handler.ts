@@ -85,6 +85,10 @@ const BIBLE_FOLLOW_MATCH_THRESHOLD = parseNumberEnv(process.env.BIBLE_FOLLOW_MAT
 const BIBLE_FOLLOW_MATCH_MARGIN = parseNumberEnv(process.env.BIBLE_FOLLOW_MATCH_MARGIN, 0.05);
 const BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS, 1800);
 const BIBLE_FOLLOW_DEBOUNCE_MATCHES = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_MATCHES, 2);
+/** End-of-verse: when buffer tail matches last 3–4 words of current verse, allow advance with 1 match and lower bar (mirror song end-of-line). */
+const BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD = parseNumberEnv(process.env.BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD, 0.52);
+const BIBLE_END_OF_VERSE_NEXT_THRESHOLD = parseNumberEnv(process.env.BIBLE_END_OF_VERSE_NEXT_THRESHOLD, 0.45);
+const BIBLE_END_OF_VERSE_BUFFER_WORDS = 6;
 
 /** Smart Bible Listen server kill switch: set to 'false' to force-disable Smart Listen for all clients. Defaults to true (allow client to enable). */
 const BIBLE_SMART_LISTEN_KILL_SWITCH = process.env.BIBLE_SMART_LISTEN_ENABLED === 'false';
@@ -118,6 +122,33 @@ function normalizeMatchText(text: string): string {
     .replace(/[^\w\s']/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Extract last N words from text (for end-of-verse trigger).
+ * wordCountOrPercentage: 0–1 = percentage of line, else fixed word count.
+ */
+function extractEndWordsForVerse(text: string, wordCountOrPercentage: number): string {
+  const words = text.trim().split(/\s+/).filter((w) => w.length > 0);
+  const numWords =
+    wordCountOrPercentage > 0 && wordCountOrPercentage < 1
+      ? Math.max(3, Math.ceil(words.length * wordCountOrPercentage))
+      : Math.floor(wordCountOrPercentage);
+  const endWords = words.slice(-Math.min(numWords, words.length));
+  return endWords.join(' ');
+}
+
+/**
+ * Adaptive end-of-verse trigger (mirror song end-of-line).
+ * Last 3 words (verse ≤6), 4 (≤9), 5 (≤12), or last 40% for longer verses.
+ */
+function getBibleEndOfVerseTrigger(verseText: string): string {
+  const words = verseText.trim().split(/\s+/).filter((w) => w.length > 0);
+  const totalWords = words.length;
+  if (totalWords <= 6) return extractEndWordsForVerse(verseText, 3);
+  if (totalWords <= 9) return extractEndWordsForVerse(verseText, 4);
+  if (totalWords <= 12) return extractEndWordsForVerse(verseText, 5);
+  return extractEndWordsForVerse(verseText, 0.4);
 }
 
 function getMatchScore(buffer: string, verseText: string): number {
@@ -1193,6 +1224,20 @@ async function handleTranscriptionResult(
           nextRef = nextChapterRef;
         }
 
+        // End-of-verse: when buffer tail matches last 3–4 words of current verse, allow advance with 1 match and lower bar (mirror song end-of-line).
+        const bufferWords = normalizedBuffer.split(/\s+/).filter(Boolean);
+        const bufferTail =
+          bufferWords.length >= BIBLE_END_OF_VERSE_BUFFER_WORDS
+            ? bufferWords.slice(-BIBLE_END_OF_VERSE_BUFFER_WORDS).join(' ')
+            : normalizedBuffer;
+        const verseEndTrigger = getBibleEndOfVerseTrigger(currentVerse.text);
+        const endOfVerseScore = compareTwoStrings(
+          normalizeMatchText(bufferTail),
+          normalizeMatchText(verseEndTrigger)
+        );
+        const inScopeEndOfVerse = endOfVerseScore >= BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD;
+        const requiredMatches = inScopeEndOfVerse ? 1 : BIBLE_FOLLOW_DEBOUNCE_MATCHES;
+
         let currentScore: number;
         let nextScore: number;
         if (isBibleSemanticFollowEnabled()) {
@@ -1213,7 +1258,11 @@ async function handleTranscriptionResult(
           nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
         }
 
-        if (nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN) {
+        const advanceThresholdMet = inScopeEndOfVerse
+          ? nextScore >= BIBLE_END_OF_VERSE_NEXT_THRESHOLD && nextScore > currentScore
+          : nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN;
+
+        if (advanceThresholdMet) {
           const now = Date.now();
           const targetKey = buildBibleRefKey(nextRef, session.bibleVersionId);
           if (session.bibleFollowHit &&
@@ -1229,7 +1278,7 @@ async function handleTranscriptionResult(
             };
           }
 
-          if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
+          if (session.bibleFollowHit.hitCount >= requiredMatches) {
             session.bibleFollowHit = undefined;
             const nextEndVerse =
               followEndVerse !== null && nextRef.chapter === followRef.chapter ? followEndVerse : null;
@@ -1262,6 +1311,11 @@ async function handleTranscriptionResult(
             };
 
             broadcastToEvent(session.eventId, displayMsg);
+            if (inScopeEndOfVerse) {
+              console.log(
+                `[WS] Bible: end-of-verse advance to ${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} (trigger ${(endOfVerseScore * 100).toFixed(0)}%)`
+              );
+            }
           }
         } else if (session.bibleFollowHit) {
           const now = Date.now();
