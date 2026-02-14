@@ -6,7 +6,7 @@ export type BibleBook = {
 };
 
 export const BIBLE_BOOKS: BibleBook[] = [
-  { name: 'Genesis', abbrev: 'Gen', order: 1, aliases: ['gen', 'ge', 'gn'] },
+  { name: 'Genesis', abbrev: 'Gen', order: 1, aliases: ['gen', 'ge', 'gn', 'genisis', 'geneses'] },
   { name: 'Exodus', abbrev: 'Exod', order: 2, aliases: ['exod', 'ex', 'exo'] },
   { name: 'Leviticus', abbrev: 'Lev', order: 3, aliases: ['lev', 'le', 'lv'] },
   { name: 'Numbers', abbrev: 'Num', order: 4, aliases: ['num', 'nu', 'nm', 'nb'] },
@@ -51,13 +51,13 @@ export const BIBLE_BOOKS: BibleBook[] = [
   { name: 'Luke', abbrev: 'Luke', order: 42, aliases: ['luke', 'luk', 'lk'] },
   { name: 'John', abbrev: 'John', order: 43, aliases: ['john', 'jhn', 'jn', 'joh'] },
   { name: 'Acts', abbrev: 'Acts', order: 44, aliases: ['acts', 'ac'] },
-  { name: 'Romans', abbrev: 'Rom', order: 45, aliases: ['romans', 'rom', 'ro', 'rm'] },
-  { name: '1 Corinthians', abbrev: '1Cor', order: 46, aliases: ['1 corinthians', '1 cor', '1co'] },
-  { name: '2 Corinthians', abbrev: '2Cor', order: 47, aliases: ['2 corinthians', '2 cor', '2co'] },
-  { name: 'Galatians', abbrev: 'Gal', order: 48, aliases: ['galatians', 'gal', 'ga'] },
+  { name: 'Romans', abbrev: 'Rom', order: 45, aliases: ['romans', 'rom', 'ro', 'rm', 'roman', 'romen'] },
+  { name: '1 Corinthians', abbrev: '1Cor', order: 46, aliases: ['1 corinthians', '1 cor', '1co', '1 corinthans'] },
+  { name: '2 Corinthians', abbrev: '2Cor', order: 47, aliases: ['2 corinthians', '2 cor', '2co', '2 corinthans'] },
+  { name: 'Galatians', abbrev: 'Gal', order: 48, aliases: ['galatians', 'gal', 'ga', 'galations'] },
   { name: 'Ephesians', abbrev: 'Eph', order: 49, aliases: ['ephesians', 'eph', 'ep'] },
-  { name: 'Philippians', abbrev: 'Phil', order: 50, aliases: ['philippians', 'phil', 'php', 'ph'] },
-  { name: 'Colossians', abbrev: 'Col', order: 51, aliases: ['colossians', 'col', 'co'] },
+  { name: 'Philippians', abbrev: 'Phil', order: 50, aliases: ['philippians', 'phil', 'php', 'ph', 'philipians', 'phillipians'] },
+  { name: 'Colossians', abbrev: 'Col', order: 51, aliases: ['colossians', 'col', 'co', 'colosians'] },
   { name: '1 Thessalonians', abbrev: '1Thess', order: 52, aliases: ['1 thessalonians', '1 thess', '1th'] },
   { name: '2 Thessalonians', abbrev: '2Thess', order: 53, aliases: ['2 thessalonians', '2 thess', '2th'] },
   { name: '1 Timothy', abbrev: '1Tim', order: 54, aliases: ['1 timothy', '1 tim', '1ti'] },
@@ -72,5 +72,5 @@ export const BIBLE_BOOKS: BibleBook[] = [
   { name: '2 John', abbrev: '2John', order: 63, aliases: ['2 john', '2 jn', '2jo'] },
   { name: '3 John', abbrev: '3John', order: 64, aliases: ['3 john', '3 jn', '3jo'] },
   { name: 'Jude', abbrev: 'Jude', order: 65, aliases: ['jude', 'jud'] },
-  { name: 'Revelation', abbrev: 'Rev', order: 66, aliases: ['revelation', 'rev', 're', 'rv'] },
+  { name: 'Revelation', abbrev: 'Rev', order: 66, aliases: ['revelation', 'rev', 're', 'rv', 'revelations'] },
 ];

@@ -1,3 +1,4 @@
+import { compareTwoStrings } from 'string-similarity';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 import { BIBLE_BOOKS } from '../data/bibleBooks';
 
@@ -101,6 +102,19 @@ export function findBibleReference(input: string): BibleReference | null {
       break;
     }
 
+    // Chapter-only: "Luke 1", "Luke chapter 1", "Romans 5" → verse 1
+    if (!chapter || !verse) {
+      const chapterOnly1 = /^(?:chapter|chap|ch)\s+(\d{1,3})\s*$/.exec(after);
+      const chapterOnly2 = /^(\d{1,3})\s*$/.exec(after);
+      if (chapterOnly1) {
+        chapter = Number(chapterOnly1[1]);
+        verse = 1;
+      } else if (chapterOnly2) {
+        chapter = Number(chapterOnly2[1]);
+        verse = 1;
+      }
+    }
+
     if (!chapter || !verse) continue;
     if (endVerse !== null && endVerse < verse) {
       endVerse = null;
@@ -110,6 +124,66 @@ export function findBibleReference(input: string): BibleReference | null {
     if (!bookName) continue;
 
     return { book: bookName, chapter, verse, endVerse };
+  }
+
+  // Fuzzy book match: no alias matched (e.g. STT said "roman" for Romans)
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  const bookToken =
+    tokens.length >= 2 && /^\d+$/.test(tokens[0]) ? `${tokens[0]} ${tokens[1]}` : tokens[0];
+  const afterFuzzy = normalized.slice(normalized.indexOf(bookToken) + bookToken.length).trim();
+
+  let bestBook: (typeof BIBLE_BOOKS)[number] | null = null;
+  let bestScore = 0;
+  const bookTokenLower = bookToken.toLowerCase();
+  for (const book of BIBLE_BOOKS) {
+    const candidates = [
+      book.name.toLowerCase(),
+      book.abbrev.toLowerCase(),
+      ...book.aliases.map((a) => a.toLowerCase()),
+    ];
+    const score = Math.max(...candidates.map((c) => compareTwoStrings(bookTokenLower, c)));
+    if (score > bestScore) {
+      bestScore = score;
+      bestBook = book;
+    }
+  }
+  const FUZZY_BOOK_THRESHOLD = 0.82;
+  if (bestBook && bestScore >= FUZZY_BOOK_THRESHOLD) {
+    let chapter: number | null = null;
+    let verse: number | null = null;
+    let endVerse: number | null = null;
+    const patterns = [
+      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*[:-]?\s*(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      /^(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      /^(\d{1,3})\s+(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      /^(?:chapter|chap|ch)\s+(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+      /^(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
+    ];
+    for (const pattern of patterns) {
+      const refMatch = afterFuzzy.match(pattern);
+      if (!refMatch) continue;
+      chapter = Number(refMatch[1]);
+      verse = Number(refMatch[2]);
+      endVerse = refMatch[3] ? Number(refMatch[3]) : null;
+      break;
+    }
+    if (!chapter || !verse) {
+      const ch1 = /^(?:chapter|chap|ch)\s+(\d{1,3})\s*$/.exec(afterFuzzy);
+      const ch2 = /^(\d{1,3})\s*$/.exec(afterFuzzy);
+      if (ch1) {
+        chapter = Number(ch1[1]);
+        verse = 1;
+      } else if (ch2) {
+        chapter = Number(ch2[1]);
+        verse = 1;
+      }
+    }
+    if (chapter && verse) {
+      if (endVerse !== null && endVerse < verse) endVerse = null;
+      return { book: bestBook.name, chapter, verse, endVerse };
+    }
   }
 
   return null;
