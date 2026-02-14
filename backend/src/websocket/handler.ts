@@ -86,9 +86,11 @@ const BIBLE_FOLLOW_MATCH_MARGIN = parseNumberEnv(process.env.BIBLE_FOLLOW_MATCH_
 const BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS, 1800);
 const BIBLE_FOLLOW_DEBOUNCE_MATCHES = parseNumberEnv(process.env.BIBLE_FOLLOW_DEBOUNCE_MATCHES, 2);
 /** End-of-verse: when buffer tail matches last 3–4 words of current verse, allow advance with 1 match and lower bar (mirror song end-of-line). */
-const BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD = parseNumberEnv(process.env.BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD, 0.52);
+const BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD = parseNumberEnv(process.env.BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD, 0.45);
 const BIBLE_END_OF_VERSE_NEXT_THRESHOLD = parseNumberEnv(process.env.BIBLE_END_OF_VERSE_NEXT_THRESHOLD, 0.45);
 const BIBLE_END_OF_VERSE_BUFFER_WORDS = 6;
+/** Min semantic score for verse-by-content open and in-chapter/cross-chapter jump (paraphrased speech). */
+const BIBLE_JUMP_BY_CONTENT_MIN_SCORE = parseNumberEnv(process.env.BIBLE_JUMP_BY_CONTENT_MIN_SCORE, 0.65);
 
 /** Smart Bible Listen server kill switch: set to 'false' to force-disable Smart Listen for all clients. Defaults to true (allow client to enable). */
 const BIBLE_SMART_LISTEN_KILL_SWITCH = process.env.BIBLE_SMART_LISTEN_ENABLED === 'false';
@@ -242,6 +244,8 @@ interface SessionState {
     lastHitAt: number;
   };
   bibleFollowCache?: Map<string, { text: string; book: string; chapter: number; verse: number; versionAbbrev: string }>;
+  /** Last time we logged that Bible Follow is on but semantic is disabled (avoid log spam). */
+  lastBibleSemanticDisabledLogAt?: number;
   songs: SongData[];
   setlistItems?: SetlistItemData[]; // Polymorphic setlist items
   currentSongIndex: number;
@@ -934,7 +938,7 @@ async function handleTranscriptionResult(
           }
           const candidates = candidateRows.map((r) => ({ ref: { book: r.book, chapter: r.chapter, verse: r.verse }, text: r.text }));
           if (candidates.length > 0) {
-            const found = await findVerseByContent(cleanedBuffer, candidates, 0.72);
+            const found = await findVerseByContent(cleanedBuffer, candidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
             if (found) {
               reference = found.ref;
               console.log(
@@ -1037,6 +1041,19 @@ async function handleTranscriptionResult(
           return;
         }
 
+        if (!isBibleSemanticFollowEnabled()) {
+          const now = Date.now();
+          if (
+            session.lastBibleSemanticDisabledLogAt == null ||
+            now - session.lastBibleSemanticDisabledLogAt > 60000
+          ) {
+            console.log(
+              '[WS] Bible Follow active but semantic disabled (in-chapter/cross-chapter jump requires BIBLE_SEMANTIC_FOLLOW_ENABLED=true and API key)'
+            );
+            session.lastBibleSemanticDisabledLogAt = now;
+          }
+        }
+
         // Cross-chapter/cross-book jump by content: say rephrased content of any verse -> jump there
         if (
           isBibleSemanticFollowEnabled() &&
@@ -1062,8 +1079,13 @@ async function handleTranscriptionResult(
             ref: { book: r.book, chapter: r.chapter, verse: r.verse },
             text: r.text,
           }));
+          if (crossCandidates.length === 0) {
+            console.log(
+              '[WS] Bible: cross-chapter jump skipped (no verse candidates for version/words; check DB has verses for selected version)'
+            );
+          }
           if (crossCandidates.length > 0) {
-            const crossFound = await findVerseByContent(normalizedBuffer, crossCandidates, 0.72);
+            const crossFound = await findVerseByContent(normalizedBuffer, crossCandidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
             const isDifferentVerse =
               crossFound &&
               (crossFound.ref.book !== followRef.book ||
@@ -1137,7 +1159,7 @@ async function handleTranscriptionResult(
             }
           }
           if (passageCandidates.length > 1) {
-            const jumpFound = await findVerseByContent(normalizedBuffer, passageCandidates, 0.72);
+            const jumpFound = await findVerseByContent(normalizedBuffer, passageCandidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
             const now = Date.now();
             if (
               jumpFound &&
@@ -1259,7 +1281,7 @@ async function handleTranscriptionResult(
         }
 
         const advanceThresholdMet = inScopeEndOfVerse
-          ? nextScore >= BIBLE_END_OF_VERSE_NEXT_THRESHOLD && nextScore > currentScore
+          ? nextScore >= BIBLE_END_OF_VERSE_NEXT_THRESHOLD
           : nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN;
 
         if (advanceThresholdMet) {
