@@ -265,6 +265,15 @@ Runtime behavior:
 Railway notes:
 - Add `ESV_API_KEY` and `ESV_API_URL` to the backend service environment variables.
 
+**Bible Follow — Semantic (vector) matching (optional):**  
+When pastors paraphrase verse text (e.g. "I won't lack" vs "I shall not want"), lexical matching can fail. You can enable semantic similarity for Bible Follow only:
+
+- `BIBLE_SEMANTIC_FOLLOW_ENABLED` = `true` to use embedding-based matching for verse advance (default: off).
+- `OPENAI_API_KEY` or `BIBLE_EMBEDDING_API_KEY` = your OpenAI API key (used for `text-embedding-3-small`).
+- Optional: `BIBLE_EMBEDDING_MODEL` = model name (default: `text-embedding-3-small`).
+
+If the embedding API is not configured or fails, the backend falls back to the existing lexical (string-similarity) scores. Lyrics are never matched with vectors; only Bible Follow uses this.
+
 ### Deployment
 - [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md) - Latest deployment status and session summary
 - [RAILWAY_SETUP.md](./RAILWAY_SETUP.md) - **Railway backend deployment guide** (Quick reference)
