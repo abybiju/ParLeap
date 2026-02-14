@@ -1,0 +1,8 @@
+# Append this block to ~/.ssh/config for ParLeap
+# Then: git remote set-url origin git@github.com-parleap:abybiju/ParLeap.git
+
+Host github.com-parleap
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_parleap
+  IdentitiesOnly yes

@@ -39,9 +39,10 @@ Add whatever helps you do your job. This is your cheat sheet.
 
 ### Git / SSH
 - Repo path: `/Users/abybiju/ParLeap-AI`
-- Remote: `origin = git@github.com:abybiju/ParLeap.git`
-- Working push command:
-  - `GIT_SSH_COMMAND='ssh -i ~/.ssh/id_parleap -o IdentitiesOnly=yes' git push`
-- Key used for this machine:
+- **Full setup:** see [SSH_SETUP.md](SSH_SETUP.md) (generate key, add to GitHub, config, remote).
+- After setup, remote should be: `origin = git@github.com-parleap:abybiju/ParLeap.git` so normal `git push` uses the right key.
+- Key used for this repo:
   - Private: `~/.ssh/id_parleap`
   - Public: `~/.ssh/id_parleap.pub`
+  - Fingerprint: `SHA256:...` (ED25519) — verify with `ssh-keygen -l -f ~/.ssh/id_parleap.pub`
+- Config snippet: `scripts/ssh-config-snippet.txt` (append to `~/.ssh/config`).
