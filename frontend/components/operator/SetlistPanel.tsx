@@ -38,6 +38,8 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
   const [currentItemIndex, setCurrentItemIndex] = useState<number>(0);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [hasSessionStarted, setHasSessionStarted] = useState(false);
+  /** When true, main display is showing a Bible verse (reference-driven); do not highlight a song as Current. */
+  const [displayIsBible, setDisplayIsBible] = useState(false);
 
   const handleItemClick = (index: number, item: DisplayItem) => {
     goToItem(index);
@@ -69,6 +71,7 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
     if (isDisplayUpdateMessage(lastMessage)) {
       const displayMsg = lastMessage as DisplayUpdateMessage;
       const songId = displayMsg.payload.songId;
+      setDisplayIsBible(songId?.startsWith('bible:') ?? false);
       setCurrentSongId(songId);
       setCurrentSlideIndex(displayMsg.payload.slideIndex);
       // Prefer currentItemIndex from payload when set; else infer from songId
@@ -191,7 +194,12 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
 
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
         {displayItems.map((item, index) => {
-          const isCurrent = isUsingCachedSetlist ? index === currentItemIndex : item.kind === 'SONG' && item.songId === currentSongId;
+          const isCurrent =
+            displayIsBible && item.kind === 'SONG'
+              ? false
+              : isUsingCachedSetlist
+                ? index === currentItemIndex
+                : item.kind === 'SONG' && item.songId === currentSongId;
           const isSong = item.kind === 'SONG';
           const cachedSong = isSong && isUsingCachedSetlist && slideCache.setlist
             ? slideCache.setlist.songs.find((s) => s.id === item.songId)
