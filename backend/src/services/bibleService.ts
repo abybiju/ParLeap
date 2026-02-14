@@ -350,3 +350,64 @@ export function wrapBibleText(text: string, maxLineLength = 48, maxLines = 4): s
   trimmed.push(lines.slice(maxLines - 1).join(' '));
   return trimmed;
 }
+
+/** Result row for verse-by-content candidate search (book name, chapter, verse, text). */
+export type VerseCandidateRow = {
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+};
+
+/**
+ * Search bible_verses by keywords (search_text ilike any word), return up to `limit` candidates
+ * with book name, chapter, verse, text for use in semantic rerank (findVerseByContent).
+ * Used for full-Bible verse-by-content lookup when no reference is detected.
+ */
+export async function searchVerseCandidatesByWords(
+  versionId: string,
+  words: string[],
+  limit: number = 80
+): Promise<VerseCandidateRow[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  if (!words.length) return [];
+
+  const books = await ensureBookCache();
+  if (!books) return [];
+
+  const cleanWords = words
+    .map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter((w) => w.length >= 2);
+  if (!cleanWords.length) return [];
+
+  const orConditions = cleanWords
+    .slice(0, 10)
+    .map((w) => `search_text.ilike.%${w}%`)
+    .join(',');
+  if (!orConditions) return [];
+
+  const { data: rows, error } = await supabase
+    .from('bible_verses')
+    .select('book_id, chapter, verse, text')
+    .eq('version_id', versionId)
+    .or(orConditions)
+    .limit(limit);
+
+  if (error || !rows?.length) {
+    if (error) console.warn('[BibleService] searchVerseCandidatesByWords error:', error.message);
+    return [];
+  }
+
+  const result: VerseCandidateRow[] = [];
+  for (const row of rows) {
+    const bookEntry = books.byId.get(row.book_id as string);
+    const book = bookEntry?.name ?? 'Unknown';
+    result.push({
+      book,
+      chapter: row.chapter as number,
+      verse: row.verse as number,
+      text: (row.text as string) ?? '',
+    });
+  }
+  return result;
+}
