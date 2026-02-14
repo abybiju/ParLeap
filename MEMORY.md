@@ -1,5 +1,14 @@
 # ParLeap AI - Memory Log
 
+## Session: February 13, 2026 - Advance/jump todo, homophone fix, docs
+
+### What we did
+- **Bible verse advance** and **cross-chapter/cross-book jump** are not working reliably; documented as backlog/todo (fix later).
+- **STT homophone fix**: "daniel one" often heard as "daniel won" — added normalization in `bibleService.normalizeReferenceText`: won/one→1, two/too→2, for/four→4, ate/eight→8, plus five/six/seven/nine/ten. "to" is not normalized so "verse 1 to 3" range is preserved.
+- **Docs**: BIBLE_SEMANTIC_BACKLOG.md (homophones shipped, advance + jump in backlog), PROJECT_PLAN.md, project-context.mdc updated. Memory (this file + memory/2026-02-13.md) updated.
+
+---
+
 ## Session: February 13, 2026 - Bible Semantic Refinements
 
 ### What We Shipped
