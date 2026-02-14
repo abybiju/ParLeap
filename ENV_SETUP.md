@@ -45,6 +45,14 @@ CORS_ORIGIN=http://localhost:3000
 
 # CORS Configuration (Production)
 # CORS_ORIGIN=https://your-frontend.vercel.app
+
+# Bible Follow — Semantic matching (optional)
+# When enabled, verse advance uses embedding similarity so paraphrased speech still matches.
+# Set to true and provide an OpenAI API key to enable. If unset or API fails, lexical matching is used.
+# BIBLE_SEMANTIC_FOLLOW_ENABLED=false
+# OPENAI_API_KEY=your_openai_api_key_here
+# BIBLE_EMBEDDING_API_KEY=alternative_key_override
+# BIBLE_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 ## How to Get Your Keys

@@ -37,6 +37,10 @@ import {
   getDefaultBibleVersionId,
   wrapBibleText,
 } from '../services/bibleService';
+import {
+  isBibleSemanticFollowEnabled,
+  getBibleFollowSemanticScores,
+} from '../services/bibleEmbeddingService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
 import {
   findBestMatchAcrossAllSongs,
@@ -972,8 +976,25 @@ async function handleTranscriptionResult(
           nextRef = nextChapterRef;
         }
 
-        const currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
-        const nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
+        let currentScore: number;
+        let nextScore: number;
+        if (isBibleSemanticFollowEnabled()) {
+          const semantic = await getBibleFollowSemanticScores(
+            normalizedBuffer,
+            currentVerse.text,
+            nextVerse.text
+          );
+          if (semantic) {
+            currentScore = semantic.currentScore;
+            nextScore = semantic.nextScore;
+          } else {
+            currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
+            nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
+          }
+        } else {
+          currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
+          nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
+        }
 
         if (nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN) {
           const now = Date.now();
