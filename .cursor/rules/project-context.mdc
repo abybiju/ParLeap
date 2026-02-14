@@ -47,6 +47,11 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 - Login page has "Forgot your password?"; Profile Security has "Reset Password" modal
 - Supabase Site URL and Redirect URLs must use production domain (e.g. www.parleap.com) for recovery emails
 
+**Bible semantic (vector) and refinements** (February 13, 2026)
+- Semantic (OpenAI embeddings) for Bible only: verse-by-content open, Bible Follow advance, in-chapter jump by content. Lyrics remain fuzzy.
+- Full-Bible open: keyword search on `bible_verses.search_text` then semantic rerank; fallback to 15 verses. Chapter-only refs ("Luke 1" → 1:1), book soundalikes ("roman" → Romans), fuzzy book match (≥ 0.82).
+- In-chapter jump works; cross-chapter/cross-book jump by content on backlog. See `BIBLE_SEMANTIC_BACKLOG.md` for backlog: improve cross-chapter jump, reduce Bible verse latency, brainstorm open-source semantic (e.g. Hugging Face model in Node/Edge).
+
 **Smart Bible Listen** (February 11, 2026) — IN PROGRESS
 - Smart Listen toggle in operator HUD gates STT for Bible items
 - Frontend: audio buffered until wake word or "Listen now" triggers STT window
@@ -77,6 +82,7 @@ Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap
+- `BIBLE_SEMANTIC_BACKLOG.md` - Bible semantic shipped behavior and backlog (cross-chapter jump, latency, open-source semantic brainstorm)
 - `TESTING_INFRASTRUCTURE_COMPLETE.md` - Test coverage details
 - `.cursorrules` - Full architecture specification
 - `CLAWDBOT_INSTRUCTIONS.md` - Operational directives for autonomous AI work (Governor System)

@@ -1,5 +1,29 @@
 # ParLeap AI - Memory Log
 
+## Session: February 13, 2026 - Bible Semantic Refinements
+
+### What We Shipped
+- **Semantic (vector) for Bible only**: OpenAI embeddings for verse-by-content open and Bible Follow; lyrics stay fuzzy.
+- **Full-Bible open by content**: Keyword search on `bible_verses.search_text` → up to 80 candidates → semantic rerank; fallback to 15 well-known verses.
+- **Jump within same chapter**: When following a passage, saying content of another verse in that chapter jumps display (works well).
+- **Reference UX**: Chapter-only ("Luke 1", "Luke chapter 1" → verse 1); book soundalikes ("roman", "romen" → Romans, etc.); fuzzy book match (string-similarity ≥ 0.82) when no alias matches.
+- **Cross-chapter jump path**: Handler runs full-Bible content lookup when in Bible Follow; in practice in-chapter jump works, cross-chapter/cross-book not yet reliable (on backlog).
+
+### Backlog (saved for later)
+1. **Improve cross-chapter/cross-book jump** — Make saying rephrased content of a verse in another chapter/book reliably jump there.
+2. **Reduce Bible verse latency** — Optimize without breaking; consider throttling, caching, or precomputed verse embeddings.
+3. **Brainstorm open-source semantic** — Explore Hugging Face–style model runnable in Node.js or Edge Function (cost/latency/on-prem).
+
+### Docs
+- `BIBLE_SEMANTIC_BACKLOG.md` — Shipped behavior + backlog.
+- `PROJECT_PLAN.md` — Recent updates + pointer to backlog.
+
+### Commits
+- `7557b45` — feat(bible): chapter-only refs, book soundalikes, fuzzy book, cross-chapter jump
+- Earlier: `9efa18a` (full-Bible + in-passage jump), `5fc135e` (verse-by-content open), `d964934` (semantic Bible Follow), `ebd98f2` (lint)
+
+---
+
 ## Session: February 13, 2026 - Community Template Stability and Remaining Apply Gap
 
 ### Shipped Today
