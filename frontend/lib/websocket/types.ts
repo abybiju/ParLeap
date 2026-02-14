@@ -160,6 +160,10 @@ export interface DisplayUpdateMessage {
     matchConfidence?: number;
     isAutoAdvance: boolean;
     currentItemIndex?: number; // Index in polymorphic setlist (songs, Bible, media)
+    /** Next verse text for Bible (operator next-slide preview) */
+    nextVerseText?: string;
+    /** Next verse reference e.g. "Romans 1:4" for Bible */
+    nextVerseRef?: string;
   };
   timing?: TimingMetadata;
 }

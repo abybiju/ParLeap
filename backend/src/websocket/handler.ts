@@ -980,6 +980,22 @@ async function handleTranscriptionResult(
         const verseLines = wrapBibleText(verse.text);
         const verseTitle = `${verse.book} ${verse.chapter}:${verse.verse} • ${verse.versionAbbrev}`;
 
+        let nextVerseText: string | undefined;
+        let nextVerseRef: string | undefined;
+        const nextRefOpen: BibleReference = { book: reference.book, chapter: reference.chapter, verse: reference.verse + 1 };
+        const nextVerseOpen = await getBibleVerseCached(session, nextRefOpen, session.bibleVersionId);
+        if (nextVerseOpen?.text) {
+          nextVerseText = nextVerseOpen.text;
+          nextVerseRef = `${nextVerseOpen.book} ${nextVerseOpen.chapter}:${nextVerseOpen.verse}`;
+        } else {
+          const nextChRef: BibleReference = { book: reference.book, chapter: reference.chapter + 1, verse: 1 };
+          const nextChVerse = await getBibleVerseCached(session, nextChRef, session.bibleVersionId);
+          if (nextChVerse?.text) {
+            nextVerseText = nextChVerse.text;
+            nextVerseRef = `${nextChVerse.book} ${nextChVerse.chapter}:${nextChVerse.verse}`;
+          }
+        }
+
         const displayMsg: DisplayUpdateMessage = {
           type: 'DISPLAY_UPDATE',
           payload: {
@@ -991,6 +1007,8 @@ async function handleTranscriptionResult(
             songTitle: verseTitle,
             isAutoAdvance: true,
             currentItemIndex: session.currentItemIndex,
+            nextVerseText,
+            nextVerseRef,
           },
           timing: createTiming(receivedAt, processingStart),
         };
@@ -1317,6 +1335,22 @@ async function handleTranscriptionResult(
             const verseLines = wrapBibleText(nextVerse.text);
             const verseTitle = `${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} • ${nextVerse.versionAbbrev}`;
 
+            let nextVersePreviewText: string | undefined;
+            let nextVersePreviewRef: string | undefined;
+            const nextNextRef: BibleReference = { book: nextVerse.book, chapter: nextVerse.chapter, verse: nextVerse.verse + 1 };
+            const nextNextVerse = await getBibleVerseCached(session, nextNextRef, session.bibleVersionId);
+            if (nextNextVerse?.text) {
+              nextVersePreviewText = nextNextVerse.text;
+              nextVersePreviewRef = `${nextNextVerse.book} ${nextNextVerse.chapter}:${nextNextVerse.verse}`;
+            } else {
+              const nextNextCh: BibleReference = { book: nextVerse.book, chapter: nextVerse.chapter + 1, verse: 1 };
+              const nextNextChVerse = await getBibleVerseCached(session, nextNextCh, session.bibleVersionId);
+              if (nextNextChVerse?.text) {
+                nextVersePreviewText = nextNextChVerse.text;
+                nextVersePreviewRef = `${nextNextChVerse.book} ${nextNextChVerse.chapter}:${nextNextChVerse.verse}`;
+              }
+            }
+
             const displayMsg: DisplayUpdateMessage = {
               type: 'DISPLAY_UPDATE',
               payload: {
@@ -1328,6 +1362,8 @@ async function handleTranscriptionResult(
                 songTitle: verseTitle,
                 isAutoAdvance: true,
                 currentItemIndex: session.currentItemIndex,
+                nextVerseText: nextVersePreviewText,
+                nextVerseRef: nextVersePreviewRef,
               },
               timing: createTiming(receivedAt, processingStart),
             };
@@ -1338,6 +1374,7 @@ async function handleTranscriptionResult(
                 `[WS] Bible: end-of-verse advance to ${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} (trigger ${(endOfVerseScore * 100).toFixed(0)}%)`
               );
             }
+            session.rollingBuffer = '';
           }
         } else if (session.bibleFollowHit) {
           const now = Date.now();
