@@ -40,6 +40,7 @@ import {
 import {
   isBibleSemanticFollowEnabled,
   getBibleFollowSemanticScores,
+  findVerseByContent,
 } from '../services/bibleEmbeddingService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
 import {
@@ -854,8 +855,51 @@ async function handleTranscriptionResult(
         return;
       }
 
-      const reference =
+      let reference =
         findBibleReference(transcriptionResult.text) ?? findBibleReference(cleanedBuffer);
+
+      // If no reference detected but semantic lookup is enabled, try to find verse by spoken content
+      // (e.g. "The Lord is my shepherd, I won't lack anything" -> Psalm 23:1)
+      if (!reference && isBibleSemanticFollowEnabled()) {
+        const versionId = session.bibleVersionId ?? (await getDefaultBibleVersionId());
+        const bufferWordCount = normalizeMatchText(cleanedBuffer).split(/\s+/).filter(Boolean).length;
+        if (versionId && bufferWordCount >= 6) {
+          const candidateRefs: Array<{ book: string; chapter: number; verse: number }> = [
+            { book: 'Psalms', chapter: 23, verse: 1 },
+            { book: 'John', chapter: 3, verse: 16 },
+            { book: 'Romans', chapter: 8, verse: 28 },
+            { book: 'Philippians', chapter: 4, verse: 13 },
+            { book: 'Proverbs', chapter: 3, verse: 5 },
+            { book: 'Psalms', chapter: 91, verse: 1 },
+            { book: 'Matthew', chapter: 11, verse: 28 },
+            { book: 'Isaiah', chapter: 41, verse: 10 },
+            { book: 'Jeremiah', chapter: 29, verse: 11 },
+            { book: 'Psalms', chapter: 46, verse: 1 },
+            { book: 'Genesis', chapter: 1, verse: 1 },
+            { book: 'Psalms', chapter: 119, verse: 105 },
+            { book: 'Matthew', chapter: 28, verse: 19 },
+            { book: 'John', chapter: 1, verse: 1 },
+            { book: 'Psalms', chapter: 4, verse: 1 },
+          ];
+          const candidates: Array<{ ref: { book: string; chapter: number; verse: number }; text: string }> = [];
+          for (const ref of candidateRefs) {
+            const verse = await getBibleVerseCached(session, ref, versionId);
+            if (verse?.text) {
+              candidates.push({ ref, text: verse.text });
+            }
+          }
+          if (candidates.length > 0) {
+            const found = await findVerseByContent(cleanedBuffer, candidates, 0.72);
+            if (found) {
+              reference = found.ref;
+              console.log(
+                `[WS] Bible: verse-by-content match "${found.ref.book} ${found.ref.chapter}:${found.ref.verse}" (score ${(found.score * 100).toFixed(1)}%)`
+              );
+            }
+          }
+        }
+      }
+
       if (reference) {
         if (!session.bibleVersionId) {
           const fallbackVersionId = await getDefaultBibleVersionId();

@@ -125,3 +125,48 @@ export async function getBibleFollowSemanticScores(
 
   return { currentScore, nextScore };
 }
+
+/** Minimal ref shape for verse-by-content lookup (avoids importing bibleService). */
+export interface BibleRefForLookup {
+  book: string;
+  chapter: number;
+  verse: number;
+}
+
+export interface VerseByContentMatch {
+  ref: BibleRefForLookup;
+  score: number;
+}
+
+/**
+ * Find which candidate verse best matches the spoken buffer by semantic similarity.
+ * Used when the user says verse content (e.g. "The Lord is my shepherd, I won't lack anything")
+ * instead of a reference (e.g. "Psalm 23"). Returns the best match if score >= minScore.
+ */
+export async function findVerseByContent(
+  buffer: string,
+  candidates: Array<{ ref: BibleRefForLookup; text: string }>,
+  minScore: number = 0.72
+): Promise<VerseByContentMatch | null> {
+  const trimmedBuffer = buffer.trim();
+  if (!trimmedBuffer || candidates.length === 0) return null;
+
+  const texts = [trimmedBuffer, ...candidates.map((c) => c.text.trim())];
+  const embeddings = await embedTexts(texts);
+  if (!embeddings || embeddings.length !== texts.length) return null;
+
+  const bufVec = embeddings[0];
+  let bestScore = minScore;
+  let bestIndex = -1;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const score = cosineSimilarity(bufVec, embeddings[i + 1]);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+
+  if (bestIndex < 0) return null;
+  return { ref: candidates[bestIndex].ref, score: bestScore };
+}
