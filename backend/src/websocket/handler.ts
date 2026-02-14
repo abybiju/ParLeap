@@ -35,6 +35,7 @@ import {
   findBibleReference,
   getBibleVersionIdByAbbrev,
   getDefaultBibleVersionId,
+  searchVerseCandidatesByWords,
   wrapBibleText,
 } from '../services/bibleService';
 import {
@@ -859,35 +860,48 @@ async function handleTranscriptionResult(
         findBibleReference(transcriptionResult.text) ?? findBibleReference(cleanedBuffer);
 
       // If no reference detected but semantic lookup is enabled, try to find verse by spoken content
-      // (e.g. "The Lord is my shepherd, I won't lack anything" -> Psalm 23:1)
+      // (full-Bible: keyword search on bible_verses then semantic rerank; fallback to 15 well-known verses)
       if (!reference && isBibleSemanticFollowEnabled()) {
         const versionId = session.bibleVersionId ?? (await getDefaultBibleVersionId());
         const bufferWordCount = normalizeMatchText(cleanedBuffer).split(/\s+/).filter(Boolean).length;
         if (versionId && bufferWordCount >= 6) {
-          const candidateRefs: Array<{ book: string; chapter: number; verse: number }> = [
-            { book: 'Psalms', chapter: 23, verse: 1 },
-            { book: 'John', chapter: 3, verse: 16 },
-            { book: 'Romans', chapter: 8, verse: 28 },
-            { book: 'Philippians', chapter: 4, verse: 13 },
-            { book: 'Proverbs', chapter: 3, verse: 5 },
-            { book: 'Psalms', chapter: 91, verse: 1 },
-            { book: 'Matthew', chapter: 11, verse: 28 },
-            { book: 'Isaiah', chapter: 41, verse: 10 },
-            { book: 'Jeremiah', chapter: 29, verse: 11 },
-            { book: 'Psalms', chapter: 46, verse: 1 },
-            { book: 'Genesis', chapter: 1, verse: 1 },
-            { book: 'Psalms', chapter: 119, verse: 105 },
-            { book: 'Matthew', chapter: 28, verse: 19 },
-            { book: 'John', chapter: 1, verse: 1 },
-            { book: 'Psalms', chapter: 4, verse: 1 },
-          ];
-          const candidates: Array<{ ref: { book: string; chapter: number; verse: number }; text: string }> = [];
-          for (const ref of candidateRefs) {
-            const verse = await getBibleVerseCached(session, ref, versionId);
-            if (verse?.text) {
-              candidates.push({ ref, text: verse.text });
+          const stopwords = new Set([
+            'the', 'is', 'my', 'i', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'it', 'that', 'for',
+            'we', 'you', 'he', 'she', 'they', 'when', 'what', 'anything', 'everything', 'wont',
+            'will', 'shall', 'not', 'no', 'so', 'but', 'if', 'with', 'at', 'on', 'be', 'have',
+            'has', 'had', 'do', 'does', 'did', 'this', 'these', 'those', 'am', 'are', 'was', 'were',
+          ]);
+          const words = normalizeMatchText(cleanedBuffer)
+            .split(/\s+/)
+            .filter((w) => w.length >= 2 && !stopwords.has(w.toLowerCase()))
+            .slice(0, 10);
+          let candidateRows = await searchVerseCandidatesByWords(versionId, words, 80);
+          if (candidateRows.length === 0) {
+            const fallbackRefs: Array<{ book: string; chapter: number; verse: number }> = [
+              { book: 'Psalms', chapter: 23, verse: 1 },
+              { book: 'John', chapter: 3, verse: 16 },
+              { book: 'Romans', chapter: 8, verse: 28 },
+              { book: 'Philippians', chapter: 4, verse: 13 },
+              { book: 'Proverbs', chapter: 3, verse: 5 },
+              { book: 'Psalms', chapter: 91, verse: 1 },
+              { book: 'Matthew', chapter: 11, verse: 28 },
+              { book: 'Isaiah', chapter: 41, verse: 10 },
+              { book: 'Jeremiah', chapter: 29, verse: 11 },
+              { book: 'Psalms', chapter: 46, verse: 1 },
+              { book: 'Genesis', chapter: 1, verse: 1 },
+              { book: 'Psalms', chapter: 119, verse: 105 },
+              { book: 'Matthew', chapter: 28, verse: 19 },
+              { book: 'John', chapter: 1, verse: 1 },
+              { book: 'Psalms', chapter: 4, verse: 1 },
+            ];
+            for (const ref of fallbackRefs) {
+              const verse = await getBibleVerseCached(session, ref, versionId);
+              if (verse?.text) {
+                candidateRows.push({ book: ref.book, chapter: ref.chapter, verse: ref.verse, text: verse.text });
+              }
             }
           }
+          const candidates = candidateRows.map((r) => ({ ref: { book: r.book, chapter: r.chapter, verse: r.verse }, text: r.text }));
           if (candidates.length > 0) {
             const found = await findVerseByContent(cleanedBuffer, candidates, 0.72);
             if (found) {
@@ -990,6 +1004,78 @@ async function handleTranscriptionResult(
         const currentVerse = await getBibleVerseCached(session, followRef, session.bibleVersionId);
         if (!currentVerse) {
           return;
+        }
+
+        // Jump within passage: if semantic enabled, match buffer against all verses in range;
+        // if best match is a different verse, jump to it (e.g. say verse 4 content -> show verse 4)
+        const endVerseNum = followEndVerse !== null ? followEndVerse : followRef.verse + 19;
+        if (isBibleSemanticFollowEnabled() && endVerseNum > followRef.verse) {
+          const passageCandidates: Array<{ ref: { book: string; chapter: number; verse: number }; text: string }> = [];
+          for (let v = followRef.verse; v <= endVerseNum; v++) {
+            const ref: BibleReference = { book: followRef.book, chapter: followRef.chapter, verse: v };
+            const verse = await getBibleVerseCached(session, ref, session.bibleVersionId);
+            if (verse?.text) {
+              passageCandidates.push({ ref: { book: verse.book, chapter: verse.chapter, verse: verse.verse }, text: verse.text });
+            }
+          }
+          if (passageCandidates.length > 1) {
+            const jumpFound = await findVerseByContent(normalizedBuffer, passageCandidates, 0.72);
+            const now = Date.now();
+            if (
+              jumpFound &&
+              jumpFound.ref.verse !== followRef.verse &&
+              jumpFound.ref.book === followRef.book &&
+              jumpFound.ref.chapter === followRef.chapter
+            ) {
+              const jumpRef: BibleReference = {
+                book: followRef.book,
+                chapter: followRef.chapter,
+                verse: jumpFound.ref.verse,
+                endVerse: followEndVerse ?? undefined,
+              };
+              const targetKey = buildBibleRefKey(jumpRef, session.bibleVersionId);
+              if (
+                session.bibleFollowHit?.targetKey === targetKey &&
+                now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS
+              ) {
+                session.bibleFollowHit.hitCount += 1;
+                session.bibleFollowHit.lastHitAt = now;
+              } else {
+                session.bibleFollowHit = { targetKey, hitCount: 1, lastHitAt: now };
+              }
+              if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
+                session.bibleFollowHit = undefined;
+                session.bibleFollowRef = { ...jumpRef, endVerse: followEndVerse ?? undefined };
+                const jumpVerse = await getBibleVerseCached(session, jumpRef, session.bibleVersionId);
+                if (jumpVerse) {
+                  const verseLines = wrapBibleText(jumpVerse.text);
+                  const verseTitle = `${jumpVerse.book} ${jumpVerse.chapter}:${jumpVerse.verse} • ${jumpVerse.versionAbbrev}`;
+                  broadcastToEvent(session.eventId, {
+                    type: 'DISPLAY_UPDATE',
+                    payload: {
+                      lineText: verseLines[0] ?? jumpVerse.text,
+                      slideText: verseLines.join('\n'),
+                      slideLines: verseLines,
+                      slideIndex: 0,
+                      songId: `bible:${jumpVerse.book}:${jumpVerse.chapter}:${jumpVerse.verse}`,
+                      songTitle: verseTitle,
+                      isAutoAdvance: true,
+                      currentItemIndex: session.currentItemIndex,
+                    },
+                    timing: createTiming(receivedAt, processingStart),
+                  });
+                  session.lastBibleRefKey = `${jumpVerse.book}:${jumpVerse.chapter}:${jumpVerse.verse}:${jumpVerse.versionAbbrev}`;
+                  session.lastBibleRefAt = now;
+                  console.log(
+                    `[WS] Bible: jump within passage to ${jumpVerse.book} ${jumpVerse.chapter}:${jumpVerse.verse} (score ${(jumpFound.score * 100).toFixed(1)}%)`
+                  );
+                }
+                return;
+              }
+            } else if (session.bibleFollowHit && now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+              session.bibleFollowHit = undefined;
+            }
+          }
         }
 
         let nextRef: BibleReference = {
