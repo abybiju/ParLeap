@@ -875,7 +875,7 @@ async function handleTranscriptionResult(
             .split(/\s+/)
             .filter((w) => w.length >= 2 && !stopwords.has(w.toLowerCase()))
             .slice(0, 10);
-          let candidateRows = await searchVerseCandidatesByWords(versionId, words, 80);
+          const candidateRows = await searchVerseCandidatesByWords(versionId, words, 80);
           if (candidateRows.length === 0) {
             const fallbackRefs: Array<{ book: string; chapter: number; verse: number }> = [
               { book: 'Psalms', chapter: 23, verse: 1 },
