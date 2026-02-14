@@ -14,7 +14,8 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - **Vector/semantic for Bible only**: OpenAI embeddings for verse-by-content open and Bible Follow (paraphrased advance). Lyrics remain fuzzy match.
 - **Full-Bible + in-chapter jump**: Keyword search on `bible_verses` then semantic rerank; jump within same chapter by content works.
 - **Reference UX**: Chapter-only ("Luke 1" → 1:1), book soundalikes (e.g. "roman" → Romans), fuzzy book match (string-similarity ≥ 0.82).
-- **Backlog**: See `BIBLE_SEMANTIC_BACKLOG.md` — improve cross-chapter/cross-book jump, reduce Bible verse latency, brainstorm open-source semantic (e.g. Hugging Face model in Node/Edge).
+- **STT homophones**: "daniel won" → Daniel 1 via `normalizeReferenceText` (won/one→1, two/too→2, for/four→4, ate/eight→8, etc.; "to" left as-is for "verse 1 to 3").
+- **Backlog / known issues**: Bible verse **advance** not working reliably (fix later); **cross-chapter/cross-book jump** not reliable. See `BIBLE_SEMANTIC_BACKLOG.md` for full backlog (advance, jump, latency, open-source semantic).
 
 ### Password Reset / Forgot Password ✅
 - **Forgot password**: `/auth/forgot-password` — email form, `resetPasswordForEmail` with `redirectTo` to `/auth/reset-password`

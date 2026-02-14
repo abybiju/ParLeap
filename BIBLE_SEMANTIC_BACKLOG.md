@@ -18,7 +18,8 @@
 - **Reference detection improvements**  
   - Chapter-only: "Luke 1", "Luke chapter 1", "Romans 5" → open verse 1 of that chapter.  
   - Book soundalikes: e.g. "roman", "romen" → Romans; "genisis", "revelations", "philipians", "colosians", "galations", "corinthans" added.  
-  - Fuzzy book match: if no alias matches, `string-similarity` (≥ 0.82) against book names/aliases to resolve book, then parse chapter/verse.
+  - Fuzzy book match: if no alias matches, `string-similarity` (≥ 0.82) against book names/aliases to resolve book, then parse chapter/verse.  
+  - **STT homophones**: "won" → 1, "one" → 1, "two"/"too" → 2, "for"/"four" → 4, "ate"/"eight" → 8, etc. in `normalizeReferenceText` so e.g. "daniel won" parses as Daniel 1. ("to" is not normalized to 2 so "verse 1 to 3" range syntax is preserved.)
 
 - **Cross-chapter/cross-book jump by content (attempted)**  
   - Handler runs full-Bible verse-by-content when in Bible Follow; if best match is a different verse (any book/chapter), debounce and jump.  
@@ -28,17 +29,20 @@
 
 ## Backlog (To Improve)
 
-1. **Improve cross-chapter / cross-book jump by content**  
+1. **Bible verse advance**  
+   - Current: Advance to next verse (after end-of-verse detection) is not working reliably; to fix later.
+
+2. **Improve cross-chapter / cross-book jump by content**  
    - Goal: When user says rephrased content of a verse in another chapter or book (e.g. Romans 8:28 while on Romans 1), reliably jump to that verse.  
    - Current: In-chapter jump works; cross-chapter/cross-book often does not.  
    - Ideas: Tune threshold, candidate set, or run full-Bible path more often; consider precomputed verse embeddings (pgvector) for lower latency and better recall.
 
-2. **Reduce Bible verse latency**  
+3. **Reduce Bible verse latency**  
    - User-reported: Bible verse path feels slow.  
    - Goal: Measure and optimize without breaking behavior.  
    - Ideas: Throttle embedding calls (e.g. don’t run on every transcript chunk), cache embeddings for current/next verse in session, or move to precomputed verse embeddings so only the buffer is embedded at request time.
 
-3. **Brainstorm: Open-source semantic instead of/in addition to OpenAI**  
+4. **Brainstorm: Open-source semantic instead of/in addition to OpenAI**  
    - Goal: Explore running a small open-source embedding/semantic model (e.g. from Hugging Face) inside Node.js or an Edge Function to reduce cost or latency, or for on-prem.  
    - To do: Identify a suitable model (e.g. sentence-transformers style), check runnability in Node/Edge, and document options for a future session.
 

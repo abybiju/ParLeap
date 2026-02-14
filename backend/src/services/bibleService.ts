@@ -50,12 +50,24 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Normalize text for Bible reference parsing: lowercase, ordinals, and
+ * STT homophones (e.g. "won" → 1 so "daniel won" parses as Daniel 1).
+ * We do not replace "to" with 2 so that "verse 1 to 3" range syntax is preserved.
+ */
 function normalizeReferenceText(input: string) {
   return input
     .toLowerCase()
-    .replace(/\b(first|1st)\b/g, '1')
-    .replace(/\b(second|2nd)\b/g, '2')
+    .replace(/\b(first|1st|one|won)\b/g, '1')
+    .replace(/\b(second|2nd|two|too)\b/g, '2')
     .replace(/\b(third|3rd)\b/g, '3')
+    .replace(/\b(for|four)\b/g, '4')
+    .replace(/\bfive\b/g, '5')
+    .replace(/\bsix\b/g, '6')
+    .replace(/\bseven\b/g, '7')
+    .replace(/\b(ate|eight)\b/g, '8')
+    .replace(/\bnine\b/g, '9')
+    .replace(/\bten\b/g, '10')
     .replace(/[\u2013\u2014]/g, '-')
     .replace(/[\u2019']/g, '')
     .replace(/[^a-z0-9:\s-]/g, ' ')
