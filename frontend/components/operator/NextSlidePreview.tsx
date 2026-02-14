@@ -16,6 +16,9 @@ export function NextSlidePreview() {
   const [nextSlideLines, setNextSlideLines] = useState<string[] | null>(null);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(0);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
+  const [bibleNextVerseText, setBibleNextVerseText] = useState<string | null>(null);
+  const [bibleNextVerseRef, setBibleNextVerseRef] = useState<string | null>(null);
+  const [displayIsBible, setDisplayIsBible] = useState(false);
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -23,14 +26,20 @@ export function NextSlidePreview() {
     if (isSessionStartedMessage(lastMessage)) {
       setCurrentSongIndex(lastMessage.payload.currentSongIndex);
       setCurrentSlideIndex(lastMessage.payload.currentSlideIndex);
+      setDisplayIsBible(false);
     }
 
     if (isDisplayUpdateMessage(lastMessage)) {
       const displayMsg = lastMessage as DisplayUpdateMessage;
+      const isBible = displayMsg.payload.songId?.startsWith('bible:') ?? false;
+      setDisplayIsBible(isBible);
+      if (isBible) {
+        setBibleNextVerseText(displayMsg.payload.nextVerseText ?? null);
+        setBibleNextVerseRef(displayMsg.payload.nextVerseRef ?? null);
+      }
       setCurrentSlideIndex(displayMsg.payload.slideIndex);
-      
-      // Find current song index from setlist
-      if (slideCache.setlist) {
+
+      if (!isBible && slideCache.setlist) {
         const songIndex = slideCache.setlist.songs.findIndex(
           (s) => s.id === displayMsg.payload.songId
         );
@@ -42,6 +51,9 @@ export function NextSlidePreview() {
   }, [lastMessage, slideCache.setlist]);
 
   useEffect(() => {
+    if (displayIsBible) {
+      return;
+    }
     if (!slideCache.setlist) {
       setNextSlideLines(null);
       return;
@@ -83,7 +95,23 @@ export function NextSlidePreview() {
 
     // No next slide
     setNextSlideLines(null);
-  }, [slideCache.setlist, currentSongIndex, currentSlideIndex]);
+  }, [displayIsBible, slideCache.setlist, currentSongIndex, currentSlideIndex]);
+
+  if (displayIsBible) {
+    const label = bibleNextVerseRef ? `Next verse (${bibleNextVerseRef})` : 'Next verse';
+    return (
+      <div className="p-3 rounded-xl border border-white/10 bg-white/5">
+        <p className="text-[11px] text-slate-400 uppercase tracking-[0.2em] mb-1.5">{label}</p>
+        {bibleNextVerseText ? (
+          <p className="text-sm text-slate-300 font-light leading-snug whitespace-pre-wrap">
+            {bibleNextVerseText}
+          </p>
+        ) : (
+          <p className="text-sm text-slate-500 italic">End of passage</p>
+        )}
+      </div>
+    );
+  }
 
   if (!nextSlideLines || nextSlideLines.length === 0) {
     return (

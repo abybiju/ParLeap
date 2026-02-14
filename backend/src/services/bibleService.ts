@@ -115,6 +115,12 @@ export function findBibleReference(input: string): BibleReference | null {
       }
     }
 
+    // Book-only: "Daniel", "Psalm" → chapter 1, verse 1
+    if ((!chapter || !verse) && after.trim() === '') {
+      chapter = 1;
+      verse = 1;
+    }
+
     if (!chapter || !verse) continue;
     if (endVerse !== null && endVerse < verse) {
       endVerse = null;
