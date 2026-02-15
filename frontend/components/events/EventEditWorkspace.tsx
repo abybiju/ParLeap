@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { EventEditSidebar } from './EventEditSidebar';
 import { SetlistView } from './SetlistView';
 import { SetlistLibrary } from './SetlistLibrary';
 import {
@@ -12,7 +13,13 @@ import {
   removeSetlistItem,
   reorderEventItems,
 } from '@/app/events/actions';
-import type { SetlistItem } from '@/lib/types/setlist';
+import type {
+  SetlistItem,
+  SongSetlistItem,
+  BibleSetlistItem,
+  MediaSetlistItem,
+  AnnouncementSetlistItem,
+} from '@/lib/types/setlist';
 import type { AnnouncementSlideInput } from '@/lib/types/setlist';
 import { isSongItem } from '@/lib/types/setlist';
 
@@ -22,29 +29,37 @@ interface SongOption {
   artist: string | null;
 }
 
-interface SetlistBuilderProps {
-  eventId: string;
+interface EventEditWorkspaceProps {
+  event: {
+    id: string;
+    name: string;
+    event_date: string | null;
+    status: 'draft' | 'live' | 'ended';
+  };
   initialSetlist: SetlistItem[];
   songs: SongOption[];
 }
 
-/**
- * Two-column Setlist Builder (Setlist | Library).
- * For the event edit page, EventEditWorkspace is used instead (Spotify-style sidebar + full-width views).
- * This component is kept for reuse elsewhere if needed.
- */
-export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilderProps) {
+type WorkspaceView = 'setlist' | 'library';
+
+export function EventEditWorkspace({ event, initialSetlist, songs }: EventEditWorkspaceProps) {
+  const [activeView, setActiveView] = useState<WorkspaceView>('setlist');
   const [setlistItems, setSetlistItems] = useState<SetlistItem[]>(initialSetlist);
   const [, startTransition] = useTransition();
+  const eventId = event.id;
 
   const handleReorder = (orderedIds: string[]) => {
     const orderMap = new Map(orderedIds.map((id, i) => [id, i + 1]));
     const reordered = [...setlistItems].sort(
       (a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0)
     );
-    const resequenced = reordered.map((item, index) => ({ ...item, sequenceOrder: index + 1 }));
+    const resequenced = reordered.map((item, index) => ({
+      ...item,
+      sequenceOrder: index + 1,
+    }));
 
     setSetlistItems(resequenced);
+
     startTransition(async () => {
       const result = await reorderEventItems(eventId, orderedIds);
       if (!result.success) {
@@ -63,10 +78,21 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         toast.error(result.error || 'Failed to remove item');
         return;
       }
+
       const remaining = setlistItems.filter((entry) => entry.id !== item.id);
-      const resequenced = remaining.map((entry, index) => ({ ...entry, sequenceOrder: index + 1 }));
+      const resequenced = remaining.map((entry, index) => ({
+        ...entry,
+        sequenceOrder: index + 1,
+      }));
       setSetlistItems(resequenced);
-      await reorderEventItems(eventId, resequenced.map((i) => i.id));
+
+      const reorderResult = await reorderEventItems(
+        eventId,
+        resequenced.map((i) => i.id)
+      );
+      if (!reorderResult.success) {
+        toast.error('Item removed but order update failed');
+      }
       toast.success('Item removed');
     });
   };
@@ -74,6 +100,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
   const handleAddSong = (songId: string) => {
     const song = songs.find((s) => s.id === songId);
     if (!song) return;
+
     const nextOrder = setlistItems.length + 1;
     startTransition(async () => {
       const result = await addSongToEvent(eventId, songId, nextOrder);
@@ -81,18 +108,17 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         toast.error(result.error || 'Failed to add song');
         return;
       }
-      setSetlistItems((prev) => [
-        ...prev,
-        {
-          id: result.id as string,
-          eventId,
-          itemType: 'SONG' as const,
-          songId: song.id,
-          title: song.title,
-          artist: song.artist,
-          sequenceOrder: nextOrder,
-        },
-      ]);
+
+      const newItem: SongSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'SONG',
+        songId: song.id,
+        title: song.title,
+        artist: song.artist,
+        sequenceOrder: nextOrder,
+      };
+      setSetlistItems((prev) => [...prev, newItem]);
       toast.success('Song added to setlist');
     });
   };
@@ -105,10 +131,15 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         toast.error(result.error || 'Failed to add Bible segment');
         return;
       }
-      setSetlistItems((prev) => [
-        ...prev,
-        { id: result.id as string, eventId, itemType: 'BIBLE' as const, bibleRef, sequenceOrder: nextOrder },
-      ]);
+
+      const newItem: BibleSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'BIBLE',
+        bibleRef,
+        sequenceOrder: nextOrder,
+      };
+      setSetlistItems((prev) => [...prev, newItem]);
       toast.success('Bible segment added to setlist');
     });
   };
@@ -121,10 +152,16 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         toast.error(result.error || 'Failed to add media');
         return;
       }
-      setSetlistItems((prev) => [
-        ...prev,
-        { id: result.id as string, eventId, itemType: 'MEDIA' as const, mediaUrl, mediaTitle, sequenceOrder: nextOrder },
-      ]);
+
+      const newItem: MediaSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'MEDIA',
+        mediaUrl,
+        mediaTitle,
+        sequenceOrder: nextOrder,
+      };
+      setSetlistItems((prev) => [...prev, newItem]);
       toast.success('Media added to setlist');
     });
   };
@@ -137,39 +174,45 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         toast.error(result.error || 'Failed to add announcement');
         return;
       }
-      setSetlistItems((prev) => [
-        ...prev,
-        { id: result.id as string, eventId, itemType: 'ANNOUNCEMENT' as const, announcementSlides: slides, sequenceOrder: nextOrder },
-      ]);
+
+      const newItem: AnnouncementSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'ANNOUNCEMENT',
+        announcementSlides: slides,
+        sequenceOrder: nextOrder,
+      };
+      setSetlistItems((prev) => [...prev, newItem]);
       toast.success('Announcement added to setlist');
     });
   };
 
   return (
-    <div className="glass-card rounded-2xl p-6 shadow-xl shadow-slate-900/40">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-white">Setlist Builder</h2>
-        <p className="text-sm text-slate-300">
-          Drag items to reorder. Add songs, Bible, or media from the library.
-        </p>
-      </div>
+    <div className="flex w-full min-h-[calc(100vh-8rem)] gap-6">
+      <EventEditSidebar
+        event={event}
+        setlistItemCount={setlistItems.length}
+        activeView={activeView}
+        onViewChange={setActiveView}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[400px] max-h-[70vh]">
-        <div className="flex flex-col min-h-0">
-          <h3 className="text-sm font-medium text-slate-300 mb-3">Setlist</h3>
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <SetlistView
-              eventId={eventId}
-              setlistItems={setlistItems}
-              onRemove={handleRemove}
-              onReorder={handleReorder}
-              showHeader={false}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col min-h-0">
-          <h3 className="text-sm font-medium text-slate-300 mb-3">Library</h3>
-          <div className="flex-1 min-h-0 rounded-lg border border-white/10 bg-slate-900/40 p-4 overflow-y-auto">
+      <main className="flex-1 min-w-0 overflow-y-auto">
+        {activeView === 'setlist' && (
+          <SetlistView
+            eventId={eventId}
+            setlistItems={setlistItems}
+            onRemove={handleRemove}
+            onReorder={handleReorder}
+          />
+        )}
+        {activeView === 'library' && (
+          <div className="glass-card rounded-2xl p-6 shadow-xl shadow-slate-900/40">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold text-white">Content Library</h2>
+              <p className="text-sm text-slate-300">
+                Add songs, Bible segments, media, or announcements to the setlist.
+              </p>
+            </div>
             <SetlistLibrary
               songs={songs}
               setlistItems={setlistItems.map((item) => ({
@@ -183,8 +226,8 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
               onAddAnnouncement={handleAddAnnouncement}
             />
           </div>
-        </div>
-      </div>
+        )}
+      </main>
     </div>
   );
 }
