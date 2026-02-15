@@ -25,10 +25,18 @@ export interface SongData {
   slideConfig?: SlideConfig; // Applied config (for reference)
 }
 
-export interface AnnouncementSlideData {
-  url: string;
-  type: 'image' | 'video';
+export interface AnnouncementStructuredText {
   title?: string;
+  subtitle?: string;
+  date?: string;
+  lines?: string[];
+}
+
+export interface AnnouncementSlideData {
+  url?: string;
+  type?: 'image' | 'video';
+  title?: string;
+  structuredText?: AnnouncementStructuredText;
 }
 
 export interface SetlistItemData {
