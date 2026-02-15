@@ -197,7 +197,7 @@ export function EventEditWorkspace({ event, initialSetlist, songs }: EventEditWo
         onViewChange={setActiveView}
       />
 
-      <main className="flex-1 min-w-0 overflow-y-auto">
+      <main className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
         <AnimatePresence mode="wait">
           {activeView === 'setlist' && (
             <motion.div
