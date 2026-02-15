@@ -74,26 +74,26 @@ export default async function LivePage({ params }: LivePageProps) {
     notFound()
   }
 
-  // Fetch event_items for pre-session setlist (with polymorphic support)
-  // Try new schema first, fallback to old schema for backward compatibility
+  // Fetch event_items for pre-session setlist (with polymorphic support, including announcement_slides)
+  let items: any[] = []
   const { data: eventItems, error: itemsError } = await supabase
     .from('event_items')
-    .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title, songs(id, title, artist)')
+    .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title, announcement_slides, songs(id, title, artist)')
     .eq('event_id', params.id)
     .order('sequence_order', { ascending: true })
 
-  // If new columns don't exist, fallback to old query
-  let items: any[] = eventItems || [];
   if (itemsError && itemsError.code === '42703') {
-    const { data: oldItems } = await supabase
+    const { data: fallbackItems } = await supabase
       .from('event_items')
-      .select('id, sequence_order, song_id, songs(id, title, artist)')
+      .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title, songs(id, title, artist)')
       .eq('event_id', params.id)
-      .order('sequence_order', { ascending: true });
-    items = oldItems || [];
+      .order('sequence_order', { ascending: true })
+    items = fallbackItems ?? []
+  } else {
+    items = eventItems ?? []
   }
 
-  // Build initial setlist (polymorphic: songs, Bible, media) for display before session starts
+  // Build initial setlist (polymorphic: songs, Bible, media, announcement) for display before session starts
   type SetlistItemRow = {
     id: string
     sequence_order: number
@@ -102,11 +102,18 @@ export default async function LivePage({ params }: LivePageProps) {
     bible_ref?: string | null
     media_url?: string | null
     media_title?: string | null
+    announcement_slides?: Array<{ url: string; type: string; title?: string }> | null
     songs: { id: string; title: string; artist: string | null } | null
   }
   const initialSetlist = (items ?? [])
     .map((item: SetlistItemRow) => {
-      const itemType = item.item_type || (item.song_id ? 'SONG' : null) || (item.bible_ref ? 'BIBLE' : null) || (item.media_url ? 'MEDIA' : null) || 'SONG'
+      const itemType =
+        item.item_type ||
+        (item.song_id ? 'SONG' : null) ||
+        (item.bible_ref ? 'BIBLE' : null) ||
+        (item.media_url ? 'MEDIA' : null) ||
+        (item.announcement_slides && Array.isArray(item.announcement_slides) && item.announcement_slides.length > 0 ? 'ANNOUNCEMENT' : null) ||
+        'SONG'
       if (itemType === 'SONG') {
         const song = item.songs
         if (!song) return null
@@ -117,6 +124,9 @@ export default async function LivePage({ params }: LivePageProps) {
       }
       if (itemType === 'MEDIA' && item.media_url) {
         return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.media_title ?? 'Media', mediaUrl: item.media_url, sequenceOrder: item.sequence_order }
+      }
+      if (itemType === 'ANNOUNCEMENT' && item.announcement_slides && item.announcement_slides.length > 0) {
+        return { kind: 'ANNOUNCEMENT' as const, id: item.id, slideCount: item.announcement_slides.length, sequenceOrder: item.sequence_order }
       }
       return null
     })

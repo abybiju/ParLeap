@@ -1,10 +1,16 @@
 /**
  * Setlist Type Definitions
- * 
- * Defines polymorphic setlist items that can be Songs, Bible references, or Media items
+ *
+ * Defines polymorphic setlist items that can be Songs, Bible references, Media, or Announcements
  */
 
-export type SetlistItemType = 'SONG' | 'BIBLE' | 'MEDIA';
+export type SetlistItemType = 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT';
+
+export interface AnnouncementSlideInput {
+  url: string;
+  type: 'image' | 'video';
+  title?: string;
+}
 
 export interface BaseSetlistItem {
   id: string;
@@ -31,7 +37,12 @@ export interface MediaSetlistItem extends BaseSetlistItem {
   mediaTitle: string;
 }
 
-export type SetlistItem = SongSetlistItem | BibleSetlistItem | MediaSetlistItem;
+export interface AnnouncementSetlistItem extends BaseSetlistItem {
+  itemType: 'ANNOUNCEMENT';
+  announcementSlides: AnnouncementSlideInput[];
+}
+
+export type SetlistItem = SongSetlistItem | BibleSetlistItem | MediaSetlistItem | AnnouncementSetlistItem;
 
 /**
  * Type guard functions
@@ -46,4 +57,8 @@ export function isBibleItem(item: SetlistItem): item is BibleSetlistItem {
 
 export function isMediaItem(item: SetlistItem): item is MediaSetlistItem {
   return item.itemType === 'MEDIA';
+}
+
+export function isAnnouncementItem(item: SetlistItem): item is AnnouncementSetlistItem {
+  return item.itemType === 'ANNOUNCEMENT';
 }

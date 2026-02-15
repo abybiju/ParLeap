@@ -159,11 +159,17 @@ export interface DisplayUpdateMessage {
     songTitle: string;
     matchConfidence?: number;
     isAutoAdvance: boolean;
-    currentItemIndex?: number; // Index in polymorphic setlist (songs, Bible, media)
+    currentItemIndex?: number; // Index in polymorphic setlist (songs, Bible, media, announcement)
     /** Next verse text for Bible (operator next-slide preview) */
     nextVerseText?: string;
     /** Next verse reference e.g. "Romans 1:4" for Bible */
     nextVerseRef?: string;
+    /** For ANNOUNCEMENT: image URL to show full-screen */
+    slideImageUrl?: string;
+    /** For ANNOUNCEMENT: video URL to show full-screen */
+    slideVideoUrl?: string;
+    /** Display mode: lyrics (default), image, or video */
+    displayType?: 'lyrics' | 'image' | 'video';
   };
   timing?: TimingMetadata;
 }

@@ -81,9 +81,18 @@ Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
 - **Password reset**: `SESSION_SUMMARY_PASSWORD_RESET.md`
 - **Bible/Smart Listen**: `SESSION_SUMMARY_FEB_11_2026.md`
 
+### To-Do List (see PROJECT_PLAN.md § To-Do List)
+- Brainstorm semantic AI / Hugging Face (open-source embeddings in Node/Edge)
+- Work on humming search feature (Hum-to-Search; see `HUM_SEARCH_STATUS.md`)
+- Background visuals for projector view (optional image/video/motion layer; see `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md`)
+- Announcement slides + Ideogram AI (announcement slide type; prompt → Ideogram API → add to slides; see Ideogram API docs)
+- Expand projector font options (e.g. Google Fonts API or other APIs)
+
 ### Important Files
-- `PROJECT_PLAN.md` - Master roadmap
+- `PROJECT_PLAN.md` - Master roadmap and to-do list
+- `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md` - Background visuals and announcement slides (ProPresenter/ProContent context, ParLeap roadmap)
 - `BIBLE_SEMANTIC_BACKLOG.md` - Bible semantic shipped behavior and backlog (cross-chapter jump, latency, open-source semantic brainstorm)
+- `HUM_SEARCH_STATUS.md` - Hum-to-Search status and next steps
 - `TESTING_INFRASTRUCTURE_COMPLETE.md` - Test coverage details
 - `.cursorrules` - Full architecture specification
 - `CLAWDBOT_INSTRUCTIONS.md` - Operational directives for autonomous AI work (Governor System)

@@ -25,14 +25,21 @@ export interface SongData {
   slideConfig?: SlideConfig; // Applied config (for reference)
 }
 
+export interface AnnouncementSlideData {
+  url: string;
+  type: 'image' | 'video';
+  title?: string;
+}
+
 export interface SetlistItemData {
   id: string;
-  type: 'SONG' | 'BIBLE' | 'MEDIA';
+  type: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT';
   sequenceOrder: number;
   songId?: string;
   bibleRef?: string;
   mediaUrl?: string;
   mediaTitle?: string;
+  announcementSlides?: AnnouncementSlideData[];
 }
 
 export interface EventData {
@@ -144,13 +151,14 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       bible_ref?: string | null;
       media_url?: string | null;
       media_title?: string | null;
+      announcement_slides?: AnnouncementSlideData[] | null;
     }> | null = null;
     const songsMap: Map<string, { id: string; title: string; artist: string | null; lyrics: string; slide_config?: SlideConfig; ccli_number?: string | null }> = new Map();
 
     // Query 1: Fetch ALL event_items WITHOUT the songs() embed (avoids INNER JOIN issue)
     const { data: allItems, error: itemsError } = await supabase
       .from('event_items')
-      .select('id, sequence_order, item_type, song_id, slide_config_override, bible_ref, media_url, media_title')
+      .select('id, sequence_order, item_type, song_id, slide_config_override, bible_ref, media_url, media_title, announcement_slides')
       .eq('event_id', eventId)
       .order('sequence_order', { ascending: true });
 
@@ -242,15 +250,20 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         (item.song_id ? 'SONG' : null) ||
         (item.bible_ref ? 'BIBLE' : null) ||
         (item.media_url ? 'MEDIA' : null) ||
+        (item.announcement_slides && Array.isArray(item.announcement_slides) && item.announcement_slides.length > 0 ? 'ANNOUNCEMENT' : null) ||
         'SONG';
+      const slides = item.announcement_slides && Array.isArray(item.announcement_slides)
+        ? (item.announcement_slides as AnnouncementSlideData[])
+        : undefined;
       return {
         id: item.id,
-        type: itemType as 'SONG' | 'BIBLE' | 'MEDIA',
+        type: itemType as 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT',
         sequenceOrder: item.sequence_order,
         songId: itemType === 'SONG' ? (item.song_id || undefined) : undefined,
         bibleRef: itemType === 'BIBLE' ? (item.bible_ref || undefined) : undefined,
         mediaUrl: itemType === 'MEDIA' ? (item.media_url || undefined) : undefined,
         mediaTitle: itemType === 'MEDIA' ? (item.media_title || undefined) : undefined,
+        announcementSlides: itemType === 'ANNOUNCEMENT' ? slides : undefined,
       };
     });
 

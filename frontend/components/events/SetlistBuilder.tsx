@@ -25,10 +25,12 @@ import {
   addSongToEvent,
   addBibleToEvent,
   addMediaToEvent,
+  addAnnouncementToEvent,
   removeSetlistItem,
   reorderEventItems,
 } from '@/app/events/actions';
-import type { SetlistItem, SongSetlistItem, BibleSetlistItem, MediaSetlistItem } from '@/lib/types/setlist';
+import type { SetlistItem, SongSetlistItem, BibleSetlistItem, MediaSetlistItem, AnnouncementSetlistItem } from '@/lib/types/setlist';
+import type { AnnouncementSlideInput } from '@/lib/types/setlist';
 import { isSongItem } from '@/lib/types/setlist';
 
 interface SongOption {
@@ -198,6 +200,28 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
     });
   };
 
+  const handleAddAnnouncement = (slides: AnnouncementSlideInput[]) => {
+    const nextOrder = setlistItems.length + 1;
+    startTransition(async () => {
+      const result = await addAnnouncementToEvent(eventId, slides, nextOrder);
+      if (!result.success) {
+        toast.error(result.error || 'Failed to add announcement');
+        return;
+      }
+
+      const newItem: AnnouncementSetlistItem = {
+        id: result.id as string,
+        eventId,
+        itemType: 'ANNOUNCEMENT',
+        announcementSlides: slides,
+        sequenceOrder: nextOrder,
+      };
+
+      setSetlistItems((prev) => [...prev, newItem]);
+      toast.success('Announcement added to setlist');
+    });
+  };
+
   const handleRemove = (item: SetlistItem) => {
     startTransition(async () => {
       const result = await removeSetlistItem(eventId, item.id);
@@ -288,6 +312,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
               onAddSong={handleAddSong}
               onAddBible={handleAddBible}
               onAddMedia={handleAddMedia}
+              onAddAnnouncement={handleAddAnnouncement}
             />
           </div>
         </div>

@@ -1,10 +1,10 @@
 'use client';
 
-import { GripVertical, Music, BookOpen, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { GripVertical, Music, BookOpen, Image as ImageIcon, Megaphone, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { SetlistItem } from '@/lib/types/setlist';
-import { isSongItem, isBibleItem, isMediaItem } from '@/lib/types/setlist';
+import { isSongItem, isBibleItem, isMediaItem, isAnnouncementItem } from '@/lib/types/setlist';
 
 interface SetlistItemCardProps {
   item: SetlistItem;
@@ -22,6 +22,7 @@ export function SetlistItemCard({ item, onRemove, isDragging, className, dragLis
     if (isSongItem(item)) return <Music className="h-4 w-4" />;
     if (isBibleItem(item)) return <BookOpen className="h-4 w-4" />;
     if (isMediaItem(item)) return <ImageIcon className="h-4 w-4" aria-label="Media" />;
+    if (isAnnouncementItem(item)) return <Megaphone className="h-4 w-4" aria-label="Announcement" />;
     return null;
   };
 
@@ -29,6 +30,7 @@ export function SetlistItemCard({ item, onRemove, isDragging, className, dragLis
     if (isSongItem(item)) return 'border-blue-400/50 bg-blue-500/10';
     if (isBibleItem(item)) return 'border-purple-400/50 bg-purple-500/10';
     if (isMediaItem(item)) return 'border-green-400/50 bg-green-500/10';
+    if (isAnnouncementItem(item)) return 'border-amber-400/50 bg-amber-500/10';
     return 'border-white/10 bg-slate-900/40';
   };
 
@@ -67,6 +69,20 @@ export function SetlistItemCard({ item, onRemove, isDragging, className, dragLis
               {item.sequenceOrder}. {item.mediaTitle}
             </p>
             <p className="text-xs text-slate-400 truncate max-w-[200px]">{item.mediaUrl}</p>
+          </div>
+        </>
+      );
+    }
+
+    if (isAnnouncementItem(item)) {
+      const count = item.announcementSlides?.length ?? 0;
+      return (
+        <>
+          <div>
+            <p className="text-sm font-medium text-white">
+              {item.sequenceOrder}. Announcement
+            </p>
+            <p className="text-xs text-slate-400">{count} slide{count !== 1 ? 's' : ''}</p>
           </div>
         </>
       );
