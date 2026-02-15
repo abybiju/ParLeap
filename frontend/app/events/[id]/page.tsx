@@ -126,7 +126,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
 
   return (
     <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <main className="mx-auto max-w-5xl px-6 py-10 space-y-8">
+      <main className="mx-auto max-w-5xl px-6 py-10 space-y-10">
         {/* Back to Dashboard Button */}
         <Link
           href="/dashboard"
@@ -136,8 +136,18 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           Back to Dashboard
         </Link>
 
-        <EventForm mode="edit" event={event} />
-        <SetlistBuilder eventId={params.id} initialSetlist={setlist} songs={songs ?? []} />
+        {/* Event details section */}
+        <section aria-labelledby="event-details-heading">
+          <EventForm mode="edit" event={event} />
+        </section>
+
+        {/* Setlist section */}
+        <section aria-labelledby="setlist-heading" className="space-y-2">
+          <h2 id="setlist-heading" className="text-sm font-medium text-slate-400">
+            Setlist
+          </h2>
+          <SetlistBuilder eventId={params.id} initialSetlist={setlist} songs={songs ?? []} />
+        </section>
       </main>
     </AppPageWrapper>
   );

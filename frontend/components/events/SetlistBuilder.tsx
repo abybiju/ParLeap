@@ -252,7 +252,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-slate-900/40 backdrop-blur">
+    <div className="glass-card rounded-2xl p-6 shadow-xl shadow-slate-900/40">
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-white">Setlist Builder</h2>
         <p className="text-sm text-slate-300">
@@ -260,12 +260,12 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         </p>
       </div>
 
-      {/* Split Screen Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[500px]">
+      {/* Split Screen Layout: both columns scroll inside panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[400px] max-h-[70vh]">
         {/* Left: Setlist */}
-        <div className="flex flex-col">
+        <div className="flex flex-col min-h-0">
           <h3 className="text-sm font-medium text-slate-300 mb-3">Setlist</h3>
-          <div className="flex-1 rounded-lg border border-white/10 bg-slate-900/40 p-4 overflow-y-auto">
+          <div className="flex-1 min-h-0 rounded-lg border border-white/10 bg-slate-900/40 p-4 overflow-y-auto">
             {setlistItems.length === 0 ? (
               <div className="flex items-center justify-center h-full text-center text-slate-400 py-8">
                 <div>
@@ -299,9 +299,9 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
         </div>
 
         {/* Right: Library */}
-        <div className="flex flex-col">
+        <div className="flex flex-col min-h-0">
           <h3 className="text-sm font-medium text-slate-300 mb-3">Library</h3>
-          <div className="flex-1 rounded-lg border border-white/10 bg-slate-900/40 p-4">
+          <div className="flex-1 min-h-0 rounded-lg border border-white/10 bg-slate-900/40 p-4 overflow-y-auto">
             <SetlistLibrary
               songs={songs}
               setlistItems={setlistItems.map((item) => ({

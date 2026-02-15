@@ -92,7 +92,7 @@ export function EventForm({ mode, event }: EventFormProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-slate-900/40 backdrop-blur">
+    <div className="glass-card rounded-2xl p-6 shadow-xl shadow-slate-900/40">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">{title}</h1>
