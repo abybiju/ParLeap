@@ -189,7 +189,76 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
 
   const { lineText, slideText, slideLines, songTitle, slideIndex, slideImageUrl, slideVideoUrl } = currentSlide.payload;
 
-  // Announcement: full-screen image or video
+  const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
+  const hasStructuredText = displayLines.length > 0;
+
+  // Announcement: image or video with optional structured text overlay (exact wording on top)
+  if (slideImageUrl && hasStructuredText) {
+    return (
+      <div className="h-screen w-screen relative flex items-center justify-center bg-black overflow-hidden">
+        <img
+          src={slideImageUrl}
+          alt=""
+          className={cn(
+            'absolute inset-0 w-full h-full object-cover opacity-40 transition-opacity duration-300',
+            isTransitioning ? 'opacity-0' : 'opacity-40'
+          )}
+        />
+        <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-6xl px-8 text-center text-white">
+          {songTitle && (
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-light text-slate-300 mb-6">
+              {songTitle}
+            </h2>
+          )}
+          <div className={cn('flex flex-col items-center justify-center space-y-4 md:space-y-6', getProjectorFontClass(projectorFontId))}>
+            {displayLines.map((line, index) => (
+              <p
+                key={index}
+                className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-light leading-relaxed text-white"
+                style={{ textShadow: '0 2px 20px rgba(0, 0, 0, 0.5)' }}
+              >
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (slideVideoUrl && hasStructuredText) {
+    return (
+      <div className="h-screen w-screen relative flex items-center justify-center bg-black overflow-hidden">
+        <video
+          src={slideVideoUrl}
+          className="absolute inset-0 w-full h-full object-cover opacity-30"
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+        <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-6xl px-8 text-center text-white">
+          {songTitle && (
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-light text-slate-300 mb-6">
+              {songTitle}
+            </h2>
+          )}
+          <div className={cn('flex flex-col items-center justify-center space-y-4 md:space-y-6', getProjectorFontClass(projectorFontId))}>
+            {displayLines.map((line, index) => (
+              <p
+                key={index}
+                className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-light leading-relaxed text-white"
+                style={{ textShadow: '0 2px 20px rgba(0, 0, 0, 0.5)' }}
+              >
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Announcement: image or video only (no structured text)
   if (slideImageUrl) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-black overflow-hidden">
@@ -221,9 +290,6 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       </div>
     );
   }
-
-  // Use slideLines if available, otherwise fall back to slideText or lineText
-  const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
   
   // Debug logging
   if (process.env.NODE_ENV === 'development') {

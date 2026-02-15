@@ -5,7 +5,7 @@ import { Music, Image as ImageIcon, BookOpen, Plus, Megaphone, Trash2, Link2, Up
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import type { AnnouncementSlideInput } from '@/lib/types/setlist';
+import type { AnnouncementSlideInput, AnnouncementStructuredText } from '@/lib/types/setlist';
 
 type TabType = 'songs' | 'bible' | 'media' | 'announcement';
 type AnnouncementSourceType = 'url' | 'device' | 'drive' | 'ideogram';
@@ -36,7 +36,14 @@ export function SetlistLibrary({
   const [activeTab, setActiveTab] = useState<TabType>('songs');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaTitle, setMediaTitle] = useState('');
-  const [announcementSlides, setAnnouncementSlides] = useState<Array<{ url: string; type: 'image' | 'video'; title: string }>>([{ url: '', type: 'image', title: '' }]);
+  type AnnouncementSlideState = {
+    url: string;
+    type: 'image' | 'video';
+    title: string;
+    structuredText?: AnnouncementStructuredText;
+  };
+  const defaultSlide = (): AnnouncementSlideState => ({ url: '', type: 'image', title: '' });
+  const [announcementSlides, setAnnouncementSlides] = useState<AnnouncementSlideState[]>([defaultSlide()]);
   const [announcementSource, setAnnouncementSource] = useState<AnnouncementSourceType>('url');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [driveLink, setDriveLink] = useState('');
@@ -59,24 +66,65 @@ export function SetlistLibrary({
     }
   };
 
+  const hasStructuredText = (s: AnnouncementSlideState) => {
+    const st = s.structuredText;
+    if (!st) return false;
+    if (st.title?.trim()) return true;
+    if (st.subtitle?.trim()) return true;
+    if (st.date?.trim()) return true;
+    if (st.lines?.some((l) => (l ?? '').trim())) return true;
+    return false;
+  };
+  const isValidSlide = (s: AnnouncementSlideState) =>
+    (s.url?.trim() && (s.type === 'image' || s.type === 'video')) || hasStructuredText(s);
   const handleAnnouncementAddToSetlist = () => {
-    const valid = announcementSlides.filter((s) => s.url.trim());
+    const valid = announcementSlides.filter(isValidSlide).map((s) => {
+      const out: AnnouncementSlideInput = {};
+      if (s.url?.trim() && (s.type === 'image' || s.type === 'video')) {
+        out.url = s.url.trim();
+        out.type = s.type;
+        if (s.title?.trim()) out.title = s.title.trim();
+      }
+      if (hasStructuredText(s) && s.structuredText) {
+        out.structuredText = {
+          title: s.structuredText.title?.trim() || undefined,
+          subtitle: s.structuredText.subtitle?.trim() || undefined,
+          date: s.structuredText.date?.trim() || undefined,
+          lines: s.structuredText.lines?.map((l) => (l ?? '').trim()).filter(Boolean),
+        };
+        if (out.structuredText.lines?.length === 0) delete out.structuredText.lines;
+      }
+      return out;
+    });
     if (valid.length > 0) {
-      onAddAnnouncement(
-        valid.map((s) => ({ url: s.url.trim(), type: s.type, title: s.title.trim() || undefined }))
-      );
-      setAnnouncementSlides([{ url: '', type: 'image', title: '' }]);
+      onAddAnnouncement(valid);
+      setAnnouncementSlides([defaultSlide()]);
     }
   };
 
-  const hasUrlSlides = announcementSlides.some((s) => s.url.trim());
-  const canAddAnnouncementToSetlist = hasUrlSlides;
+  const canAddAnnouncementToSetlist = announcementSlides.some(isValidSlide);
 
   const addDriveLinkAsSlide = () => {
     if (driveLink.trim()) {
       setAnnouncementSlides((prev) => [...prev, { url: driveLink.trim(), type: 'image', title: '' }]);
       setDriveLink('');
     }
+  };
+
+  const updateSlideStructuredText = (index: number, field: keyof AnnouncementStructuredText, value: string | string[]) => {
+    setAnnouncementSlides((prev) =>
+      prev.map((s, i) =>
+        i !== index
+          ? s
+          : {
+              ...s,
+              structuredText: {
+                ...s.structuredText,
+                [field]: value,
+              },
+            }
+      )
+    );
   };
 
   const handleDeviceDrop = useCallback((e: React.DragEvent) => {
@@ -361,6 +409,49 @@ export function SetlistLibrary({
                         }
                         className="bg-slate-900/60 border-white/10 text-white text-sm"
                       />
+                      {/* Exact wording – operator-typed text shown on projector to avoid AI/image typos */}
+                      <div className="mt-3 pt-3 border-t border-white/10">
+                        <p className="text-xs text-slate-400 mb-2">Exact wording (recommended for names, dates)</p>
+                        <Input
+                          type="text"
+                          placeholder="Heading"
+                          value={slide.structuredText?.title ?? ''}
+                          onChange={(e) => updateSlideStructuredText(index, 'title', e.target.value)}
+                          className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Subtitle (optional)"
+                          value={slide.structuredText?.subtitle ?? ''}
+                          onChange={(e) => updateSlideStructuredText(index, 'subtitle', e.target.value)}
+                          className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Date (optional)"
+                          value={slide.structuredText?.date ?? ''}
+                          onChange={(e) => updateSlideStructuredText(index, 'date', e.target.value)}
+                          className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                        />
+                        {[0, 1, 2, 3].map((li) => {
+                          const lines = slide.structuredText?.lines ?? [];
+                          return (
+                            <Input
+                              key={li}
+                              type="text"
+                              placeholder={`Line ${li + 1} (optional)`}
+                              value={lines[li] ?? ''}
+                              onChange={(e) => {
+                                const next = [...lines];
+                                while (next.length <= li) next.push('');
+                                next[li] = e.target.value;
+                                updateSlideStructuredText(index, 'lines', next);
+                              }}
+                              className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -369,7 +460,7 @@ export function SetlistLibrary({
                   variant="outline"
                   size="sm"
                   className="w-full border-white/20 text-slate-300"
-                  onClick={() => setAnnouncementSlides((prev) => [...prev, { url: '', type: 'image', title: '' }])}
+                  onClick={() => setAnnouncementSlides((prev) => [...prev, defaultSlide()])}
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Add slide
@@ -452,9 +543,9 @@ export function SetlistLibrary({
                   <Plus className="mr-2 h-4 w-4" />
                   Add link as slide
                 </Button>
-                {announcementSlides.filter((s) => s.url.trim()).length > 0 && (
+                {announcementSlides.filter(isValidSlide).length > 0 && (
                   <div className="pt-2 border-t border-white/10">
-                    <span className="text-xs text-slate-400">Slides added: {announcementSlides.filter((s) => s.url.trim()).length}</span>
+                    <span className="text-xs text-slate-400">Slides added: {announcementSlides.filter(isValidSlide).length}</span>
                   </div>
                 )}
               </div>

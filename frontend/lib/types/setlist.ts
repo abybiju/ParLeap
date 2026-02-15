@@ -6,10 +6,20 @@
 
 export type SetlistItemType = 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT';
 
-export interface AnnouncementSlideInput {
-  url: string;
-  type: 'image' | 'video';
+/** Structured text for exact wording on projector (avoids AI/image typos). When present, display uses this. */
+export interface AnnouncementStructuredText {
   title?: string;
+  subtitle?: string;
+  date?: string;
+  lines?: string[];
+}
+
+export interface AnnouncementSlideInput {
+  url?: string;
+  type?: 'image' | 'video';
+  title?: string;
+  /** When set, projector shows this exact text (and optionally image as background). */
+  structuredText?: AnnouncementStructuredText;
 }
 
 export interface BaseSetlistItem {

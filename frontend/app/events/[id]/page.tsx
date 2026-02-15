@@ -112,7 +112,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           id: item.id,
           eventId: params.id,
           itemType: 'ANNOUNCEMENT' as const,
-          announcementSlides: item.announcement_slides as Array<{ url: string; type: 'image' | 'video'; title?: string }>,
+          announcementSlides: item.announcement_slides as Array<{ url?: string; type?: 'image' | 'video'; title?: string; structuredText?: { title?: string; subtitle?: string; date?: string; lines?: string[] } }>,
           sequenceOrder: item.sequence_order,
         };
       }

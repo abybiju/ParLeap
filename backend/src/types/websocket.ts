@@ -157,7 +157,12 @@ export interface SessionStartedMessage {
       bibleRef?: string;
       mediaUrl?: string;
       mediaTitle?: string;
-      announcementSlides?: Array<{ url: string; type: 'image' | 'video'; title?: string }>;
+      announcementSlides?: Array<{
+        url?: string;
+        type?: 'image' | 'video';
+        title?: string;
+        structuredText?: { title?: string; subtitle?: string; date?: string; lines?: string[] };
+      }>;
     }>; // Polymorphic setlist items
   };
   timing?: TimingMetadata;

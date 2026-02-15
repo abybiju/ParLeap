@@ -77,6 +77,70 @@ function parseNumberEnv(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+type AnnouncementSlide = {
+  url?: string;
+  type?: 'image' | 'video';
+  title?: string;
+  structuredText?: { title?: string; subtitle?: string; date?: string; lines?: string[] };
+};
+
+function hasStructuredText(slide: AnnouncementSlide): boolean {
+  const st = slide.structuredText;
+  if (!st) return false;
+  if (st.title?.trim()) return true;
+  if (st.subtitle?.trim()) return true;
+  if (st.date?.trim()) return true;
+  if (st.lines?.some((l) => (l ?? '').trim())) return true;
+  return false;
+}
+
+function buildAnnouncementPayload(
+  slide: AnnouncementSlide,
+  placeholderId: string,
+  slideIndex: number,
+  currentItemIndex: number,
+  isAutoAdvance: boolean
+): DisplayUpdateMessage['payload'] {
+  const base = {
+    slideIndex,
+    lineIndex: 0,
+    songId: placeholderId,
+    isAutoAdvance,
+    currentItemIndex,
+  };
+  if (hasStructuredText(slide) && slide.structuredText) {
+    const st = slide.structuredText;
+    const lines: string[] = [];
+    if (st.title?.trim()) lines.push(st.title.trim());
+    if (st.subtitle?.trim()) lines.push(st.subtitle.trim());
+    if (st.date?.trim()) lines.push(st.date.trim());
+    if (st.lines) for (const l of st.lines) if ((l ?? '').trim()) lines.push((l ?? '').trim());
+    const songTitle = st.title?.trim() ?? slide.title ?? 'Announcement';
+    const firstLine = lines[0] ?? songTitle;
+    return {
+      ...base,
+      lineText: firstLine,
+      slideText: lines.join('\n'),
+      slideLines: lines,
+      songTitle,
+      slideImageUrl: slide.type === 'image' && slide.url ? slide.url : undefined,
+      slideVideoUrl: slide.type === 'video' && slide.url ? slide.url : undefined,
+      displayType: 'lyrics',
+    };
+  }
+  const title = slide.title ?? 'Announcement';
+  return {
+    ...base,
+    lineText: title,
+    slideText: title,
+    slideLines: [title],
+    songTitle: title,
+    slideImageUrl: slide.type === 'image' ? slide.url : undefined,
+    slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
+    displayType: slide.type === 'image' ? 'image' : 'video',
+  };
+}
+
 const MATCH_STALE_MS = parseNumberEnv(process.env.MATCHER_STALE_MS, 12000);
 const MATCH_RECOVERY_WINDOW_MS = parseNumberEnv(process.env.MATCHER_RECOVERY_WINDOW_MS, 10000);
 const MATCH_RECOVERY_COOLDOWN_MS = parseNumberEnv(process.env.MATCHER_RECOVERY_COOLDOWN_MS, 15000);
@@ -670,24 +734,11 @@ async function handleStartSession(
     send(ws, displayUpdate);
   } else if (currentSetlistItem?.type === 'ANNOUNCEMENT' && currentSetlistItem.announcementSlides && currentSetlistItem.announcementSlides.length > 0) {
     const slideIndex = Math.min(currentSlideIndex, currentSetlistItem.announcementSlides.length - 1);
-    const slide = currentSetlistItem.announcementSlides[slideIndex];
+    const slide = currentSetlistItem.announcementSlides[slideIndex] as AnnouncementSlide;
     const placeholderId = `announcement:${currentSetlistItem.id}`;
     const displayUpdate: DisplayUpdateMessage = {
       type: 'DISPLAY_UPDATE',
-      payload: {
-        lineText: slide.title ?? 'Announcement',
-        slideText: slide.title ?? 'Announcement',
-        slideLines: [slide.title ?? 'Announcement'],
-        slideIndex,
-        lineIndex: 0,
-        songId: placeholderId,
-        songTitle: slide.title ?? 'Announcement',
-        isAutoAdvance: false,
-        currentItemIndex: session.currentItemIndex,
-        slideImageUrl: slide.type === 'image' ? slide.url : undefined,
-        slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
-        displayType: slide.type === 'image' ? 'image' : 'video',
-      },
+      payload: buildAnnouncementPayload(slide, placeholderId, slideIndex, session.currentItemIndex ?? 0, false),
       timing: createTiming(receivedAt, processingStart),
     };
     send(ws, displayUpdate);
@@ -2113,24 +2164,11 @@ function handleManualOverride(
     }
     if (targetItem.type === 'ANNOUNCEMENT' && targetItem.announcementSlides && targetItem.announcementSlides.length > 0) {
       session.currentSlideIndex = 0;
-      const slide = targetItem.announcementSlides[0];
+      const slide = targetItem.announcementSlides[0] as AnnouncementSlide;
       const placeholderId = `announcement:${targetItem.id}`;
       const displayUpdate: DisplayUpdateMessage = {
         type: 'DISPLAY_UPDATE',
-        payload: {
-          lineText: slide.title ?? 'Announcement',
-          slideText: slide.title ?? 'Announcement',
-          slideLines: [slide.title ?? 'Announcement'],
-          slideIndex: 0,
-          lineIndex: 0,
-          songId: placeholderId,
-          songTitle: slide.title ?? 'Announcement',
-          isAutoAdvance: false,
-          currentItemIndex: itemIndex,
-          slideImageUrl: slide.type === 'image' ? slide.url : undefined,
-          slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
-          displayType: slide.type === 'image' ? 'image' : 'video',
-        },
+        payload: buildAnnouncementPayload(slide, placeholderId, 0, itemIndex, false),
         timing: createTiming(receivedAt, Date.now()),
       };
       broadcastToEvent(session.eventId, displayUpdate);
@@ -2165,24 +2203,11 @@ function handleManualOverride(
         if (session.currentSlideIndex < announcementSlideCount - 1) {
           newSlideIndex = session.currentSlideIndex + 1;
           session.currentSlideIndex = newSlideIndex;
-          const slide = currentSetlistItem!.announcementSlides![newSlideIndex];
+          const slide = currentSetlistItem!.announcementSlides![newSlideIndex] as AnnouncementSlide;
           const placeholderId = `announcement:${currentSetlistItem!.id}`;
           const displayUpdate: DisplayUpdateMessage = {
             type: 'DISPLAY_UPDATE',
-            payload: {
-              lineText: slide.title ?? 'Announcement',
-              slideText: slide.title ?? 'Announcement',
-              slideLines: [slide.title ?? 'Announcement'],
-              slideIndex: newSlideIndex,
-              lineIndex: 0,
-              songId: placeholderId,
-              songTitle: slide.title ?? 'Announcement',
-              isAutoAdvance: false,
-              currentItemIndex: currentItemIdx,
-              slideImageUrl: slide.type === 'image' ? slide.url : undefined,
-              slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
-              displayType: slide.type === 'image' ? 'image' : 'video',
-            },
+            payload: buildAnnouncementPayload(slide, placeholderId, newSlideIndex, currentItemIdx, false),
             timing: createTiming(receivedAt, processingStart),
           };
           broadcastToEvent(session.eventId, displayUpdate);
@@ -2228,24 +2253,11 @@ function handleManualOverride(
         if (session.currentSlideIndex > 0) {
           newSlideIndex = session.currentSlideIndex - 1;
           session.currentSlideIndex = newSlideIndex;
-          const slide = currentSetlistItem!.announcementSlides![newSlideIndex];
+          const slide = currentSetlistItem!.announcementSlides![newSlideIndex] as AnnouncementSlide;
           const placeholderId = `announcement:${currentSetlistItem!.id}`;
           const displayUpdate: DisplayUpdateMessage = {
             type: 'DISPLAY_UPDATE',
-            payload: {
-              lineText: slide.title ?? 'Announcement',
-              slideText: slide.title ?? 'Announcement',
-              slideLines: [slide.title ?? 'Announcement'],
-              slideIndex: newSlideIndex,
-              lineIndex: 0,
-              songId: placeholderId,
-              songTitle: slide.title ?? 'Announcement',
-              isAutoAdvance: false,
-              currentItemIndex: currentItemIdx,
-              slideImageUrl: slide.type === 'image' ? slide.url : undefined,
-              slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
-              displayType: slide.type === 'image' ? 'image' : 'video',
-            },
+            payload: buildAnnouncementPayload(slide, placeholderId, newSlideIndex, currentItemIdx, false),
             timing: createTiming(receivedAt, processingStart),
           };
           broadcastToEvent(session.eventId, displayUpdate);
@@ -2375,24 +2387,11 @@ function handleManualOverride(
       session.currentSlideIndex = slideIndex;
       session.isAutoFollowing = false;
       session.suggestedSongSwitch = undefined;
-      const slide = targetItem.announcementSlides[slideIndex];
+      const slide = targetItem.announcementSlides[slideIndex] as AnnouncementSlide;
       const placeholderId = `announcement:${targetItem.id}`;
       const displayUpdate: DisplayUpdateMessage = {
         type: 'DISPLAY_UPDATE',
-        payload: {
-          lineText: slide.title ?? 'Announcement',
-          slideText: slide.title ?? 'Announcement',
-          slideLines: [slide.title ?? 'Announcement'],
-          slideIndex,
-          lineIndex: 0,
-          songId: placeholderId,
-          songTitle: slide.title ?? 'Announcement',
-          isAutoAdvance: false,
-          currentItemIndex: newItemIndex,
-          slideImageUrl: slide.type === 'image' ? slide.url : undefined,
-          slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
-          displayType: slide.type === 'image' ? 'image' : 'video',
-        },
+        payload: buildAnnouncementPayload(slide, placeholderId, slideIndex, newItemIndex, false),
         timing: createTiming(receivedAt, processingStart),
       };
       broadcastToEvent(session.eventId, displayUpdate);

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { eventSchema } from '@/lib/schemas/event';
+import type { AnnouncementSlideInput } from '@/lib/types/setlist';
 
 export interface ActionResult {
   success: boolean;
@@ -297,8 +298,6 @@ export async function addMediaToEvent(eventId: string, mediaUrl: string, mediaTi
   return { success: true, id: (data as { id: string } | null)?.id };
 }
 
-export type AnnouncementSlideInput = { url: string; type: 'image' | 'video'; title?: string };
-
 export async function addAnnouncementToEvent(
   eventId: string,
   slides: AnnouncementSlideInput[],
@@ -318,12 +317,42 @@ export async function addAnnouncementToEvent(
     return { success: false, error: 'At least one slide is required' };
   }
 
+  const hasStructuredText = (s: (typeof slides)[0]) => {
+    const st = s.structuredText;
+    if (!st) return false;
+    if (st.title?.trim()) return true;
+    if (st.subtitle?.trim()) return true;
+    if (st.date?.trim()) return true;
+    if (st.lines?.some((l: string) => (l ?? '').trim())) return true;
+    return false;
+  };
   const validSlides = slides
-    .filter((s) => s.url?.trim() && (s.type === 'image' || s.type === 'video'))
-    .map((s) => ({ url: s.url.trim(), type: s.type as 'image' | 'video', title: s.title?.trim() || undefined }));
+    .filter(
+      (s) =>
+        (s.url?.trim() && (s.type === 'image' || s.type === 'video')) || hasStructuredText(s)
+    )
+    .map((s) => {
+      const out: { url?: string; type?: 'image' | 'video'; title?: string; structuredText?: { title?: string; subtitle?: string; date?: string; lines?: string[] } } = {};
+      if (s.url?.trim() && (s.type === 'image' || s.type === 'video')) {
+        out.url = s.url.trim();
+        out.type = s.type as 'image' | 'video';
+        if (s.title?.trim()) out.title = s.title.trim();
+      }
+      if (hasStructuredText(s) && s.structuredText) {
+        out.structuredText = {
+          title: s.structuredText.title?.trim() || undefined,
+          subtitle: s.structuredText.subtitle?.trim() || undefined,
+          date: s.structuredText.date?.trim() || undefined,
+          lines: s.structuredText.lines?.map((l: string) => (l ?? '').trim()).filter(Boolean),
+        };
+        if (Array.isArray(out.structuredText.lines) && out.structuredText.lines.length === 0)
+          delete out.structuredText.lines;
+      }
+      return out;
+    });
 
   if (validSlides.length === 0) {
-    return { success: false, error: 'Each slide must have a URL and type image or video' };
+    return { success: false, error: 'Each slide must have a URL and type (image/video) or structured text (exact wording)' };
   }
 
   const insertData: Record<string, unknown> = {
