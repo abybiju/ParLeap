@@ -187,7 +187,40 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     );
   }
 
-  const { lineText, slideText, slideLines, songTitle, slideIndex } = currentSlide.payload;
+  const { lineText, slideText, slideLines, songTitle, slideIndex, slideImageUrl, slideVideoUrl } = currentSlide.payload;
+
+  // Announcement: full-screen image or video
+  if (slideImageUrl) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-black overflow-hidden">
+        <img
+          src={slideImageUrl}
+          alt={songTitle ?? 'Announcement'}
+          className={cn(
+            'max-h-full max-w-full object-contain transition-opacity duration-300',
+            isTransitioning ? 'opacity-0' : 'opacity-100'
+          )}
+        />
+      </div>
+    );
+  }
+  if (slideVideoUrl) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-black overflow-hidden">
+        <video
+          src={slideVideoUrl}
+          className={cn(
+            'max-h-full max-w-full object-contain transition-opacity duration-300',
+            isTransitioning ? 'opacity-0' : 'opacity-100'
+          )}
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+      </div>
+    );
+  }
 
   // Use slideLines if available, otherwise fall back to slideText or lineText
   const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);

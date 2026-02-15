@@ -297,6 +297,59 @@ export async function addMediaToEvent(eventId: string, mediaUrl: string, mediaTi
   return { success: true, id: (data as { id: string } | null)?.id };
 }
 
+export type AnnouncementSlideInput = { url: string; type: 'image' | 'video'; title?: string };
+
+export async function addAnnouncementToEvent(
+  eventId: string,
+  slides: AnnouncementSlideInput[],
+  sequenceOrder: number
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) {
+    return { success: false, error };
+  }
+
+  const ownership = await ensureEventOwnership(supabase, user.id, eventId);
+  if (ownership.error) {
+    return { success: false, error: ownership.error };
+  }
+
+  if (!slides || slides.length === 0) {
+    return { success: false, error: 'At least one slide is required' };
+  }
+
+  const validSlides = slides
+    .filter((s) => s.url?.trim() && (s.type === 'image' || s.type === 'video'))
+    .map((s) => ({ url: s.url.trim(), type: s.type as 'image' | 'video', title: s.title?.trim() || undefined }));
+
+  if (validSlides.length === 0) {
+    return { success: false, error: 'Each slide must have a URL and type image or video' };
+  }
+
+  const insertData: Record<string, unknown> = {
+    event_id: eventId,
+    item_type: 'ANNOUNCEMENT',
+    announcement_slides: validSlides,
+    sequence_order: sequenceOrder,
+  };
+
+  const { data, error: insertError } = await (supabase
+    .from('event_items') as ReturnType<typeof supabase.from>)
+    .insert(insertData)
+    .select('id')
+    .single();
+
+  if (insertError) {
+    if (insertError.code === '42703') {
+      return { success: false, error: 'Announcement items require database migration 013. Please run the migration first.' };
+    }
+    return { success: false, error: insertError.message };
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  return { success: true, id: (data as { id: string } | null)?.id };
+}
+
 export async function removeSongFromEvent(eventId: string, eventItemId: string): Promise<ActionResult> {
   return removeSetlistItem(eventId, eventItemId);
 }

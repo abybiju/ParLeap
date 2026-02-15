@@ -314,7 +314,7 @@ function sendError(ws: WebSocket, code: string, message: string, details?: unkno
   send(ws, errorMessage);
 }
 
-function currentItemType(session: SessionState): 'SONG' | 'BIBLE' | 'MEDIA' | null {
+function currentItemType(session: SessionState): 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT' | null {
   const items = session.setlistItems;
   const idx = session.currentItemIndex ?? 0;
   if (!items || idx < 0 || idx >= items.length) return null;
@@ -632,7 +632,66 @@ async function handleStartSession(
   }
 
   // Send current display update (synced to existing session if available)
-  if (currentSong && currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
+  if (currentSetlistItem?.type === 'BIBLE' && currentSetlistItem.bibleRef) {
+    const placeholderId = `bible:${currentSetlistItem.bibleRef.replace(/\s+/g, ':')}`;
+    const displayUpdate: DisplayUpdateMessage = {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: currentSetlistItem.bibleRef,
+        slideText: currentSetlistItem.bibleRef,
+        slideLines: [currentSetlistItem.bibleRef],
+        slideIndex: 0,
+        lineIndex: 0,
+        songId: placeholderId,
+        songTitle: currentSetlistItem.bibleRef,
+        isAutoAdvance: false,
+        currentItemIndex: session.currentItemIndex,
+      },
+      timing: createTiming(receivedAt, processingStart),
+    };
+    send(ws, displayUpdate);
+  } else if (currentSetlistItem?.type === 'MEDIA') {
+    const placeholderId = `media:${currentSetlistItem.mediaUrl ?? 'placeholder'}`;
+    const displayUpdate: DisplayUpdateMessage = {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: 'Media',
+        slideText: 'Media',
+        slideLines: ['Media'],
+        slideIndex: 0,
+        lineIndex: 0,
+        songId: placeholderId,
+        songTitle: currentSetlistItem.mediaTitle ?? 'Media',
+        isAutoAdvance: false,
+        currentItemIndex: session.currentItemIndex,
+      },
+      timing: createTiming(receivedAt, processingStart),
+    };
+    send(ws, displayUpdate);
+  } else if (currentSetlistItem?.type === 'ANNOUNCEMENT' && currentSetlistItem.announcementSlides && currentSetlistItem.announcementSlides.length > 0) {
+    const slideIndex = Math.min(currentSlideIndex, currentSetlistItem.announcementSlides.length - 1);
+    const slide = currentSetlistItem.announcementSlides[slideIndex];
+    const placeholderId = `announcement:${currentSetlistItem.id}`;
+    const displayUpdate: DisplayUpdateMessage = {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: slide.title ?? 'Announcement',
+        slideText: slide.title ?? 'Announcement',
+        slideLines: [slide.title ?? 'Announcement'],
+        slideIndex,
+        lineIndex: 0,
+        songId: placeholderId,
+        songTitle: slide.title ?? 'Announcement',
+        isAutoAdvance: false,
+        currentItemIndex: session.currentItemIndex,
+        slideImageUrl: slide.type === 'image' ? slide.url : undefined,
+        slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
+        displayType: slide.type === 'image' ? 'image' : 'video',
+      },
+      timing: createTiming(receivedAt, processingStart),
+    };
+    send(ws, displayUpdate);
+  } else if (currentSong && currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
     const currentSlide = currentSong.slides[currentSlideIndex];
     console.log(`[WS] Sending slide ${currentSlideIndex}: ${currentSlide.lines.length} lines - "${currentSlide.slideText.substring(0, 50)}..."`);
     const displayUpdate: DisplayUpdateMessage = {
@@ -2030,6 +2089,54 @@ function handleManualOverride(
         return;
       }
     }
+    if (targetItem.type === 'MEDIA') {
+      session.currentSlideIndex = 0;
+      const placeholderId = `media:${targetItem.mediaUrl ?? 'placeholder'}`;
+      const displayUpdate: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: 'Media',
+          slideText: 'Media',
+          slideLines: ['Media'],
+          slideIndex: 0,
+          lineIndex: 0,
+          songId: placeholderId,
+          songTitle: targetItem.mediaTitle ?? 'Media',
+          isAutoAdvance: false,
+          currentItemIndex: itemIndex,
+        },
+        timing: createTiming(receivedAt, Date.now()),
+      };
+      broadcastToEvent(session.eventId, displayUpdate);
+      console.log(`[WS] Manual override: GO_TO_ITEM -> Media (item ${itemIndex})`);
+      return;
+    }
+    if (targetItem.type === 'ANNOUNCEMENT' && targetItem.announcementSlides && targetItem.announcementSlides.length > 0) {
+      session.currentSlideIndex = 0;
+      const slide = targetItem.announcementSlides[0];
+      const placeholderId = `announcement:${targetItem.id}`;
+      const displayUpdate: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: slide.title ?? 'Announcement',
+          slideText: slide.title ?? 'Announcement',
+          slideLines: [slide.title ?? 'Announcement'],
+          slideIndex: 0,
+          lineIndex: 0,
+          songId: placeholderId,
+          songTitle: slide.title ?? 'Announcement',
+          isAutoAdvance: false,
+          currentItemIndex: itemIndex,
+          slideImageUrl: slide.type === 'image' ? slide.url : undefined,
+          slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
+          displayType: slide.type === 'image' ? 'image' : 'video',
+        },
+        timing: createTiming(receivedAt, Date.now()),
+      };
+      broadcastToEvent(session.eventId, displayUpdate);
+      console.log(`[WS] Manual override: GO_TO_ITEM -> Announcement (item ${itemIndex}, slide 0)`);
+      return;
+    }
     return;
   }
 
@@ -2048,35 +2155,125 @@ function handleManualOverride(
     return song.slides?.length ?? song.lines.length;
   };
 
+  const currentSetlistItem = setlistItems[currentItemIdx];
+  const isAnnouncement = currentSetlistItem?.type === 'ANNOUNCEMENT' && currentSetlistItem.announcementSlides && currentSetlistItem.announcementSlides.length > 0;
+  const announcementSlideCount = isAnnouncement ? currentSetlistItem!.announcementSlides!.length : 0;
+
   switch (action) {
     case 'NEXT_SLIDE': {
-      const slideCount = getSlideCount(currentSong);
-      if (session.currentSlideIndex < slideCount - 1) {
-        newSlideIndex = session.currentSlideIndex + 1;
-      } else if (setlistItems.length > 0 && currentItemIdx < setlistItems.length - 1) {
-        // Advance to next setlist item (may be Bible/Media)
+      if (isAnnouncement) {
+        if (session.currentSlideIndex < announcementSlideCount - 1) {
+          newSlideIndex = session.currentSlideIndex + 1;
+          session.currentSlideIndex = newSlideIndex;
+          const slide = currentSetlistItem!.announcementSlides![newSlideIndex];
+          const placeholderId = `announcement:${currentSetlistItem!.id}`;
+          const displayUpdate: DisplayUpdateMessage = {
+            type: 'DISPLAY_UPDATE',
+            payload: {
+              lineText: slide.title ?? 'Announcement',
+              slideText: slide.title ?? 'Announcement',
+              slideLines: [slide.title ?? 'Announcement'],
+              slideIndex: newSlideIndex,
+              lineIndex: 0,
+              songId: placeholderId,
+              songTitle: slide.title ?? 'Announcement',
+              isAutoAdvance: false,
+              currentItemIndex: currentItemIdx,
+              slideImageUrl: slide.type === 'image' ? slide.url : undefined,
+              slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
+              displayType: slide.type === 'image' ? 'image' : 'video',
+            },
+            timing: createTiming(receivedAt, processingStart),
+          };
+          broadcastToEvent(session.eventId, displayUpdate);
+          console.log(`[WS] Manual override: NEXT_SLIDE -> Announcement slide ${newSlideIndex + 1}/${announcementSlideCount}`);
+          return;
+        }
         newItemIndex = currentItemIdx + 1;
         const nextItem = setlistItems[newItemIndex];
-        if (nextItem.type === 'SONG' && nextItem.songId) {
+        if (nextItem?.type === 'SONG' && nextItem.songId) {
           const idx = session.songs.findIndex((s) => s.id === nextItem.songId);
           if (idx >= 0) {
             newSongIndex = idx;
             newSlideIndex = 0;
           }
+        } else {
+          newSlideIndex = 0;
         }
-        // Else next item is BIBLE/MEDIA - handled below
-      } else if (session.currentSongIndex < session.songs.length - 1) {
-        newSongIndex = session.currentSongIndex + 1;
-        newSlideIndex = 0;
+      }
+      if (!isAnnouncement || newItemIndex === currentItemIdx) {
+        const slideCount = getSlideCount(currentSong);
+        if (session.currentSlideIndex < slideCount - 1 && !isAnnouncement) {
+          newSlideIndex = session.currentSlideIndex + 1;
+        } else if (setlistItems.length > 0 && currentItemIdx < setlistItems.length - 1 && newItemIndex === currentItemIdx) {
+          newItemIndex = currentItemIdx + 1;
+          const nextItem = setlistItems[newItemIndex];
+          if (nextItem.type === 'SONG' && nextItem.songId) {
+            const idx = session.songs.findIndex((s) => s.id === nextItem.songId);
+            if (idx >= 0) {
+              newSongIndex = idx;
+              newSlideIndex = 0;
+            }
+          }
+        } else if (session.currentSongIndex < session.songs.length - 1 && !isAnnouncement) {
+          newSongIndex = session.currentSongIndex + 1;
+          newSlideIndex = 0;
+        }
       }
       break;
     }
 
     case 'PREV_SLIDE': {
-      if (session.currentSlideIndex > 0) {
-        newSlideIndex = session.currentSlideIndex - 1;
-      } else if (setlistItems.length > 0 && currentItemIdx > 0) {
+      if (isAnnouncement) {
+        if (session.currentSlideIndex > 0) {
+          newSlideIndex = session.currentSlideIndex - 1;
+          session.currentSlideIndex = newSlideIndex;
+          const slide = currentSetlistItem!.announcementSlides![newSlideIndex];
+          const placeholderId = `announcement:${currentSetlistItem!.id}`;
+          const displayUpdate: DisplayUpdateMessage = {
+            type: 'DISPLAY_UPDATE',
+            payload: {
+              lineText: slide.title ?? 'Announcement',
+              slideText: slide.title ?? 'Announcement',
+              slideLines: [slide.title ?? 'Announcement'],
+              slideIndex: newSlideIndex,
+              lineIndex: 0,
+              songId: placeholderId,
+              songTitle: slide.title ?? 'Announcement',
+              isAutoAdvance: false,
+              currentItemIndex: currentItemIdx,
+              slideImageUrl: slide.type === 'image' ? slide.url : undefined,
+              slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
+              displayType: slide.type === 'image' ? 'image' : 'video',
+            },
+            timing: createTiming(receivedAt, processingStart),
+          };
+          broadcastToEvent(session.eventId, displayUpdate);
+          console.log(`[WS] Manual override: PREV_SLIDE -> Announcement slide ${newSlideIndex + 1}/${announcementSlideCount}`);
+          return;
+        }
         newItemIndex = currentItemIdx - 1;
+      }
+      if (!isAnnouncement) {
+        if (session.currentSlideIndex > 0) {
+          newSlideIndex = session.currentSlideIndex - 1;
+        } else if (setlistItems.length > 0 && currentItemIdx > 0) {
+          newItemIndex = currentItemIdx - 1;
+          const prevItem = setlistItems[newItemIndex];
+          if (prevItem.type === 'SONG' && prevItem.songId) {
+            const idx = session.songs.findIndex((s) => s.id === prevItem.songId);
+            if (idx >= 0) {
+              newSongIndex = idx;
+              const prevSong = session.songs[idx];
+              newSlideIndex = getSlideCount(prevSong) - 1;
+            }
+          }
+        } else if (session.currentSongIndex > 0) {
+          newSongIndex = session.currentSongIndex - 1;
+          const prevSong = session.songs[newSongIndex];
+          newSlideIndex = getSlideCount(prevSong) - 1;
+        }
+      } else if (isAnnouncement && newItemIndex >= 0) {
         const prevItem = setlistItems[newItemIndex];
         if (prevItem.type === 'SONG' && prevItem.songId) {
           const idx = session.songs.findIndex((s) => s.id === prevItem.songId);
@@ -2085,11 +2282,9 @@ function handleManualOverride(
             const prevSong = session.songs[idx];
             newSlideIndex = getSlideCount(prevSong) - 1;
           }
+        } else if (prevItem.type === 'ANNOUNCEMENT' && prevItem.announcementSlides && prevItem.announcementSlides.length > 0) {
+          newSlideIndex = prevItem.announcementSlides.length - 1;
         }
-      } else if (session.currentSongIndex > 0) {
-        newSongIndex = session.currentSongIndex - 1;
-        const prevSong = session.songs[newSongIndex];
-        newSlideIndex = getSlideCount(prevSong) - 1;
       }
       break;
     }
@@ -2151,6 +2346,7 @@ function handleManualOverride(
     }
     if (targetItem.type === 'MEDIA') {
       session.currentItemIndex = newItemIndex;
+      session.currentSlideIndex = 0;
       session.isAutoFollowing = false;
       session.suggestedSongSwitch = undefined;
       const placeholderId = `media:${targetItem.mediaUrl ?? 'placeholder'}`;
@@ -2171,6 +2367,36 @@ function handleManualOverride(
       };
       broadcastToEvent(session.eventId, displayUpdate);
       console.log(`[WS] Manual override: ${action} -> Media (item ${newItemIndex})`);
+      return;
+    }
+    if (targetItem.type === 'ANNOUNCEMENT' && targetItem.announcementSlides && targetItem.announcementSlides.length > 0) {
+      const slideIndex = Math.min(Math.max(0, newSlideIndex), targetItem.announcementSlides.length - 1);
+      session.currentItemIndex = newItemIndex;
+      session.currentSlideIndex = slideIndex;
+      session.isAutoFollowing = false;
+      session.suggestedSongSwitch = undefined;
+      const slide = targetItem.announcementSlides[slideIndex];
+      const placeholderId = `announcement:${targetItem.id}`;
+      const displayUpdate: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: slide.title ?? 'Announcement',
+          slideText: slide.title ?? 'Announcement',
+          slideLines: [slide.title ?? 'Announcement'],
+          slideIndex,
+          lineIndex: 0,
+          songId: placeholderId,
+          songTitle: slide.title ?? 'Announcement',
+          isAutoAdvance: false,
+          currentItemIndex: newItemIndex,
+          slideImageUrl: slide.type === 'image' ? slide.url : undefined,
+          slideVideoUrl: slide.type === 'video' ? slide.url : undefined,
+          displayType: slide.type === 'image' ? 'image' : 'video',
+        },
+        timing: createTiming(receivedAt, processingStart),
+      };
+      broadcastToEvent(session.eventId, displayUpdate);
+      console.log(`[WS] Manual override: ${action} -> Announcement (item ${newItemIndex}, slide ${slideIndex})`);
       return;
     }
   }

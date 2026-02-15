@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Music, Image as ImageIcon, BookOpen, Plus } from 'lucide-react';
+import { Music, Image as ImageIcon, BookOpen, Plus, Megaphone, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import type { AnnouncementSlideInput } from '@/lib/types/setlist';
 
-type TabType = 'songs' | 'bible' | 'media';
+type TabType = 'songs' | 'bible' | 'media' | 'announcement';
 
 interface SongOption {
   id: string;
@@ -20,6 +21,7 @@ interface SetlistLibraryProps {
   onAddSong: (songId: string) => void;
   onAddBible: (bibleRef: string) => void;
   onAddMedia: (mediaUrl: string, mediaTitle: string) => void;
+  onAddAnnouncement: (slides: AnnouncementSlideInput[]) => void;
 }
 
 export function SetlistLibrary({
@@ -28,10 +30,12 @@ export function SetlistLibrary({
   onAddSong,
   onAddBible,
   onAddMedia,
+  onAddAnnouncement,
 }: SetlistLibraryProps) {
   const [activeTab, setActiveTab] = useState<TabType>('songs');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaTitle, setMediaTitle] = useState('');
+  const [announcementSlides, setAnnouncementSlides] = useState<Array<{ url: string; type: 'image' | 'video'; title: string }>>([{ url: '', type: 'image', title: '' }]);
 
   // Filter out songs already in setlist
   const availableSongs = songs.filter(
@@ -94,6 +98,20 @@ export function SetlistLibrary({
           <div className="flex items-center gap-2">
             <ImageIcon className="h-4 w-4" aria-label="Media" />
             Media
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('announcement')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+            activeTab === 'announcement'
+              ? 'border-amber-400 text-amber-300'
+              : 'border-transparent text-slate-400 hover:text-slate-300'
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Megaphone className="h-4 w-4" aria-label="Announcement" />
+            Announcement
           </div>
         </button>
       </div>
@@ -178,6 +196,94 @@ export function SetlistLibrary({
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Media
+            </Button>
+          </div>
+        )}
+
+        {activeTab === 'announcement' && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">
+              Add an announcement with one or more slides (images or videos). Each slide needs a URL and type.
+            </p>
+            <div className="space-y-3">
+              {announcementSlides.map((slide, index) => (
+                <div key={index} className="rounded-lg border border-white/10 bg-slate-900/40 p-3 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-400">Slide {index + 1}</span>
+                    {announcementSlides.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-400 hover:text-red-300 h-8 w-8 p-0"
+                        onClick={() => setAnnouncementSlides((prev) => prev.filter((_, i) => i !== index))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <Input
+                    type="url"
+                    placeholder="Image or video URL"
+                    value={slide.url}
+                    onChange={(e) =>
+                      setAnnouncementSlides((prev) =>
+                        prev.map((s, i) => (i === index ? { ...s, url: e.target.value } : s))
+                      )
+                    }
+                    className="bg-slate-900/60 border-white/10 text-white text-sm"
+                  />
+                  <select
+                    value={slide.type}
+                    onChange={(e) =>
+                      setAnnouncementSlides((prev) =>
+                        prev.map((s, i) => (i === index ? { ...s, type: e.target.value as 'image' | 'video' } : s))
+                      )
+                    }
+                    className="w-full rounded-md border border-white/10 bg-slate-900/60 text-white text-sm px-3 py-2"
+                  >
+                    <option value="image">Image</option>
+                    <option value="video">Video</option>
+                  </select>
+                  <Input
+                    type="text"
+                    placeholder="Title (optional)"
+                    value={slide.title}
+                    onChange={(e) =>
+                      setAnnouncementSlides((prev) =>
+                        prev.map((s, i) => (i === index ? { ...s, title: e.target.value } : s))
+                      )
+                    }
+                    className="bg-slate-900/60 border-white/10 text-white text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full border-white/20 text-slate-300"
+              onClick={() => setAnnouncementSlides((prev) => [...prev, { url: '', type: 'image', title: '' }])}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add slide
+            </Button>
+            <Button
+              onClick={() => {
+                const valid = announcementSlides.filter((s) => s.url.trim());
+                if (valid.length > 0) {
+                  onAddAnnouncement(
+                    valid.map((s) => ({ url: s.url.trim(), type: s.type, title: s.title.trim() || undefined }))
+                  );
+                  setAnnouncementSlides([{ url: '', type: 'image', title: '' }]);
+                }
+              }}
+              disabled={!announcementSlides.some((s) => s.url.trim())}
+              className="w-full"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add announcement to setlist
             </Button>
           </div>
         )}

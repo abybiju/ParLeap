@@ -8,7 +8,8 @@ import { AlertTriangle, ArrowLeft } from 'lucide-react';
 type InitialSetlistItem =
   | { kind: 'SONG'; id: string; songId: string; title: string; artist: string | null; sequenceOrder: number }
   | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
-  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number }
+  | { kind: 'ANNOUNCEMENT'; id: string; slideCount: number; sequenceOrder: number };
 
 interface LivePageClientProps {
   eventId: string;

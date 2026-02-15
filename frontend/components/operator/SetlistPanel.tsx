@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Play, Music, BookOpen, Image as ImageIcon } from 'lucide-react';
+import { Play, Music, BookOpen, Image as ImageIcon, Megaphone } from 'lucide-react';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useSlideCache } from '@/lib/stores/slideCache';
 import { isDisplayUpdateMessage, isSessionStartedMessage, type DisplayUpdateMessage } from '@/lib/websocket/types';
@@ -11,19 +11,21 @@ import { cn } from '@/lib/utils';
 type InitialSetlistItem =
   | { kind: 'SONG'; id: string; songId: string; title: string; artist: string | null; sequenceOrder: number }
   | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
-  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number }
+  | { kind: 'ANNOUNCEMENT'; id: string; slideCount: number; sequenceOrder: number };
 
 interface SetlistPanelProps {
   initialSetlist?: InitialSetlistItem[];
   /** Called when the operator clicks a setlist item. Provides index and item kind for Smart Listen gate. */
-  onItemActivated?: (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA') => void;
+  onItemActivated?: (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT') => void;
 }
 
 /** Display item for the setlist (unified from setlistItems + songs or legacy songs-only) */
 type DisplayItem =
   | { kind: 'SONG'; id: string; title: string; artist: string | null; sequenceOrder: number; songId: string }
   | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
-  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number }
+  | { kind: 'ANNOUNCEMENT'; id: string; slideCount: number; sequenceOrder: number };
 
 /**
  * Setlist Panel Component
@@ -44,7 +46,7 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
   const handleItemClick = (index: number, item: DisplayItem) => {
     goToItem(index);
     onItemActivated?.(index, item.kind);
-    const label = item.kind === 'SONG' ? item.title : item.kind === 'BIBLE' ? item.bibleRef : item.mediaTitle;
+    const label = item.kind === 'SONG' ? item.title : item.kind === 'BIBLE' ? item.bibleRef : item.kind === 'MEDIA' ? item.mediaTitle : 'Announcement';
     console.log(`[SetlistPanel] Manual override: Jumping to item ${index} (${item.kind}) "${label}"`);
   };
 
@@ -83,7 +85,8 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
           (item) =>
             (item.type === 'SONG' && item.songId === songId) ||
             (songId.startsWith('bible:') && item.type === 'BIBLE') ||
-            (songId.startsWith('media:') && item.type === 'MEDIA')
+            (songId.startsWith('media:') && item.type === 'MEDIA') ||
+            (songId.startsWith('announcement:') && item.type === 'ANNOUNCEMENT')
         );
         if (idx >= 0) setCurrentItemIndex(idx);
       } else if (slideCache.setlist?.songs) {
@@ -101,7 +104,10 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
     if (item.kind === 'BIBLE') {
       return { kind: 'BIBLE' as const, id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder };
     }
-    return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.mediaTitle, mediaUrl: item.mediaUrl, sequenceOrder: item.sequenceOrder };
+    if (item.kind === 'MEDIA') {
+      return { kind: 'MEDIA' as const, id: item.id, mediaTitle: item.mediaTitle, mediaUrl: item.mediaUrl, sequenceOrder: item.sequenceOrder };
+    }
+    return { kind: 'ANNOUNCEMENT' as const, id: item.id, slideCount: item.slideCount, sequenceOrder: item.sequenceOrder };
   };
 
   // Build display list: merge cached setlistItems with initialSetlist to ensure Bible/Media always appear
@@ -135,13 +141,20 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
               mediaUrl: item.mediaUrl,
               sequenceOrder: item.sequenceOrder,
             });
+          } else if (item.type === 'ANNOUNCEMENT' && item.announcementSlides && item.announcementSlides.length > 0) {
+            result.push({
+              kind: 'ANNOUNCEMENT',
+              id: item.id,
+              slideCount: item.announcementSlides.length,
+              sequenceOrder: item.sequenceOrder,
+            });
           }
         }
-        // Merge any BIBLE/MEDIA items from initialSetlist that the backend missed
+        // Merge any BIBLE/MEDIA/ANNOUNCEMENT items from initialSetlist that the backend missed
         // (PostgREST INNER JOIN may have dropped them if song_id is NULL)
         const missingItems: DisplayItem[] = [];
         for (const init of initialSetlist) {
-          if ((init.kind === 'BIBLE' || init.kind === 'MEDIA') && !cachedIds.has(init.id)) {
+          if ((init.kind === 'BIBLE' || init.kind === 'MEDIA' || init.kind === 'ANNOUNCEMENT') && !cachedIds.has(init.id)) {
             missingItems.push(toDisplayItem(init));
           }
         }
@@ -213,7 +226,9 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
               ? 'border-white/10 bg-white/5'
               : item.kind === 'BIBLE'
                 ? 'border-purple-400/30 bg-purple-500/5'
-                : 'border-green-400/30 bg-green-500/5';
+                : item.kind === 'MEDIA'
+                  ? 'border-green-400/30 bg-green-500/5'
+                  : 'border-amber-400/30 bg-amber-500/5';
 
           const content = (
             <>
@@ -226,6 +241,7 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
                     {item.kind === 'SONG' && <Music className="h-4 w-4" />}
                     {item.kind === 'BIBLE' && <BookOpen className="h-4 w-4" />}
                     {item.kind === 'MEDIA' && <ImageIcon className="h-4 w-4" aria-label="Media" />}
+                    {item.kind === 'ANNOUNCEMENT' && <Megaphone className="h-4 w-4" aria-label="Announcement" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     {item.kind === 'SONG' && (
@@ -250,6 +266,14 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
                           {item.sequenceOrder}. {item.mediaTitle}
                         </p>
                         <p className="text-xs text-slate-500 truncate max-w-[200px]">{item.mediaUrl}</p>
+                      </>
+                    )}
+                    {item.kind === 'ANNOUNCEMENT' && (
+                      <>
+                        <p className={cn('text-sm font-medium', isCurrent ? 'text-indigo-300' : 'text-slate-300')}>
+                          {item.sequenceOrder}. Announcement
+                        </p>
+                        <p className="text-xs text-slate-500">{item.slideCount} slide{item.slideCount !== 1 ? 's' : ''}</p>
                       </>
                     )}
                   </div>

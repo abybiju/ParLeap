@@ -26,7 +26,8 @@ import { cn } from '@/lib/utils';
 type InitialSetlistItem =
   | { kind: 'SONG'; id: string; songId: string; title: string; artist: string | null; sequenceOrder: number }
   | { kind: 'BIBLE'; id: string; bibleRef: string; sequenceOrder: number }
-  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number };
+  | { kind: 'MEDIA'; id: string; mediaTitle: string; mediaUrl: string; sequenceOrder: number }
+  | { kind: 'ANNOUNCEMENT'; id: string; slideCount: number; sequenceOrder: number };
 
 interface OperatorHUDProps {
   eventId: string;
@@ -52,7 +53,7 @@ type BibleVersionOption = {
   is_default: boolean;
 };
 
-type ActiveSetlistItemType = 'SONG' | 'BIBLE' | 'MEDIA';
+type ActiveSetlistItemType = 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT';
 
 function isSongLikeItem(type: ActiveSetlistItemType | undefined): boolean {
   return !type || type === 'SONG';
@@ -60,8 +61,8 @@ function isSongLikeItem(type: ActiveSetlistItemType | undefined): boolean {
 
 function resolveActiveItemType(
   index: number,
-  backendItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' }> | null,
-  cachedItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' }> | null,
+  backendItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT' }> | null,
+  cachedItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT' }> | null,
   initialItems?: InitialSetlistItem[]
 ): ActiveSetlistItemType {
   if (backendItems && index >= 0 && index < backendItems.length) {
@@ -139,7 +140,7 @@ export function OperatorHUD({
   // Callback from SetlistPanel when operator clicks a setlist item.
   // Immediately updates active item state so Smart Listen switches between
   // SONG bypass (continuous) and non-SONG gating without waiting for backend.
-  const handleItemActivated = (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA') => {
+  const handleItemActivated = (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT') => {
     setCurrentItemIndex(index);
     setActiveItemType(kind);
     console.log(

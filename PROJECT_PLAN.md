@@ -17,6 +17,16 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - **STT homophones**: "daniel won" → Daniel 1 via `normalizeReferenceText` (won/one→1, two/too→2, for/four→4, ate/eight→8, etc.; "to" left as-is for "verse 1 to 3").
 - **Backlog / known issues**: Bible verse **advance** not working reliably (fix later); **cross-chapter/cross-book jump** not reliable. See `BIBLE_SEMANTIC_BACKLOG.md` for full backlog (advance, jump, latency, open-source semantic).
 
+---
+
+## 📌 To-Do List
+
+- **Brainstorm semantic AI / Hugging Face** — Explore open-source embedding/semantic models (e.g. Hugging Face) runnable in Node.js or Edge for cost/latency/on-prem. See `BIBLE_SEMANTIC_BACKLOG.md` §4.
+- **Work on humming search feature** — Hum-to-Search (find songs by humming) is implemented but testing/performance pending. See `HUM_SEARCH_STATUS.md` for status, next steps, and BasicPitch/queue notes.
+- **Background visuals for projector view** — Optional image/video/motion layer behind lyrics; operator-selectable per event or per slide; possible integration with media library or stock. See `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md`.
+- **Announcement slides + Ideogram AI** — New announcement slide type (images, graphics, video); optional flow: operator enters prompt → Ideogram API → image stored and added as slide. See Ideogram API docs (https://developer.ideogram.ai/) and `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md`.
+- **Expand projector font options** — More font choices e.g. via Google Fonts API or other font APIs; font picker in operator/event settings.
+
 ### Password Reset / Forgot Password ✅
 - **Forgot password**: `/auth/forgot-password` — email form, `resetPasswordForEmail` with `redirectTo` to `/auth/reset-password`
 - **Reset password**: `/auth/reset-password` — handles recovery link (hash-based session), new password + confirm, `updateUser({ password })`, redirect to dashboard
@@ -606,6 +616,29 @@ Cost optimization feature for Bible mode that only activates STT when Bible-rela
 - Significant cost savings for 40+ minute sermons
 - Maintains accuracy for Bible reference detection
 - Operator can toggle "Always Listen" mode if needed
+
+### Background visuals for projector view
+**Status:** 📋 Roadmap  
+**Priority:** Medium  
+**Complexity:** Medium
+
+Optional background layer behind the lyric/verse content on the projector/audience display: static images, looped video, or subtle motion (e.g. gradients, low-motion loops). Inspiration: ProPresenter/ProContent-style curated libraries (motion graphics, cinematic clips); ParLeap would support operator-selectable background per event or per slide (image/URL), with possible integration to a media library or stock. Performance constraint: no frame drops on projector output. No commitment to a specific asset source. See `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md`.
+
+### Announcement slides and Ideogram AI
+**Status:** 📋 Roadmap  
+**Priority:** Medium  
+**Complexity:** Medium-High
+
+**Announcement slide type:** In addition to songs, verses, and MEDIA, support announcement items where operators add one or more slides (images, graphics, video, pictures), shown in sequence and advanced manually or by setlist position.
+
+**Ideogram AI (optional):** Allow operators to create an announcement slide from a text prompt (e.g. "Welcome to our Easter service"); call [Ideogram API](https://developer.ideogram.ai/) to generate image (Ideogram 3.0, optional transparent background); store result (e.g. Supabase Storage) and add as a slide. API is pay-as-you-go; implementation would add prompt UI, backend proxy for API key safety, and storage of generated image URL in the announcement item. See `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md`.
+
+### Expand projector font options
+**Status:** 📋 Roadmap  
+**Priority:** Low  
+**Complexity:** Low-Medium
+
+Today the projector uses eight Google Fonts (Inter, DM Sans, Manrope, etc.) from `frontend/lib/projectorFonts.ts`. Roadmap: expand options e.g. via Google Fonts API (load more families on demand, font picker in operator/event settings) or other font providers (Adobe Fonts, Fontshare, self-hosted) for branding flexibility. Keep implementation flexible (font family ID + optional provider or URL).
 
 ---
 

@@ -20,12 +20,13 @@ export interface CachedSong {
 
 export interface CachedSetlistItem {
   id: string;
-  type: 'SONG' | 'BIBLE' | 'MEDIA';
+  type: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT';
   sequenceOrder: number;
   songId?: string;
   bibleRef?: string;
   mediaUrl?: string;
   mediaTitle?: string;
+  announcementSlides?: Array<{ url: string; type: 'image' | 'video'; title?: string }>;
 }
 
 export interface CachedSetlist {
