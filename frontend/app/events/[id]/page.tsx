@@ -1,9 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { EventForm } from '@/components/events/EventForm';
-import { SetlistBuilder } from '@/components/events/SetlistBuilder';
+import { EventEditWorkspace } from '@/components/events/EventEditWorkspace';
 import type { Database } from '@/lib/supabase/types';
 import { AppPageWrapper } from '@/components/layout/AppPageWrapper';
 
@@ -126,28 +123,12 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
 
   return (
     <AppPageWrapper className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <main className="mx-auto max-w-5xl px-6 py-10 space-y-10">
-        {/* Back to Dashboard Button */}
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Link>
-
-        {/* Event details section */}
-        <section aria-labelledby="event-details-heading">
-          <EventForm mode="edit" event={event} />
-        </section>
-
-        {/* Setlist section */}
-        <section aria-labelledby="setlist-heading" className="space-y-2">
-          <h2 id="setlist-heading" className="text-sm font-medium text-slate-400">
-            Setlist
-          </h2>
-          <SetlistBuilder eventId={params.id} initialSetlist={setlist} songs={songs ?? []} />
-        </section>
+      <main className="mx-auto w-full max-w-[1920px] px-6 py-10">
+        <EventEditWorkspace
+          event={event}
+          initialSetlist={setlist}
+          songs={songs ?? []}
+        />
       </main>
     </AppPageWrapper>
   );
