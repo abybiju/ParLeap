@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { EventEditSidebar } from './EventEditSidebar';
 import { SetlistView } from './SetlistView';
@@ -197,36 +198,56 @@ export function EventEditWorkspace({ event, initialSetlist, songs }: EventEditWo
       />
 
       <main className="flex-1 min-w-0 overflow-y-auto">
-        {activeView === 'setlist' && (
-          <SetlistView
-            eventId={eventId}
-            setlistItems={setlistItems}
-            onRemove={handleRemove}
-            onReorder={handleReorder}
-          />
-        )}
-        {activeView === 'library' && (
-          <div className="glass-card rounded-2xl p-6 shadow-xl shadow-slate-900/40">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold text-white">Content Library</h2>
-              <p className="text-sm text-slate-300">
-                Add songs, Bible segments, media, or announcements to the setlist.
-              </p>
-            </div>
-            <SetlistLibrary
-              songs={songs}
-              setlistItems={setlistItems.map((item) => ({
-                songId: isSongItem(item) ? item.songId : undefined,
-                bibleRef: item.itemType === 'BIBLE' ? item.bibleRef : undefined,
-                mediaUrl: item.itemType === 'MEDIA' ? item.mediaUrl : undefined,
-              }))}
-              onAddSong={handleAddSong}
-              onAddBible={handleAddBible}
-              onAddMedia={handleAddMedia}
-              onAddAnnouncement={handleAddAnnouncement}
-            />
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {activeView === 'setlist' && (
+            <motion.div
+              key="setlist"
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.2 }}
+              className="min-w-0"
+            >
+              <SetlistView
+                eventId={eventId}
+                setlistItems={setlistItems}
+                onRemove={handleRemove}
+                onReorder={handleReorder}
+              />
+            </motion.div>
+          )}
+          {activeView === 'library' && (
+            <motion.div
+              key="library"
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.2 }}
+              className="min-w-0"
+            >
+              <div className="glass-card rounded-2xl p-6 shadow-xl shadow-slate-900/40">
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold text-white">Content Library</h2>
+                  <p className="text-sm text-slate-300">
+                    Add songs, Bible segments, media, or announcements to the setlist.
+                  </p>
+                </div>
+                <SetlistLibrary
+                  songs={songs}
+                  setlistItems={setlistItems.map((item) => ({
+                    songId: isSongItem(item) ? item.songId : undefined,
+                    bibleRef: item.itemType === 'BIBLE' ? item.bibleRef : undefined,
+                    mediaUrl: item.itemType === 'MEDIA' ? item.mediaUrl : undefined,
+                  }))}
+                  onAddSong={handleAddSong}
+                  onAddBible={handleAddBible}
+                  onAddMedia={handleAddMedia}
+                  onAddAnnouncement={handleAddAnnouncement}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
