@@ -150,18 +150,19 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
             });
           }
         }
-        // Merge any BIBLE/MEDIA/ANNOUNCEMENT items from initialSetlist that the backend missed
-        // (PostgREST INNER JOIN may have dropped them if song_id is NULL)
+        // Merge any items from initialSetlist that we didn't get a valid display item for
+        // (backend may send wrong types or omit Bible/Media/Announcement when using fallback query)
+        const resultIds = new Set(result.map((r) => r.id));
         const missingItems: DisplayItem[] = [];
         for (const init of initialSetlist) {
-          if ((init.kind === 'BIBLE' || init.kind === 'MEDIA' || init.kind === 'ANNOUNCEMENT') && !cachedIds.has(init.id)) {
+          if (!resultIds.has(init.id)) {
             missingItems.push(toDisplayItem(init));
+            resultIds.add(init.id);
           }
         }
         if (missingItems.length > 0) {
-          console.log(`[SetlistPanel] Merging ${missingItems.length} missing Bible/Media items from initialSetlist`);
+          console.log(`[SetlistPanel] Merging ${missingItems.length} missing items from initialSetlist (Bible/Media/Announcement or backend type mismatch)`);
           result.push(...missingItems);
-          // Re-sort by sequenceOrder so items appear in the correct position
           result.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
         }
         return result;
