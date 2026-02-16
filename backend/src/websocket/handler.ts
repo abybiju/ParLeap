@@ -2159,23 +2159,30 @@ async function handleManualOverride(
     if (targetItem.type === 'MEDIA') {
       session.currentSlideIndex = 0;
       const placeholderId = `media:${targetItem.mediaUrl ?? 'placeholder'}`;
+      const mediaUrl = targetItem.mediaUrl ?? '';
+      const urlLower = mediaUrl.toLowerCase();
+      const isVideo = /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(urlLower);
+      const isImage = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(urlLower);
       const displayUpdate: DisplayUpdateMessage = {
         type: 'DISPLAY_UPDATE',
         payload: {
-          lineText: 'Media',
-          slideText: 'Media',
-          slideLines: ['Media'],
+          lineText: targetItem.mediaTitle ?? 'Media',
+          slideText: targetItem.mediaTitle ?? 'Media',
+          slideLines: [targetItem.mediaTitle ?? 'Media'],
           slideIndex: 0,
           lineIndex: 0,
           songId: placeholderId,
           songTitle: targetItem.mediaTitle ?? 'Media',
           isAutoAdvance: false,
           currentItemIndex: itemIndex,
+          slideImageUrl: isImage ? mediaUrl : undefined,
+          slideVideoUrl: isVideo ? mediaUrl : undefined,
+          displayType: isVideo ? 'video' : isImage ? 'image' : 'lyrics',
         },
         timing: createTiming(receivedAt, Date.now()),
       };
       broadcastToEvent(session.eventId, displayUpdate);
-      console.log(`[WS] Manual override: GO_TO_ITEM -> Media (item ${itemIndex})`);
+      console.log(`[WS] Manual override: GO_TO_ITEM -> Media (item ${itemIndex}, ${isVideo ? 'video' : isImage ? 'image' : 'unknown'})`);
       return;
     }
     if (targetItem.type === 'ANNOUNCEMENT' && targetItem.announcementSlides && targetItem.announcementSlides.length > 0) {
