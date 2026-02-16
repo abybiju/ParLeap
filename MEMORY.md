@@ -19,6 +19,18 @@
 
 ---
 
+## Session: February 15, 2026 - Announcement click shows image on operator and projector
+
+### What we did
+- **Operator**: CurrentSlideDisplay now renders slideImageUrl/slideVideoUrl (image-only, video-only, or with text overlay) so when the operator clicks an announcement in the setlist, the picture shows on the operator screen as well as on the projector.
+- **Backend**: GO_TO_ITEM supports optional itemId when itemIndex is out of range (e.g. frontend has 6 items, backend only 3). eventService.fetchEventItemById(eventId, itemId) loads one event_item with announcement_slides; handler uses it to build DISPLAY_UPDATE with slideImageUrl and broadcast.
+- **Frontend**: SetlistPanel sends item.id with goToItem(index, item.id); WebSocket MANUAL_OVERRIDE payload includes itemId for GO_TO_ITEM.
+
+### Commits
+- `522f8a9` — fix: announcement click shows image on operator and projector
+
+---
+
 ## Session: February 15, 2026 - Grab Text + device upload + canvas eraser (announcement slides)
 
 ### What we did
