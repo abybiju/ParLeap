@@ -1,11 +1,21 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Music, Image as ImageIcon, BookOpen, Plus, Megaphone, Trash2, Link2, Upload, Cloud, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
+import { Music, Image as ImageIcon, BookOpen, Plus, Megaphone, Trash2, Link2, Upload, Cloud, Sparkles, Type, Eraser } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { AnnouncementSlideInput, AnnouncementStructuredText } from '@/lib/types/setlist';
+import { grabTextFromImage } from '@/lib/utils/grabTextOCR';
+import { uploadAnnouncementAsset, validateAnnouncementFile } from '@/lib/utils/announcementUpload';
+import { createClient } from '@/lib/supabase/client';
+import dynamic from 'next/dynamic';
+
+const AnnouncementCanvasEditor = dynamic(
+  () => import('./AnnouncementCanvasEditor').then((m) => m.AnnouncementCanvasEditor),
+  { ssr: false }
+);
 
 type TabType = 'songs' | 'bible' | 'media' | 'announcement';
 type AnnouncementSourceType = 'url' | 'device' | 'drive' | 'ideogram';
@@ -41,6 +51,8 @@ export function SetlistLibrary({
     type: 'image' | 'video';
     title: string;
     structuredText?: AnnouncementStructuredText;
+    /** When source is device, file before upload */
+    file?: File;
   };
   const defaultSlide = (): AnnouncementSlideState => ({ url: '', type: 'image', title: '' });
   const [announcementSlides, setAnnouncementSlides] = useState<AnnouncementSlideState[]>([defaultSlide()]);
@@ -48,6 +60,9 @@ export function SetlistLibrary({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [driveLink, setDriveLink] = useState('');
   const [ideogramPrompt, setIdeogramPrompt] = useState('');
+  const [grabTextSlideIndex, setGrabTextSlideIndex] = useState<number | null>(null);
+  const [canvasEditorSlideIndex, setCanvasEditorSlideIndex] = useState<number | null>(null);
+  const [canvasEditorObjectUrl, setCanvasEditorObjectUrl] = useState<string | null>(null);
 
   // Filter out songs already in setlist
   const availableSongs = songs.filter(
@@ -66,6 +81,18 @@ export function SetlistLibrary({
     }
   };
 
+  const addPendingFilesAsSlides = useCallback(() => {
+    if (pendingFiles.length === 0) return;
+    const newSlides: AnnouncementSlideState[] = pendingFiles.map((f) => ({
+      url: '',
+      type: f.type.startsWith('video/') ? 'video' : 'image',
+      title: '',
+      file: f,
+    }));
+    setAnnouncementSlides((prev) => [...prev, ...newSlides]);
+    setPendingFiles([]);
+  }, [pendingFiles]);
+
   const hasStructuredText = (s: AnnouncementSlideState) => {
     const st = s.structuredText;
     if (!st) return false;
@@ -76,9 +103,36 @@ export function SetlistLibrary({
     return false;
   };
   const isValidSlide = (s: AnnouncementSlideState) =>
-    (s.url?.trim() && (s.type === 'image' || s.type === 'video')) || hasStructuredText(s);
-  const handleAnnouncementAddToSetlist = () => {
-    const valid = announcementSlides.filter(isValidSlide).map((s) => {
+    ((s.url?.trim() || s.file) && (s.type === 'image' || s.type === 'video')) || hasStructuredText(s);
+  const handleAnnouncementAddToSetlist = async () => {
+    const slidesToSave = [...announcementSlides];
+    const hasFiles = slidesToSave.some((s) => s.file);
+    if (hasFiles) {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Sign in to upload slides.');
+        return;
+      }
+      for (let i = 0; i < slidesToSave.length; i++) {
+        const s = slidesToSave[i]!;
+        if (s.file) {
+          const validation = validateAnnouncementFile(s.file);
+          if (!validation.valid) {
+            toast.error(validation.error ?? 'Invalid file');
+            return;
+          }
+          try {
+            const url = await uploadAnnouncementAsset(s.file, user.id);
+            slidesToSave[i] = { ...s, url, file: undefined };
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Upload failed');
+            return;
+          }
+        }
+      }
+    }
+    const valid = slidesToSave.filter((s) => (s.url?.trim() && (s.type === 'image' || s.type === 'video')) || hasStructuredText(s)).map((s) => {
       const out: AnnouncementSlideInput = {};
       if (s.url?.trim() && (s.type === 'image' || s.type === 'video')) {
         out.url = s.url.trim();
@@ -99,10 +153,12 @@ export function SetlistLibrary({
     if (valid.length > 0) {
       onAddAnnouncement(valid);
       setAnnouncementSlides([defaultSlide()]);
+      setPendingFiles([]);
     }
   };
 
   const canAddAnnouncementToSetlist = announcementSlides.some(isValidSlide);
+  const hasSlidesFromDevice = announcementSlides.some((s) => s.file);
 
   const addDriveLinkAsSlide = () => {
     if (driveLink.trim()) {
@@ -126,6 +182,91 @@ export function SetlistLibrary({
       )
     );
   };
+
+  const canGrabTextForSlide = (slide: AnnouncementSlideState): boolean => {
+    if (slide.type !== 'image') return false;
+    if (slide.file && slide.file.type.startsWith('image/')) return true;
+    if (slide.url?.trim()) return true;
+    return false;
+  };
+
+  const openCanvasEditor = useCallback((index: number) => {
+    const slide = announcementSlides[index];
+    if (!slide || (slide.type !== 'image')) return;
+    if (slide.file) {
+      const url = URL.createObjectURL(slide.file);
+      setCanvasEditorObjectUrl(url);
+    } else {
+      setCanvasEditorObjectUrl(null);
+    }
+    setCanvasEditorSlideIndex(index);
+  }, [announcementSlides]);
+
+  const closeCanvasEditor = useCallback(() => {
+    setCanvasEditorSlideIndex(null);
+    if (canvasEditorObjectUrl) {
+      URL.revokeObjectURL(canvasEditorObjectUrl);
+      setCanvasEditorObjectUrl(null);
+    }
+  }, [canvasEditorObjectUrl]);
+
+  const handleCanvasEditorSave = useCallback(async (dataUrl: string) => {
+    const index = canvasEditorSlideIndex;
+    if (index == null) return;
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], 'cleaned.png', { type: 'image/png' });
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Sign in to save.');
+        return;
+      }
+      const url = await uploadAnnouncementAsset(file, user.id);
+      setAnnouncementSlides((prev) =>
+        prev.map((s, i) => (i === index ? { ...s, url, file: undefined } : s))
+      );
+      toast.success('Cleaned image saved.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed');
+      return;
+    }
+    closeCanvasEditor();
+  }, [canvasEditorSlideIndex, closeCanvasEditor]);
+
+  const handleGrabText = useCallback(async (index: number) => {
+    const slide = announcementSlides[index];
+    if (!slide || !canGrabTextForSlide(slide)) return;
+    setGrabTextSlideIndex(index);
+    try {
+      const source: File | string = slide.file ?? slide.url!.trim();
+      const { structuredText } = await grabTextFromImage(source);
+      setAnnouncementSlides((prev) =>
+        prev.map((s, i) =>
+          i !== index
+            ? s
+            : {
+                ...s,
+                structuredText: {
+                  title: structuredText.title ?? s.structuredText?.title ?? '',
+                  subtitle: structuredText.subtitle ?? s.structuredText?.subtitle ?? '',
+                  date: structuredText.date ?? s.structuredText?.date ?? '',
+                  lines: structuredText.lines?.length
+                    ? structuredText.lines
+                    : s.structuredText?.lines ?? [],
+                },
+              }
+        )
+      );
+      toast.success('Text extracted. Review and edit below.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Grab Text failed';
+      toast.error(msg + ' Try a clearer image or add text manually.');
+    } finally {
+      setGrabTextSlideIndex(null);
+    }
+  }, [announcementSlides]);
 
   const handleDeviceDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -411,7 +552,44 @@ export function SetlistLibrary({
                       />
                       {/* Exact wording – operator-typed text shown on projector to avoid AI/image typos */}
                       <div className="mt-3 pt-3 border-t border-white/10">
-                        <p className="text-xs text-slate-400 mb-2">Exact wording (recommended for names, dates)</p>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-xs text-slate-400">Exact wording (recommended for names, dates)</p>
+                          <div className="flex gap-1.5 shrink-0">
+                            {canGrabTextForSlide(slide) && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-amber-500/40 text-amber-200 hover:bg-amber-500/20"
+                                disabled={grabTextSlideIndex === index}
+                                onClick={() => handleGrabText(index)}
+                              >
+                                {grabTextSlideIndex === index ? (
+                                  <>Extracting…</>
+                                ) : (
+                                  <>
+                                    <Type className="h-3.5 w-3.5 mr-1.5" />
+                                    Grab Text
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {slide.type === 'image' && (slide.url?.trim() || slide.file) && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-slate-400/40 text-slate-300 hover:bg-slate-500/20"
+                                onClick={() => openCanvasEditor(index)}
+                                title="Draw over image to cover text (simple brush)"
+                              >
+                                <Eraser className="h-3.5 w-3.5 mr-1.5" />
+                                Clean image
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-1.5">Best for straight, Latin text.</p>
                         <Input
                           type="text"
                           placeholder="Heading"
@@ -512,11 +690,133 @@ export function SetlistLibrary({
                         </li>
                       ))}
                     </ul>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-amber-500/40 text-amber-200"
+                      onClick={addPendingFilesAsSlides}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />
+                      Add files as slides
+                    </Button>
                   </div>
                 )}
-                <p className="text-xs text-amber-200/90">
-                  Upload will be available when connected. For now, use URL or Google Drive to add slides.
-                </p>
+                {/* Slide list for device: same cards so user can Grab Text then add to setlist */}
+                {hasSlidesFromDevice && (
+                  <div className="space-y-3 pt-3 border-t border-white/10">
+                    <p className="text-xs text-slate-400">Slides (upload when you add to setlist)</p>
+                    {announcementSlides.map((slide, slideIndex) => {
+                      if (!slide.file && !slide.url?.trim()) return null;
+                      return (
+                        <div key={slideIndex} className="rounded-lg border border-white/10 bg-slate-900/40 p-3 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-slate-400">
+                              {slide.file ? `File: ${slide.file.name}` : 'URL'}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-slate-400 hover:text-red-300 h-8 w-8 p-0"
+                              onClick={() =>
+                                setAnnouncementSlides((prev) => prev.filter((_, i) => i !== slideIndex))
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {slide.file && (
+                            <Input
+                              type="text"
+                              placeholder="Title (optional)"
+                              value={slide.title}
+                              onChange={(e) =>
+                                setAnnouncementSlides((prev) =>
+                                  prev.map((s, i) => (i === slideIndex ? { ...s, title: e.target.value } : s))
+                                )
+                              }
+                              className="bg-slate-900/60 border-white/10 text-white text-sm"
+                            />
+                          )}
+                          <div className="mt-2 pt-2 border-t border-white/10">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <p className="text-xs text-slate-400">Exact wording</p>
+                              <div className="flex gap-1.5 shrink-0">
+                                {canGrabTextForSlide(slide) && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-amber-500/40 text-amber-200 hover:bg-amber-500/20"
+                                    disabled={grabTextSlideIndex === slideIndex}
+                                    onClick={() => handleGrabText(slideIndex)}
+                                  >
+                                    {grabTextSlideIndex === slideIndex ? 'Extracting…' : (
+                                      <><Type className="h-3.5 w-3.5 mr-1.5" /> Grab Text</>
+                                    )}
+                                  </Button>
+                                )}
+                                {slide.type === 'image' && (slide.url?.trim() || slide.file) && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-slate-400/40 text-slate-300 hover:bg-slate-500/20"
+                                    onClick={() => openCanvasEditor(slideIndex)}
+                                    title="Draw over image to cover text"
+                                  >
+                                    <Eraser className="h-3.5 w-3.5 mr-1.5" />
+                                    Clean image
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            <Input
+                              type="text"
+                              placeholder="Heading"
+                              value={slide.structuredText?.title ?? ''}
+                              onChange={(e) => updateSlideStructuredText(slideIndex, 'title', e.target.value)}
+                              className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                            />
+                            <Input
+                              type="text"
+                              placeholder="Subtitle"
+                              value={slide.structuredText?.subtitle ?? ''}
+                              onChange={(e) => updateSlideStructuredText(slideIndex, 'subtitle', e.target.value)}
+                              className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                            />
+                            <Input
+                              type="text"
+                              placeholder="Date"
+                              value={slide.structuredText?.date ?? ''}
+                              onChange={(e) => updateSlideStructuredText(slideIndex, 'date', e.target.value)}
+                              className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                            />
+                            {[0, 1, 2, 3].map((li) => {
+                              const lines = slide.structuredText?.lines ?? [];
+                              return (
+                                <Input
+                                  key={li}
+                                  type="text"
+                                  placeholder={`Line ${li + 1}`}
+                                  value={lines[li] ?? ''}
+                                  onChange={(e) => {
+                                    const next = [...lines];
+                                    while (next.length <= li) next.push('');
+                                    next[li] = e.target.value;
+                                    updateSlideStructuredText(slideIndex, 'lines', next);
+                                  }}
+                                  className="bg-slate-900/60 border-white/10 text-white text-sm mb-1.5"
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -579,7 +879,7 @@ export function SetlistLibrary({
             <Button
               onClick={handleAnnouncementAddToSetlist}
               disabled={!canAddAnnouncementToSetlist}
-              title={announcementSource === 'device' && pendingFiles.length > 0 ? 'Upload will be available when connected' : undefined}
+              title={announcementSource === 'device' && pendingFiles.length > 0 ? 'Add files as slides first' : undefined}
               className="w-full"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -587,6 +887,20 @@ export function SetlistLibrary({
             </Button>
           </div>
         )}
+
+        {/* Canvas editor modal: clean image with eraser (frontend-only) */}
+        {canvasEditorSlideIndex !== null && announcementSlides[canvasEditorSlideIndex] && (() => {
+          const slide = announcementSlides[canvasEditorSlideIndex]!;
+          const imageSource = canvasEditorObjectUrl ?? slide.url?.trim() ?? '';
+          return imageSource ? (
+            <AnnouncementCanvasEditor
+              open={true}
+              onOpenChange={(open) => !open && closeCanvasEditor()}
+              imageSource={imageSource}
+              onSave={handleCanvasEditorSave}
+            />
+          ) : null;
+        })()}
       </div>
     </div>
   );
