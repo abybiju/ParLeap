@@ -54,14 +54,24 @@ function isHttpRateLimited(key: string): boolean {
   return state.count > HTTP_RATE_LIMIT;
 }
 
-// CORS configuration
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+// CORS configuration: allow comma-separated origins so both www and non-www work
+const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const corsOrigins = corsOriginEnv.split(',').map((o) => o.trim()).filter(Boolean);
+// If single origin contains parleap.com, also allow the other variant (www vs non-www)
+let allowedOrigins: string | string[] = corsOrigins.length > 1 ? corsOrigins : corsOrigins[0];
+if (corsOrigins.length === 1 && corsOrigins[0].includes('parleap.com')) {
+  const base = corsOrigins[0];
+  const other = base.startsWith('https://www.') ? base.replace('https://www.', 'https://') : base.replace('https://', 'https://www.');
+  if (other !== base) allowedOrigins = [base, other];
+}
 app.use(
   cors({
-    origin: corsOrigin,
+    origin: allowedOrigins,
     credentials: true,
   })
 );
+const corsLog = Array.isArray(allowedOrigins) ? allowedOrigins.join(', ') : allowedOrigins;
+console.log('🌐 CORS allowed origins:', corsLog);
 
 // Middleware
 // Increase body size limit to 10MB for audio uploads
