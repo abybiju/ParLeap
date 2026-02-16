@@ -10,6 +10,13 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Grab Text + device upload + canvas eraser (February 15, 2026) ✅
+- **Grab Text**: Tesseract.js client-side OCR in Announcement tab; button pre-fills Exact wording (title, subtitle, date, lines) from image (URL or file). Best for straight, Latin text.
+- **Device upload**: "Add files as slides" from device/drop; upload to `announcement-assets` on Add to setlist. Migration 014 (RLS); create bucket in Dashboard if needed.
+- **Clean image**: react-konva canvas editor with frontend-only eraser brush; Save exports PNG and updates slide URL. API inpainting (Fal/Replicate) can be added later.
+- **Research**: `CANVA_GRAB_TEXT_RESEARCH.md` — how Canva does it, build-your-own guidance.
+- **Commit**: `2196946`
+
 ### Bible Semantic Refinements (February 13, 2026) ✅
 - **Vector/semantic for Bible only**: OpenAI embeddings for verse-by-content open and Bible Follow (paraphrased advance). Lyrics remain fuzzy match.
 - **Full-Bible + in-chapter jump**: Keyword search on `bible_verses` then semantic rerank; jump within same chapter by content works.

@@ -1,5 +1,22 @@
 # ParLeap AI - Memory Log
 
+## Session: February 15, 2026 - Grab Text + device upload + canvas eraser (announcement slides)
+
+### What we did
+- **Grab Text**: Tesseract.js client-side OCR in the event editor (Announcement tab). Button on each slide with image (URL or file); pre-fills Exact wording (title, subtitle, date, lines). Best for straight, Latin text. Research: `CANVA_GRAB_TEXT_RESEARCH.md`.
+- **Device upload**: Bucket `announcement-assets` (migration 014, RLS). "Add files as slides" turns pending files into slides; on "Add announcement to setlist" we upload, get URLs, then save. Helper: `announcementUpload.ts`.
+- **Clean image (eraser)**: react-konva canvas editor — draw white brush over image to cover text; Save exports PNG, uploads, updates slide URL. Frontend-only for now; Fal/Replicate inpainting can be added later.
+- **Migration 014**: Fixed `CREATE POLICY IF NOT EXISTS` (invalid in PostgreSQL); use `DROP POLICY IF EXISTS` then `CREATE POLICY`. User confirmed success.
+
+### Commits
+- `2196946` — feat: Grab Text + device upload + canvas eraser for announcement slides
+
+### Docs
+- `CANVA_GRAB_TEXT_RESEARCH.md` — how Canva Grab Text works (confirmed vs inferred), build-your-own guidance.
+- Manual: create bucket `announcement-assets` in Supabase Dashboard if not exists.
+
+---
+
 ## Session: February 13, 2026 - Advance/jump todo, homophone fix, docs
 
 ### What we did
@@ -853,8 +870,8 @@ frontend/tailwind.config.ts               (new animations)
 
 ---
 
-**Last Updated:** February 11, 2026  
-**Status:** Bible in live setlist fix deployed (PostgREST INNER JOIN workaround + Smart Listen gate). Not yet verified working — debug endpoint available for next session.
+**Last Updated:** February 15, 2026  
+**Status:** Grab Text + device upload + canvas eraser for announcement slides shipped. Bible in live setlist fix deployed earlier; debug endpoint available if needed.
 
 ---
 
