@@ -41,14 +41,17 @@ export async function searchByHum(
   const extractionTime = Date.now() - startTime;
   console.log(`[HumSearch] Vector extraction took ${extractionTime}ms`);
 
-  // Call the match_songs function in Supabase
-  // pgvector RPC params: pass vector as string literal "[a,b,c,...]" so PostgREST sends it correctly
-  const queryVectorStr = `[${queryVector.join(',')}]`;
+  // Verify backend can see song_fingerprints (diagnostic)
+  const { count: tableCount } = await supabase
+    .from('song_fingerprints')
+    .select('id', { count: 'exact', head: true });
+  console.log('[HumSearch] song_fingerprints row count (from backend):', tableCount ?? 'null');
+
   console.log('[HumSearch] Searching database for matches...', '(vector length:', queryVector.length, ')');
   const searchStart = Date.now();
 
   const { data, error } = await supabase.rpc('match_songs', {
-    query_vector: queryVectorStr,
+    query_vector: queryVector,
     match_threshold: threshold,
     match_count: limit,
   });
@@ -65,7 +68,7 @@ export async function searchByHum(
     console.log('[HumSearch] No matches found');
     console.log('[HumSearch] Fetching closest match for diagnostics...');
     const { data: closest, error: closestError } = await supabase.rpc('match_songs', {
-      query_vector: queryVectorStr,
+      query_vector: queryVector,
       match_threshold: 0,
       match_count: 1,
     });
