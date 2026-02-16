@@ -32,7 +32,7 @@ export function validateMediaFile(file: File): { valid: boolean; error?: string 
   return { valid: true };
 }
 
-export function validateMediaBlob(blob: Blob, name: string): { valid: boolean; error?: string } {
+export function validateMediaBlob(blob: Blob, _name: string): { valid: boolean; error?: string } {
   const type = blob.type;
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm'];
   if (!allowed.some((t) => type.startsWith(t.split('/')[0]!))) {
