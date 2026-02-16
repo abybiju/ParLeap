@@ -26,7 +26,7 @@ import {
   isSttWindowRequestMessage,
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
-import { fetchEventData, type SongData, type SetlistItemData } from '../services/eventService';
+import { fetchEventData, fetchEventItemById, type SongData, type SetlistItemData } from '../services/eventService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 import {
   type BibleReference,
@@ -2055,14 +2055,15 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
  * Handle MANUAL_OVERRIDE message
  * Allows operator to manually control slides
  */
-function handleManualOverride(
+async function handleManualOverride(
   ws: WebSocket,
   action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE' | 'GO_TO_ITEM',
   receivedAt: number,
   slideIndex?: number,
   songId?: string,
-  itemIndex?: number
-): void {
+  itemIndex?: number,
+  itemId?: string
+): Promise<void> {
   const processingStart = Date.now();
   const session = sessions.get(ws);
   if (!session || !session.isActive) {
@@ -2073,14 +2074,31 @@ function handleManualOverride(
   const setlistItems = session.setlistItems ?? [];
   const currentItemIdx = session.currentItemIndex ?? 0;
 
-  // GO_TO_ITEM: Jump to setlist item by index (enables clicking Bible/Media in setlist)
-  if (action === 'GO_TO_ITEM' && itemIndex !== undefined && setlistItems.length > 0) {
-    if (itemIndex < 0 || itemIndex >= setlistItems.length) {
-      sendError(ws, 'INVALID_ITEM', `itemIndex ${itemIndex} out of range (0-${setlistItems.length - 1})`);
+  // GO_TO_ITEM: Jump to setlist item by index (enables clicking Bible/Media/Announcement in setlist)
+  if (action === 'GO_TO_ITEM' && itemIndex !== undefined) {
+    // Resolve target: by index if in range, else by itemId when frontend setlist is longer (e.g. merged from initialSetlist)
+    let targetItem: SetlistItemData | null = null;
+    let resolvedIndex = itemIndex;
+    if (setlistItems.length > 0 && itemIndex >= 0 && itemIndex < setlistItems.length) {
+      targetItem = setlistItems[itemIndex];
+    } else if (itemId) {
+      const byId = setlistItems.find((i) => i.id === itemId);
+      if (byId) {
+        targetItem = byId;
+        resolvedIndex = setlistItems.indexOf(byId);
+      } else {
+        // Fetch single event_item from DB (e.g. ANNOUNCEMENT when backend used fallback query)
+        const fetched = await fetchEventItemById(session.eventId, itemId);
+        if (fetched) targetItem = fetched;
+      }
+    }
+    if (!targetItem) {
+      sendError(ws, 'INVALID_ITEM', itemId
+        ? `Item not found: ${itemId}`
+        : `itemIndex ${itemIndex} out of range (0-${Math.max(0, setlistItems.length - 1)})`);
       return;
     }
-    const targetItem = setlistItems[itemIndex];
-    session.currentItemIndex = itemIndex;
+    session.currentItemIndex = itemIndex; // Use client index so operator highlight is correct when setlists differ
     session.isAutoFollowing = false;
     session.suggestedSongSwitch = undefined;
 
@@ -2589,13 +2607,14 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
     } else if (isAudioDataMessage(message)) {
       await handleAudioData(ws, message.payload.data, message.payload.format, receivedAt);
     } else if (isManualOverrideMessage(message)) {
-      handleManualOverride(
+      await handleManualOverride(
         ws,
         message.payload.action,
         receivedAt,
         message.payload.slideIndex,
         message.payload.songId,
-        message.payload.itemIndex
+        message.payload.itemIndex,
+        message.payload.itemId
       );
     } else if (isStopSessionMessage(message)) {
       handleStopSession(ws, receivedAt);

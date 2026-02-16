@@ -44,7 +44,7 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
   const [displayIsBible, setDisplayIsBible] = useState(false);
 
   const handleItemClick = (index: number, item: DisplayItem) => {
-    goToItem(index);
+    goToItem(index, item.id);
     onItemActivated?.(index, item.kind);
     const label = item.kind === 'SONG' ? item.title : item.kind === 'BIBLE' ? item.bibleRef : item.kind === 'MEDIA' ? item.mediaTitle : 'Announcement';
     console.log(`[SetlistPanel] Manual override: Jumping to item ${index} (${item.kind}) "${label}"`);

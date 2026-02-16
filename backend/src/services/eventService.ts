@@ -413,6 +413,67 @@ export async function fetchSongById(songId: string): Promise<SongData | null> {
 }
 
 /**
+ * Fetch a single event_item by id (for GO_TO_ITEM when backend setlist is shorter than frontend).
+ * Returns SetlistItemData or null. Used when itemIndex is out of range but client sends itemId.
+ */
+export async function fetchEventItemById(
+  eventId: string,
+  itemId: string
+): Promise<SetlistItemData | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('event_items')
+      .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title, announcement_slides')
+      .eq('event_id', eventId)
+      .eq('id', itemId)
+      .single();
+
+    if (error) {
+      if (error.code === '42703') return null;
+      console.error('[EventService] fetchEventItemById failed:', error);
+      return null;
+    }
+    if (!data) return null;
+
+    const item = data as {
+      id: string;
+      sequence_order: number;
+      item_type?: string | null;
+      song_id?: string | null;
+      bible_ref?: string | null;
+      media_url?: string | null;
+      media_title?: string | null;
+      announcement_slides?: AnnouncementSlideData[] | null;
+    };
+    const itemType =
+      item.item_type ||
+      (item.song_id ? 'SONG' : null) ||
+      (item.bible_ref ? 'BIBLE' : null) ||
+      (item.media_url ? 'MEDIA' : null) ||
+      (item.announcement_slides && Array.isArray(item.announcement_slides) && item.announcement_slides.length > 0 ? 'ANNOUNCEMENT' : null) ||
+      'SONG';
+    const slides =
+      item.announcement_slides && Array.isArray(item.announcement_slides)
+        ? (item.announcement_slides as AnnouncementSlideData[])
+        : undefined;
+    return {
+      id: item.id,
+      type: itemType as SetlistItemData['type'],
+      sequenceOrder: item.sequence_order,
+      songId: itemType === 'SONG' ? (item.song_id || undefined) : undefined,
+      bibleRef: itemType === 'BIBLE' ? (item.bible_ref || undefined) : undefined,
+      mediaUrl: itemType === 'MEDIA' ? (item.media_url || undefined) : undefined,
+      mediaTitle: itemType === 'MEDIA' ? (item.media_title || undefined) : undefined,
+      announcementSlides: itemType === 'ANNOUNCEMENT' ? slides : undefined,
+    };
+  } catch (err) {
+    console.error('[EventService] fetchEventItemById error:', err);
+    return null;
+  }
+}
+
+/**
  * Create a new song
  */
 export async function createSong(

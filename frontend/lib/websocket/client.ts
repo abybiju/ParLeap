@@ -212,10 +212,23 @@ class WebSocketClient {
    * Send MANUAL_OVERRIDE message
    * - NEXT_SLIDE / PREV_SLIDE: no extra params
    * - GO_TO_SLIDE: slideIndex, songId (for songs)
-   * - GO_TO_ITEM: itemIndex (for setlist items: song, Bible, media)
+   * - GO_TO_ITEM: itemIndex (required), itemId (optional, so backend can resolve when setlist lengths differ)
    */
-  manualOverride(action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE' | 'GO_TO_ITEM', slideIndex?: number, songId?: string, itemIndex?: number): void {
-    this.send({ type: 'MANUAL_OVERRIDE', payload: { action, slideIndex, songId, itemIndex } });
+  manualOverride(
+    action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE' | 'GO_TO_ITEM',
+    slideIndex?: number,
+    songId?: string,
+    itemIndex?: number,
+    itemId?: string
+  ): void {
+    const payload: { action: typeof action; slideIndex?: number; songId?: string; itemIndex?: number; itemId?: string } = {
+      action,
+      slideIndex,
+      songId,
+      itemIndex,
+    };
+    if (action === 'GO_TO_ITEM' && itemId) payload.itemId = itemId;
+    this.send({ type: 'MANUAL_OVERRIDE', payload });
   }
 
   /**
