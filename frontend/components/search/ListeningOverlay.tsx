@@ -273,7 +273,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
           body: JSON.stringify({
             audio: base64Audio,
             limit: 5,
-            threshold: 0.4,
+            threshold: 0.35,
           }),
         })
         console.log('[HumSearch] Response status:', response.status, response.statusText)
@@ -341,7 +341,8 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
               setResults(statusData.results)
               setState('results')
             } else {
-              setError('No matching songs found. Try humming louder or longer!')
+              console.log('[HumSearch] Job completed but no matches (0 results)')
+              setError('No matching songs found. Try humming the main tune of a song in your library (e.g. Amazing Grace or Way Maker) for 5–10 seconds.')
               setState('error')
             }
           } else if (statusData.status === 'failed') {
