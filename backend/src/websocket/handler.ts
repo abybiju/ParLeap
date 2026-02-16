@@ -2078,14 +2078,12 @@ async function handleManualOverride(
   if (action === 'GO_TO_ITEM' && itemIndex !== undefined) {
     // Resolve target: by index if in range, else by itemId when frontend setlist is longer (e.g. merged from initialSetlist)
     let targetItem: SetlistItemData | null = null;
-    let resolvedIndex = itemIndex;
     if (setlistItems.length > 0 && itemIndex >= 0 && itemIndex < setlistItems.length) {
       targetItem = setlistItems[itemIndex];
     } else if (itemId) {
       const byId = setlistItems.find((i) => i.id === itemId);
       if (byId) {
         targetItem = byId;
-        resolvedIndex = setlistItems.indexOf(byId);
       } else {
         // Fetch single event_item from DB (e.g. ANNOUNCEMENT when backend used fallback query)
         const fetched = await fetchEventItemById(session.eventId, itemId);
