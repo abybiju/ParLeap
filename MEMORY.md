@@ -1,5 +1,24 @@
 # ParLeap AI - Memory Log
 
+## Session: Event edit workspace + structured announcement text (this session)
+
+### What we did
+- **Event edit page – Spotify-style layout**: Replaced cramped two-column (Setlist | Library) with a **left sidebar** (event form compact + nav) and **full-width main** that switches between **Setlist** and **Content Library**. No more small scrollable frames; operators get one view at a time with room to work. New components: `EventEditWorkspace`, `EventEditSidebar`, `EventFormCompact`, `SetlistView`. Page uses `EventEditWorkspace` with full width (`max-w-[1920px]`).
+- **View-switch animation**: Framer Motion `AnimatePresence` + `motion.div` when switching Setlist ↔ Content Library (fade + short horizontal slide, 0.2s). Added `overflow-x-hidden` on main to prevent a brief horizontal scrollbar during the animation.
+- **Structured announcement text (exact wording)**: Operators can type **exact names, dates, and lines** per slide so AI/image typos don’t show on the projector. Data: optional `structuredText: { title?, subtitle?, date?, lines[] }` per slide. Editor: “Exact wording (recommended for names, dates)” section in Announcement tab (Heading, Subtitle, Date, Line 1–4). Backend: when `structuredText` is present, DISPLAY_UPDATE sends `slideLines` (and optional image as background). Projector: if both image and slideLines → image as dimmed background + text overlay; if only slideLines → text-only layout; if only image/video → full-screen media as before. Backward compatible with image/video-only slides.
+
+### Commits
+- `2c38c60` — announcement input options + event edit page layout (overflow, glass-card)
+- `ac5209c` — feat: Spotify-style event edit workspace (sidebar + full-width views)
+- `b319b82` — view-switch animation (Setlist / Content Library)
+- `3692d84` — fix: overflow-x-hidden during view-switch animation
+- `cc62e39` — feat: structured announcement text (exact wording, no AI/image typos)
+
+### Docs
+- Plan: structured announcement slides (optional structuredText; editor, backend, projector). Revert with `git revert cc62e39` if we remove the feature.
+
+---
+
 ## Session: February 15, 2026 - Grab Text + device upload + canvas eraser (announcement slides)
 
 ### What we did

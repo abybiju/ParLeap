@@ -10,6 +10,10 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Event edit workspace + structured announcement text ✅
+- **Event edit page**: Spotify-style layout — left sidebar (event form + Setlist / Content Library nav) and full-width main that switches between Setlist view and Content Library view. No cramped scroll frames. Components: EventEditWorkspace, EventEditSidebar, EventFormCompact, SetlistView. View-switch animation (Framer Motion, 0.2s) with overflow-x-hidden to avoid horizontal scrollbar.
+- **Structured announcement text**: Optional exact wording per slide (`structuredText`: title, subtitle, date, lines). Editor has "Exact wording (recommended for names, dates)" in Announcement tab. Projector shows operator-typed text in a fixed layout (with optional image as dimmed background). Avoids AI/image typos for names and dates. Backward compatible. Commits: `2c38c60`, `ac5209c`, `b319b82`, `3692d84`, `cc62e39`.
+
 ### Grab Text + device upload + canvas eraser (February 15, 2026) ✅
 - **Grab Text**: Tesseract.js client-side OCR in Announcement tab; button pre-fills Exact wording (title, subtitle, date, lines) from image (URL or file). Best for straight, Latin text.
 - **Device upload**: "Add files as slides" from device/drop; upload to `announcement-assets` on Add to setlist. Migration 014 (RLS); create bucket in Dashboard if needed.
