@@ -161,7 +161,15 @@ export async function openGoogleDrivePicker(
         : google.picker.ViewId.DOCS;
   const view = new google.picker.DocsView(viewId as unknown as string);
   const token = accessToken;
-  const builder = new google.picker.PickerBuilder()
+  interface PickerBuilderChain {
+    setOAuthToken(t: string): PickerBuilderChain;
+    addView(v: unknown): PickerBuilderChain;
+    setCallback(cb: (data: { action: string; docs: Array<{ id: string; name: string; mimeType?: string }> }) => void): PickerBuilderChain;
+    setAppId(id: string): PickerBuilderChain;
+    build(): { setVisible(v: boolean): void };
+  }
+  const builder = new google.picker.PickerBuilder() as unknown as PickerBuilderChain;
+  builder
     .setOAuthToken(token)
     .addView(view)
     .setCallback((data: { action: string; docs: Array<{ id: string; name: string; mimeType?: string }> }) => {
@@ -188,7 +196,7 @@ export async function openGoogleDrivePicker(
       })();
     });
   const appId = getAppId();
-  if (appId) builder.setAppId(appId as unknown as string);
+  if (appId) builder.setAppId(appId);
   const picker = builder.build();
   picker.setVisible(true);
 }
