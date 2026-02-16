@@ -61,7 +61,7 @@ export async function searchByHum(
 
   if (!data || data.length === 0) {
     console.log('[HumSearch] No matches found');
-    // Log closest match below threshold for tuning (one extra query)
+    console.log('[HumSearch] Fetching closest match for diagnostics...');
     const { data: closest, error: closestError } = await supabase.rpc('match_songs', {
       query_vector: queryVector,
       match_threshold: 0,
@@ -70,11 +70,12 @@ export async function searchByHum(
     if (closestError) {
       console.warn('[HumSearch] Could not get closest match (for logging):', closestError.message);
     } else if (closest && closest.length > 0) {
-      const sim = (closest[0] as { similarity?: number }).similarity;
-      const title = (closest[0] as { title?: string }).title;
+      const row = closest[0] as { similarity?: number; title?: string };
+      const sim = row?.similarity;
+      const title = row?.title;
       console.log(`[HumSearch] Closest match below threshold: "${title ?? '?'}" (${sim != null ? Math.round(sim * 100) : '?'}% similarity)`);
     } else {
-      console.log('[HumSearch] No fingerprints in database to compare against');
+      console.log('[HumSearch] No fingerprints in database (closest query returned empty)');
     }
     return [];
   }
