@@ -46,6 +46,10 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 - Event edit page: Spotify-style — left sidebar (event form + Setlist/Content Library nav), full-width main switching between Setlist and Content Library. View-switch animation (Framer Motion); overflow-x-hidden on main. Components: EventEditWorkspace, EventEditSidebar, EventFormCompact, SetlistView.
 - Structured announcement text: Optional exact wording per slide (title, subtitle, date, lines). "Exact wording" section in Announcement tab; projector shows this text (with optional image as background). Revert with `git revert cc62e39` if removing.
 
+**Announcement click shows image on operator and projector** (February 15, 2026)
+- Operator: CurrentSlideDisplay renders slideImageUrl/slideVideoUrl so announcement pictures show when clicked in setlist.
+- Backend: GO_TO_ITEM accepts optional itemId when itemIndex out of range; fetchEventItemById loads event_item with announcement_slides; handler broadcasts DISPLAY_UPDATE with slideImageUrl. Frontend sends goToItem(index, item.id).
+
 **Grab Text + announcement device upload + canvas eraser** (February 15, 2026)
 - Grab Text: Tesseract.js client-side OCR in Announcement tab; pre-fills Exact wording from image (URL or file). Best for straight, Latin text.
 - Device upload: Add files as slides → upload to `announcement-assets` on Add to setlist. Migration 014 (RLS); bucket `announcement-assets` create in Dashboard if needed.

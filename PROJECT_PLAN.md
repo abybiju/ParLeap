@@ -14,6 +14,12 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 - **Event edit page**: Spotify-style layout — left sidebar (event form + Setlist / Content Library nav) and full-width main that switches between Setlist view and Content Library view. No cramped scroll frames. Components: EventEditWorkspace, EventEditSidebar, EventFormCompact, SetlistView. View-switch animation (Framer Motion, 0.2s) with overflow-x-hidden to avoid horizontal scrollbar.
 - **Structured announcement text**: Optional exact wording per slide (`structuredText`: title, subtitle, date, lines). Editor has "Exact wording (recommended for names, dates)" in Announcement tab. Projector shows operator-typed text in a fixed layout (with optional image as dimmed background). Avoids AI/image typos for names and dates. Backward compatible. Commits: `2c38c60`, `ac5209c`, `b319b82`, `3692d84`, `cc62e39`.
 
+### Announcement click → image on operator and projector (February 15, 2026) ✅
+- **Operator view**: `CurrentSlideDisplay` now renders `slideImageUrl` / `slideVideoUrl` (image-only, video-only, or image/video + text overlay) so announcement pictures show when the operator clicks the announcement in the setlist.
+- **Backend**: `GO_TO_ITEM` supports optional `itemId` when `itemIndex` is out of range (e.g. frontend setlist longer due to merge from initialSetlist). `fetchEventItemById` in eventService loads a single event_item with `announcement_slides` from DB; handler resolves by id and broadcasts `DISPLAY_UPDATE` with `slideImageUrl`.
+- **Frontend**: SetlistPanel sends `item.id` with `goToItem(index, item.id)`; WebSocket `MANUAL_OVERRIDE` payload includes optional `itemId` for `GO_TO_ITEM`.
+- **Commit**: `522f8a9`
+
 ### Grab Text + device upload + canvas eraser (February 15, 2026) ✅
 - **Grab Text**: Tesseract.js client-side OCR in Announcement tab; button pre-fills Exact wording (title, subtitle, date, lines) from image (URL or file). Best for straight, Latin text.
 - **Device upload**: "Add files as slides" from device/drop; upload to `announcement-assets` on Add to setlist. Migration 014 (RLS); create bucket in Dashboard if needed.
