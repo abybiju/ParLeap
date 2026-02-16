@@ -42,6 +42,11 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Recent Features
 
+**Grab Text + announcement device upload + canvas eraser** (February 15, 2026)
+- Grab Text: Tesseract.js client-side OCR in Announcement tab; pre-fills Exact wording from image (URL or file). Best for straight, Latin text.
+- Device upload: Add files as slides → upload to `announcement-assets` on Add to setlist. Migration 014 (RLS); bucket `announcement-assets` create in Dashboard if needed.
+- Clean image: react-konva editor with eraser brush (frontend-only); Save exports PNG, uploads, updates slide URL. See `CANVA_GRAB_TEXT_RESEARCH.md`.
+
 **Password reset / Forgot password**
 - `/auth/forgot-password`: request reset link; `/auth/reset-password`: set new password from email link
 - Login page has "Forgot your password?"; Profile Security has "Reset Password" modal
@@ -90,6 +95,7 @@ Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap and to-do list
+- `CANVA_GRAB_TEXT_RESEARCH.md` - Grab Text research (Canva behavior, build-your-own OCR + eraser)
 - `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md` - Background visuals and announcement slides (ProPresenter/ProContent context, ParLeap roadmap)
 - `BIBLE_SEMANTIC_BACKLOG.md` - Bible semantic shipped behavior and backlog (cross-chapter jump, latency, open-source semantic brainstorm)
 - `HUM_SEARCH_STATUS.md` - Hum-to-Search status and next steps
