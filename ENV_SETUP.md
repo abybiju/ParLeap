@@ -14,6 +14,12 @@ NEXT_PUBLIC_WS_URL=ws://localhost:3001
 
 # WebSocket Server (Production)
 # NEXT_PUBLIC_WS_URL=wss://your-backend.railway.app
+
+# Google Drive Picker (Media & Announcement tabs – choose files from Drive)
+# Create OAuth 2.0 Client ID (Web) in Google Cloud, enable Picker API + Drive API.
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+# Optional: Google Cloud project number (improves Picker behavior)
+# NEXT_PUBLIC_GOOGLE_APP_ID=123456789012
 ```
 
 ## Backend Environment Variables
@@ -73,6 +79,17 @@ CORS_ORIGIN=http://localhost:3000
 3. Navigate to your profile settings
 4. Generate an API key
 5. Copy to `ELEVENLABS_API_KEY`
+
+### Google Drive Client ID (optional – for Media & Announcement “Choose from Google Drive”)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project or select an existing one
+3. Enable **Google Picker API** and **Google Drive API** (APIs & Services → Library)
+4. Go to **APIs & Services** → **Credentials** → **Create Credentials** → **OAuth client ID**
+5. Application type: **Web application**
+6. Add **Authorized JavaScript origins** (e.g. `https://www.parleap.com`, `http://localhost:3000`)
+7. Copy the **Client ID** to `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+8. Optional: copy your **Project number** (from Dashboard) to `NEXT_PUBLIC_GOOGLE_APP_ID`
 
 ## Security Notes
 

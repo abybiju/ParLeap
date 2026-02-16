@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 import type { AnnouncementSlideInput, AnnouncementStructuredText } from '@/lib/types/setlist';
 import { grabTextFromImage } from '@/lib/utils/grabTextOCR';
 import { uploadAnnouncementAsset, validateAnnouncementFile } from '@/lib/utils/announcementUpload';
+import { uploadMediaAsset, validateMediaFile } from '@/lib/utils/mediaUpload';
+import { openGoogleDrivePicker, isGoogleDrivePickerAvailable } from '@/lib/utils/googleDrivePicker';
 import { createClient } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 
@@ -44,8 +46,11 @@ export function SetlistLibrary({
   onAddAnnouncement,
 }: SetlistLibraryProps) {
   const [activeTab, setActiveTab] = useState<TabType>('songs');
-  const [mediaUrl, setMediaUrl] = useState('');
   const [mediaTitle, setMediaTitle] = useState('');
+  type MediaSourceType = 'device' | 'drive';
+  const [mediaSource, setMediaSource] = useState<MediaSourceType>('device');
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaDriveLoading, setMediaDriveLoading] = useState(false);
   type AnnouncementSlideState = {
     url: string;
     type: 'image' | 'video';
@@ -58,7 +63,7 @@ export function SetlistLibrary({
   const [announcementSlides, setAnnouncementSlides] = useState<AnnouncementSlideState[]>([defaultSlide()]);
   const [announcementSource, setAnnouncementSource] = useState<AnnouncementSourceType>('url');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [driveLink, setDriveLink] = useState('');
+  const [announcementDriveLoading, setAnnouncementDriveLoading] = useState(false);
   const [ideogramPrompt, setIdeogramPrompt] = useState('');
   const [grabTextSlideIndex, setGrabTextSlideIndex] = useState<number | null>(null);
   const [canvasEditorSlideIndex, setCanvasEditorSlideIndex] = useState<number | null>(null);
@@ -73,12 +78,98 @@ export function SetlistLibrary({
     onAddBible('Bible'); // Generic slot – AI listens for any verse, not a pre-set reference
   };
 
-  const handleAddMedia = () => {
-    if (mediaUrl.trim() && mediaTitle.trim()) {
-      onAddMedia(mediaUrl.trim(), mediaTitle.trim());
-      setMediaUrl('');
-      setMediaTitle('');
+  const handleAddMedia = async () => {
+    const title = mediaTitle.trim();
+    if (!title) {
+      toast.error('Enter a media title');
+      return;
     }
+    if (mediaSource === 'device' && mediaFile) {
+      const validation = validateMediaFile(mediaFile);
+      if (!validation.valid) {
+        toast.error(validation.error ?? 'Invalid file');
+        return;
+      }
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Sign in to upload media.');
+        return;
+      }
+      try {
+        const url = await uploadMediaAsset(mediaFile, user.id);
+        onAddMedia(url, title);
+        setMediaTitle('');
+        setMediaFile(null);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Upload failed');
+      }
+      return;
+    }
+    if (mediaSource === 'drive') {
+      toast.error('Click "Choose from Google Drive" to pick a file');
+      return;
+    }
+    toast.error('Choose a file or drop one');
+  };
+
+  const handleMediaDrivePick = useCallback(async () => {
+    const title = mediaTitle.trim();
+    if (!title) {
+      toast.error('Enter a media title first');
+      return;
+    }
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('Sign in to add media from Google Drive.');
+      return;
+    }
+    setMediaDriveLoading(true);
+    try {
+      await openGoogleDrivePicker(
+        { multiple: false },
+        async (files) => {
+          if (files.length === 0) return;
+          try {
+            const f = files[0]!;
+            const file = new File([f.blob], f.name, { type: f.mimeType });
+            const url = await uploadMediaAsset(file, user.id);
+            onAddMedia(url, title);
+            setMediaTitle('');
+            toast.success('Media added to setlist');
+          } finally {
+            setMediaDriveLoading(false);
+          }
+        },
+        () => setMediaDriveLoading(false)
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Google Drive failed');
+    } finally {
+      setMediaDriveLoading(false);
+    }
+  }, [mediaTitle, onAddMedia]);
+
+  const handleMediaDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+      setMediaFile(file);
+    }
+  }, []);
+
+  const handleMediaDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleMediaFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+      setMediaFile(file);
+    }
+    e.target.value = '';
   };
 
   const addPendingFilesAsSlides = useCallback(() => {
@@ -160,12 +251,49 @@ export function SetlistLibrary({
   const canAddAnnouncementToSetlist = announcementSlides.some(isValidSlide);
   const hasSlidesFromDevice = announcementSlides.some((s) => s.file);
 
-  const addDriveLinkAsSlide = () => {
-    if (driveLink.trim()) {
-      setAnnouncementSlides((prev) => [...prev, { url: driveLink.trim(), type: 'image', title: '' }]);
-      setDriveLink('');
+  const handleAnnouncementDrivePick = useCallback(async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('Sign in to add slides from Google Drive.');
+      return;
     }
-  };
+    setAnnouncementDriveLoading(true);
+    try {
+      await openGoogleDrivePicker(
+        { multiple: true },
+        async (files) => {
+        const newSlides: AnnouncementSlideState[] = [];
+        for (const f of files) {
+          const validation = validateAnnouncementFile(new File([f.blob], f.name, { type: f.mimeType }));
+          if (!validation.valid) {
+            toast.error(`${f.name}: ${validation.error ?? 'Invalid file'}`);
+            continue;
+          }
+          try {
+            const url = await uploadAnnouncementAsset(new File([f.blob], f.name, { type: f.mimeType }), user.id);
+            newSlides.push({
+              url,
+              type: f.mimeType.startsWith('video/') ? 'video' : 'image',
+              title: '',
+            });
+          } catch (err) {
+            toast.error(`${f.name}: ${err instanceof Error ? err.message : 'Upload failed'}`);
+          }
+        }
+        if (newSlides.length > 0) {
+          setAnnouncementSlides((prev) => [...prev, ...newSlides]);
+          toast.success(`${newSlides.length} slide(s) added from Google Drive`);
+        }
+        setAnnouncementDriveLoading(false);
+      },
+        () => setAnnouncementDriveLoading(false)
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Google Drive failed');
+      setAnnouncementDriveLoading(false);
+    }
+  }, []);
 
   const updateSlideStructuredText = (index: number, field: keyof AnnouncementStructuredText, value: string | string[]) => {
     setAnnouncementSlides((prev) =>
@@ -409,32 +537,91 @@ export function SetlistLibrary({
                 className="bg-slate-900/60 border-white/10 text-white mb-3"
               />
             </div>
-            <div>
-              <label className="text-sm text-slate-300 mb-2 block">Media URL</label>
-              <Input
-                type="url"
-                placeholder="https://example.com/video.mp4"
-                value={mediaUrl}
-                onChange={(e) => setMediaUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleAddMedia();
-                  }
-                }}
-                className="bg-slate-900/60 border-white/10 text-white"
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                Enter a URL to an image or video
-              </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="text-xs text-slate-500 self-center">Add from:</span>
+              <Button
+                type="button"
+                variant={mediaSource === 'device' ? 'default' : 'outline'}
+                size="sm"
+                className={cn(
+                  mediaSource === 'device' && 'border-amber-500/50 bg-amber-500/20 text-amber-200'
+                )}
+                onClick={() => setMediaSource('device')}
+              >
+                <Upload className="h-3.5 w-3.5 mr-1.5" />
+                Device / Drop
+              </Button>
+              <Button
+                type="button"
+                variant={mediaSource === 'drive' ? 'default' : 'outline'}
+                size="sm"
+                className={cn(
+                  mediaSource === 'drive' && 'border-amber-500/50 bg-amber-500/20 text-amber-200'
+                )}
+                onClick={() => setMediaSource('drive')}
+              >
+                <Cloud className="h-3.5 w-3.5 mr-1.5" />
+                Google Drive
+              </Button>
             </div>
-            <Button
-              onClick={handleAddMedia}
-              disabled={!mediaUrl.trim() || !mediaTitle.trim()}
-              className="w-full"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Media
-            </Button>
+            {mediaSource === 'device' && (
+              <div
+                onDrop={handleMediaDrop}
+                onDragOver={handleMediaDragOver}
+                className="rounded-lg border-2 border-dashed border-white/20 bg-slate-900/40 p-6 text-center hover:border-amber-500/40 transition-colors"
+              >
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleMediaFileSelect}
+                  className="hidden"
+                  id="media-file-input"
+                />
+                <label
+                  htmlFor="media-file-input"
+                  className="cursor-pointer block text-slate-400 text-sm"
+                >
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-slate-500" />
+                  Drop a file here or click to browse
+                </label>
+                <p className="text-xs text-slate-500 mt-1">One image or video (max 50MB)</p>
+                {mediaFile && (
+                  <p className="text-xs text-amber-300 mt-2 truncate max-w-full px-2">
+                    {mediaFile.name}
+                  </p>
+                )}
+              </div>
+            )}
+            {mediaSource === 'drive' && (
+              <div className="space-y-2">
+                {isGoogleDrivePickerAvailable() ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-amber-500/40 text-amber-200"
+                    onClick={() => void handleMediaDrivePick()}
+                    disabled={!mediaTitle.trim() || mediaDriveLoading}
+                  >
+                    <Cloud className="h-4 w-4 mr-2" />
+                    {mediaDriveLoading ? 'Opening Google Drive…' : 'Choose from Google Drive'}
+                  </Button>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    Google Drive is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable.
+                  </p>
+                )}
+              </div>
+            )}
+            {mediaSource === 'device' && (
+              <Button
+                onClick={() => void handleAddMedia()}
+                disabled={!mediaTitle.trim() || !mediaFile}
+                className="w-full"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Media
+              </Button>
+            )}
           </div>
         )}
 
@@ -820,29 +1007,29 @@ export function SetlistLibrary({
               </div>
             )}
 
-            {/* Google Drive: link input, use as URL */}
+            {/* Google Drive: open Picker, upload to our storage, add as slides */}
             {announcementSource === 'drive' && (
               <div className="space-y-3">
-                <label className="text-sm text-slate-300 block">Paste Google Drive link</label>
-                <Input
-                  type="url"
-                  placeholder="https://drive.google.com/..."
-                  value={driveLink}
-                  onChange={(e) => setDriveLink(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addDriveLinkAsSlide()}
-                  className="bg-slate-900/60 border-white/10 text-white"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full border-white/20 text-slate-300"
-                  onClick={addDriveLinkAsSlide}
-                  disabled={!driveLink.trim()}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add link as slide
-                </Button>
+                {isGoogleDrivePickerAvailable() ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-amber-500/40 text-amber-200"
+                      onClick={() => void handleAnnouncementDrivePick()}
+                      disabled={announcementDriveLoading}
+                    >
+                      <Cloud className="h-4 w-4 mr-2" />
+                      {announcementDriveLoading ? 'Opening Google Drive…' : 'Choose from Google Drive'}
+                    </Button>
+                    <p className="text-xs text-slate-400">Pick one or more images or videos from your Drive. They will be uploaded and added as slides.</p>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    Google Drive is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable.
+                  </p>
+                )}
                 {announcementSlides.filter(isValidSlide).length > 0 && (
                   <div className="pt-2 border-t border-white/10">
                     <span className="text-xs text-slate-400">Slides added: {announcementSlides.filter(isValidSlide).length}</span>
