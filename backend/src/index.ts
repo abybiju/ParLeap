@@ -283,35 +283,44 @@ app.post('/api/hum-search', async (req, res) => {
   }
 });
 
-// Job status endpoint
+// Job status endpoint - always return 200 with status in body so client can show real errors
 app.get('/api/hum-search/:jobId', (req, res) => {
-  const { jobId } = req.params;
-  const job = getJobStatus(jobId);
+  try {
+    const { jobId } = req.params;
+    const job = getJobStatus(jobId);
 
-  if (!job) {
-    res.status(404).json({ error: 'Job not found' });
-    return;
-  }
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
 
-  if (job.status === 'completed') {
-    const results = job.result as SearchResult[] | undefined;
-    res.json({
-      success: true,
-      status: 'completed',
-      results: results || [],
-      count: results?.length || 0,
-    });
-  } else if (job.status === 'failed') {
+    if (job.status === 'completed') {
+      const results = job.result as SearchResult[] | undefined;
+      res.json({
+        success: true,
+        status: 'completed',
+        results: results || [],
+        count: results?.length || 0,
+      });
+    } else if (job.status === 'failed') {
+      res.json({
+        success: false,
+        status: 'failed',
+        error: job.error || 'Search failed',
+      });
+    } else {
+      res.json({
+        success: true,
+        status: job.status,
+        message: job.status === 'processing' ? 'Still processing...' : 'Pending...',
+      });
+    }
+  } catch (err) {
+    console.error('[HumSearch] Job status error:', err);
     res.status(500).json({
       success: false,
       status: 'failed',
-      error: job.error,
-    });
-  } else {
-    res.json({
-      success: true,
-      status: job.status,
-      message: job.status === 'processing' ? 'Still processing...' : 'Pending...',
+      error: err instanceof Error ? err.message : 'Internal server error',
     });
   }
 });
