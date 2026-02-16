@@ -47,6 +47,8 @@ export interface ManualOverrideMessage {
     slideIndex?: number;
     songId?: string;
     itemIndex?: number;
+    /** When backend setlist is shorter (e.g. merged from initialSetlist), backend can resolve by id */
+    itemId?: string;
   };
 }
 

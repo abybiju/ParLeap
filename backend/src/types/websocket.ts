@@ -65,6 +65,8 @@ export interface ManualOverrideMessage {
     slideIndex?: number;
     songId?: string;
     itemIndex?: number;
+    /** When itemIndex is out of range (e.g. frontend has merged setlist), backend can resolve by id */
+    itemId?: string;
   };
 }
 

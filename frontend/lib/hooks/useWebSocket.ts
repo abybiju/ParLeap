@@ -21,7 +21,7 @@ export interface UseWebSocketReturn {
   prevSlide: () => void;
   goToSlide: (slideIndex: number, songId?: string) => void;
   /** Jump to setlist item by index (songs, Bible, media). Prefer over goToSlide when using polymorphic setlist. */
-  goToItem: (itemIndex: number) => void;
+  goToItem: (itemIndex: number, itemId?: string) => void;
   ping: () => void;
   connect: () => void;
   disconnect: () => void;
@@ -152,8 +152,8 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
   );
 
   const goToItem = useCallback(
-    (itemIndex: number) => {
-      client.manualOverride('GO_TO_ITEM', undefined, undefined, itemIndex);
+    (itemIndex: number, itemId?: string) => {
+      client.manualOverride('GO_TO_ITEM', undefined, undefined, itemIndex, itemId);
     },
     [client]
   );
