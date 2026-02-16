@@ -46,7 +46,7 @@ export async function searchByHum(
   const searchStart = Date.now();
   
   const { data, error } = await supabase.rpc('match_songs', {
-    query_embedding: queryVector,
+    query_vector: queryVector,
     match_threshold: threshold,
     match_count: limit,
   });
@@ -66,19 +66,19 @@ export async function searchByHum(
 
   console.log(`[HumSearch] Found ${data.length} matches`);
   
-  // Map results to SearchResult interface
+  // Map results to SearchResult interface (lyrics optional for backward compatibility with pre-016 migration)
   const results: SearchResult[] = data.map((row: {
     song_id: string;
     title: string;
     artist: string | null;
     similarity: number;
-    lyrics: string;
+    lyrics?: string;
   }) => ({
     songId: row.song_id,
     title: row.title,
     artist: row.artist,
     similarity: row.similarity,
-    lyrics: row.lyrics,
+    lyrics: row.lyrics ?? '',
   }));
 
   return results;

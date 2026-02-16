@@ -5,6 +5,9 @@ import { X, Music, Loader2, Sparkles, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { audioBufferToWav, arrayBufferToBase64 } from '@/lib/audioUtils'
 
+/** Max recording duration (seconds). User can stop earlier with "Stop & Search". */
+const RECORDING_MAX_SECONDS = 10
+
 interface SearchResult {
   songId: string
   title: string
@@ -27,6 +30,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
   const [results, setResults] = useState<SearchResult[]>([])
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(16).fill(0.1))
   const [recordingTime, setRecordingTime] = useState(0)
+  const [processingElapsed, setProcessingElapsed] = useState(0)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -85,8 +89,12 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       mediaStreamRef.current = stream
 
       // Set up AudioContext for recording and visualization
-      audioContextRef.current = new AudioContext({ sampleRate: 22050 })
-      const source = audioContextRef.current.createMediaStreamSource(stream)
+      const ctx = new AudioContext({ sampleRate: 22050 })
+      audioContextRef.current = ctx
+      if (ctx.state === 'suspended') {
+        await ctx.resume()
+      }
+      const source = ctx.createMediaStreamSource(stream)
       
       // Set up analyser for visualization
       analyserRef.current = audioContextRef.current.createAnalyser()
@@ -118,23 +126,26 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       setState('recording')
       setRecordingTime(0)
 
-      // Start timer
+      // Start timer and auto-stop when we hit the limit
       timerRef.current = setInterval(() => {
         setRecordingTime((t) => {
-          // Cap at 5 seconds for display (reduced to prevent payload too large)
-          if (t >= 5) {
-            return 5
+          const next = t + 1
+          if (next >= RECORDING_MAX_SECONDS) {
+            if (isRecordingRef.current) {
+              stopRecording()
+            }
+            return RECORDING_MAX_SECONDS
           }
-          return t + 1
+          return next
         })
       }, 1000)
 
-      // Auto-stop after 5 seconds (reduced to prevent payload too large)
+      // Auto-stop after max duration (backup in case interval is slow)
       autoStopTimeoutRef.current = setTimeout(() => {
         if (isRecordingRef.current) {
           stopRecording()
         }
-      }, 5000)
+      }, RECORDING_MAX_SECONDS * 1000)
     } catch (err) {
       console.error('Failed to start recording:', err)
       setError('Could not access microphone. Please grant permission.')
@@ -212,7 +223,13 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
 
   const processRecording = async () => {
     setState('processing')
+    setProcessingElapsed(0)
     setAudioLevels(Array(16).fill(0.1))
+    
+    // Show elapsed time while processing (BasicPitch can take 30-60s)
+    let processingTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
+      setProcessingElapsed((prev) => prev + 1)
+    }, 1000)
 
     try {
       if (!audioContextRef.current || audioChunksRef.current.length === 0) {
@@ -270,12 +287,12 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
 
       if (!response.ok) {
         const responseClone = response.clone()
-        let errorData: any = {}
+        let errorData: { error?: string } = {}
         let errorMessage = `Search failed: ${response.status} ${response.statusText}`
         
         try {
-          errorData = await responseClone.json()
-          errorMessage = errorData.error || errorMessage
+          errorData = (await responseClone.json()) as { error?: string }
+          errorMessage = errorData.error ?? errorMessage
         } catch {
           try {
             const text = await response.text()
@@ -311,12 +328,12 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       const pollForResults = async (): Promise<void> => {
         try {
           const statusResponse = await fetch(`${backendUrl}/api/hum-search/${jobData.jobId}`)
+          const statusData = await statusResponse.json().catch(() => ({})) as { status?: string; error?: string; results?: SearchResult[] }
           
           if (!statusResponse.ok) {
-            throw new Error(`Failed to check job status: ${statusResponse.status}`)
+            const msg = statusData?.error ?? `Failed to check job status: ${statusResponse.status}`
+            throw new Error(msg)
           }
-          
-          const statusData = await statusResponse.json()
           console.log(`[HumSearch] Job ${jobData.jobId} status:`, statusData.status)
           
           if (statusData.status === 'completed') {
@@ -351,6 +368,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       setError(errorMessage)
       setState('error')
     } finally {
+      if (processingTimer) clearInterval(processingTimer)
       // Clear audio chunks for next recording
       audioChunksRef.current = []
     }
@@ -406,7 +424,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
               Listening...
             </p>
             <p className="text-white/60 mb-6">
-              Hum your melody ({Math.max(0, 5 - recordingTime)}s remaining)
+              Hum your melody ({Math.max(0, RECORDING_MAX_SECONDS - recordingTime)}s remaining)
             </p>
 
             {/* Real Waveform Visualization */}
@@ -446,8 +464,11 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
             <p className="text-xl font-semibold text-white mb-2">
               Analyzing melody...
             </p>
-            <p className="text-white/60">
+            <p className="text-white/60 mb-1">
               Finding matching songs
+            </p>
+            <p className="text-white/50 text-sm">
+              This may take 30–60 seconds · {processingElapsed}s
             </p>
           </div>
         )}

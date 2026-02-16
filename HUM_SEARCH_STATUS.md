@@ -1,6 +1,6 @@
 # Hum-to-Search Feature Status
 
-**Last Updated:** January 29, 2026  
+**Last Updated:** February 16, 2026  
 **Status:** ⚠️ Implementation Complete, Testing Pending
 
 ## Overview
@@ -150,32 +150,93 @@ Poll for job status.
 }
 ```
 
+## Ensure Hum-to-Search has data
+
+Hum search only returns matches if the `song_fingerprints` table has rows with melody vectors.
+
+**Existing data (from January 29, 2026):** Two fingerprints were already ingested and are in `song_fingerprints`: **Amazing Grace** and **Way Maker** (Leeland). If you see 2 records in the Supabase Table Editor for `song_fingerprints`, you already have data—no need to re-run ingest unless you want to add more songs or refresh vectors.
+
+To add more songs or refresh, use one of the options below.
+
+### Option A: Ingest from WAV files (recommended for testing)
+
+1. **Create the input folder**
+   ```bash
+   mkdir -p backend/songs_input
+   ```
+
+2. **Add WAV files**  
+   Put one or more `.wav` files in `backend/songs_input/`. The script infers **title** and **artist** from the filename:
+   - `Amazing-Grace-Traditional.wav` → title "Amazing Grace", artist "Traditional"
+   - `Way-Maker-Sinach.wav` → title "Way Maker", artist "Sinach"  
+   Use hyphens or underscores; the last segment is treated as artist, the rest as title.
+
+3. **Configure backend env**  
+   In `backend/.env` set:
+   ```env
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   ```
+
+4. **Run the ingest script**
+   ```bash
+   cd backend
+   npm run ingest
+   ```
+   Each WAV is processed by BasicPitch (about **30–60 seconds per file**). Fingerprints are written to `song_fingerprints` (with `song_id` NULL unless you extend the script to link to `songs`). Search still returns these rows; lyrics will be empty until you link them to songs.
+
+### Option B: Link existing songs (for production)
+
+If you already have rows in the `songs` table and want hum results to include lyrics and open the song in the app:
+
+- Either extend the ingest script to look up (or create) a row in `songs` by title/artist and set `song_fingerprints.song_id`, then re-run ingest for those WAVs.
+- Or build a separate flow (e.g. “Generate fingerprint” in the song editor) that computes the melody vector for a song’s audio and inserts/updates `song_fingerprints` with that `song_id`.
+
+### Verify data
+
+In Supabase SQL Editor:
+
+```sql
+SELECT id, title, artist, song_id, source, created_at
+FROM song_fingerprints
+LIMIT 10;
+```
+
+If this returns rows, hum search can return matches (after you’ve run migration 016 and the backend is using it).
+
+---
+
 ## Testing Checklist
 
-- [ ] Verify audio recording works (check browser console)
-- [ ] Verify WAV format is correct (check network request)
-- [ ] Verify backend receives request (check Railway logs)
-- [ ] Verify BasicPitch model loads (check Railway logs)
-- [ ] Verify job queue creates jobs (check Railway logs)
-- [ ] Verify polling works (check browser console)
-- [ ] Verify results display correctly
-- [ ] Test with "Amazing Grace" (known song in database)
-- [ ] Test with "Way Maker" (known song in database)
+- [ ] Apply migration `016_match_songs_return_lyrics.sql` in Supabase (SQL Editor) if using lyrics in results.
+- [ ] Ensure `song_fingerprints` has data (Option A or B above).
+- [ ] Verify audio recording works (check browser console on Songs page, click hum button).
+- [ ] Verify WAV format is correct (check network request payload to `POST /api/hum-search`).
+- [ ] Verify backend receives request (check backend logs for `[HumSearch] Created job`).
+- [ ] Verify BasicPitch model loads (check backend logs for `[MelodyService] Using BasicPitch model`; first request may be slow).
+- [ ] Verify job queue creates jobs (check logs for `Job ... completed` or `failed`).
+- [ ] Verify polling works (check browser console for `[HumSearch] Job ... status:`).
+- [ ] Verify results display correctly (match list with similarity %).
+- [ ] Test with "Amazing Grace" or "Way Maker" if those songs have been ingested.
 
 ## Performance Notes
 
-- **Recording**: 5 seconds max (reduces payload size)
+- **Recording**: 10 seconds max (user can click "Stop & Search" earlier). Auto-stops and analyzes when time is up.
 - **Processing**: 30-60 seconds (BasicPitch inference)
 - **Polling**: Every 1 second, max 60 attempts
-- **Payload**: ~290KB base64 for 5 seconds of audio
+- **Payload**: ~290KB base64 per ~5s of audio (10s ≈ 580KB, well under 10MB limit)
+
+## Recent Improvements (February 16, 2026)
+
+- **Processing UX**: ListeningOverlay now shows "This may take 30–60 seconds" and a live elapsed-time counter during analysis so users know to wait.
+- **API**: `match_songs` RPC extended via migration `016_match_songs_return_lyrics.sql` to return `lyrics` (JOIN songs). Backend tolerates missing lyrics for backward compatibility.
+- **Types**: Removed `any` in ListeningOverlay error handling; strict typing for error response.
 
 ## Next Steps
 
-1. Push latest TypeScript fixes
-2. Deploy and test end-to-end
-3. Monitor Railway logs for processing times
-4. Consider performance optimizations if needed
-5. Add user feedback for long processing times
+1. Deploy and test end-to-end (run migration 016 in Supabase if not applied).
+2. Monitor Railway logs for processing times.
+3. Consider performance optimizations if needed (e.g. Redis-backed job queue for persistence).
 
 ## Backup Plan: Fastify Server Approach
 
