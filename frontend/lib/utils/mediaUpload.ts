@@ -66,6 +66,12 @@ export async function uploadMediaAsset(
     .upload(filename, fileObj, { cacheControl: '3600', upsert: false });
 
   if (error) {
+    const msg = error.message?.toLowerCase() ?? '';
+    if (msg.includes('bucket') && (msg.includes('not found') || msg.includes('missing'))) {
+      throw new Error(
+        "Storage bucket 'media-assets' not found. Create it in Supabase: Dashboard → Storage → New bucket → name 'media-assets', set to Public."
+      );
+    }
     throw new Error(`Upload failed: ${error.message}`);
   }
 
