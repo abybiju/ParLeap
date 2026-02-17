@@ -155,6 +155,7 @@ function buildAnnouncementPayload(
 const MATCH_STALE_MS = parseNumberEnv(process.env.MATCHER_STALE_MS, 12000);
 const MATCH_RECOVERY_WINDOW_MS = parseNumberEnv(process.env.MATCHER_RECOVERY_WINDOW_MS, 10000);
 const MATCH_RECOVERY_COOLDOWN_MS = parseNumberEnv(process.env.MATCHER_RECOVERY_COOLDOWN_MS, 15000);
+const ROLLING_BUFFER_MAX_CHARS = parseNumberEnv(process.env.ROLLING_BUFFER_MAX_CHARS, 250);
 const BIBLE_FOLLOW_MIN_WORDS = parseNumberEnv(process.env.BIBLE_FOLLOW_MIN_WORDS, 4);
 const BIBLE_FOLLOW_MATCH_THRESHOLD = parseNumberEnv(process.env.BIBLE_FOLLOW_MATCH_THRESHOLD, 0.55);
 const BIBLE_FOLLOW_MATCH_MARGIN = parseNumberEnv(process.env.BIBLE_FOLLOW_MATCH_MARGIN, 0.05);
@@ -1352,14 +1353,19 @@ async function handleTranscriptionResult(
     // So we REPLACE the buffer instead of appending to avoid duplication
     // For chunk-based STT (Google), we append
     if (sttProvider === 'elevenlabs') {
-      // ElevenLabs sends cumulative transcripts - use directly
-      session.rollingBuffer = matchText;
+      // ElevenLabs sends cumulative transcripts - keep last N chars for matching
+      session.rollingBuffer = matchText.length > ROLLING_BUFFER_MAX_CHARS
+        ? matchText.slice(-ROLLING_BUFFER_MAX_CHARS)
+        : matchText;
     } else {
-      // Other providers send deltas - append
+      // Other providers send deltas - append then cap
       session.rollingBuffer += ' ' + matchText;
       const words = session.rollingBuffer.split(' ');
       if (words.length > 100) {
         session.rollingBuffer = words.slice(-100).join(' ');
+      }
+      if (session.rollingBuffer.length > ROLLING_BUFFER_MAX_CHARS) {
+        session.rollingBuffer = session.rollingBuffer.slice(-ROLLING_BUFFER_MAX_CHARS);
       }
     }
 
