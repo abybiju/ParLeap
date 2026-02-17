@@ -44,6 +44,11 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Recent Features
 
+**Live session fixes** (February 17, 2026)
+- **Matcher crash when jumping songs**: Clamp `currentLineIndex` to valid range in handler (GO_TO_ITEM, SESSION_STARTED) and in matcher (`effectiveLineIndex`); guard `getAdaptiveEndTrigger` for undefined/empty text. Prevents "slide stuck" and `Cannot read properties of undefined (reading 'trim')`.
+- **Event Not Found**: Clearer backend log and error message (Supabase URL/service role key). Frontend toast suggests checking backend env on production. NextSlidePreview: "Start session to see next slide" when no setlist instead of "End of setlist".
+- **RATE_LIMITED**: START_SESSION exempt from WebSocket control rate limit so "Start session" never triggers it. Friendlier frontend toast when RATE_LIMITED occurs.
+
 **Hum-to-Search: YouTube-style embedding + live hum** (February 16, 2026)
 - Python embedding microservice (`hum-embedding-service/`): FastAPI + Wav2Vec2, POST WAV → 768D vector. Deployed to Railway.
 - Audio trimmed to 30s max to prevent OOM on full-length tracks (was causing EPIPE errors).
@@ -103,6 +108,7 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Session Summaries Location
 Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files and `memory/` daily logs.
+- **Live session fixes (Feb 17)**: `memory/2026-02-17.md`
 - **Hum-to-search (Feb 16)**: `memory/2026-02-16.md`
 - **Password reset**: `SESSION_SUMMARY_PASSWORD_RESET.md`
 - **Bible/Smart Listen**: `SESSION_SUMMARY_FEB_11_2026.md`
