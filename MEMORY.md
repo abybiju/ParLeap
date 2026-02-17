@@ -1,5 +1,22 @@
 # ParLeap AI - Memory Log
 
+## Session: February 17, 2026 — Live session fixes (matcher crash, Event Not Found, RATE_LIMITED)
+
+### What we did
+- **Matcher crash when jumping songs**: Session could have `currentLineIndex` past last line (e.g. 14 for 14-line song). `getAdaptiveEndTrigger(lines[14])` threw. Fixed by: (1) guarding `getAdaptiveEndTrigger` for null/empty; (2) using clamped `effectiveLineIndex` in `findBestMatch`; (3) clamping line index in handler on GO_TO_ITEM and SESSION_STARTED.
+- **Event Not Found + Next Slide**: Clearer backend error message (check Supabase URL/service role key). Frontend toast suggests checking backend env on production. NextSlidePreview shows "Start session to see next slide" when no setlist instead of "End of setlist".
+- **RATE_LIMITED**: Exempted START_SESSION from WebSocket control rate limit so starting a session never triggers it. Frontend shows friendlier warning toast when RATE_LIMITED occurs (e.g. from rapid slide changes).
+
+### Commits
+- `f72b151` — fix: clamp currentLineIndex to prevent matcher crash when jumping songs
+- `6448b39` — fix: clearer Event Not Found message and Next Slide copy when no session
+- `e258f33` — fix: exempt START_SESSION from rate limit; friendlier RATE_LIMITED toast
+
+### Key lesson
+- **Out-of-range indices**: Whenever session or song context stores a line/slide index, clamp it to the current song’s line count at the source (handler) and defensively in the matcher so one bad path can’t crash the match loop.
+
+---
+
 ## Session: February 16, 2026 — Hum-to-Search: YouTube-style embedding + live hum + lazy Supabase
 
 ### What we did
