@@ -88,15 +88,11 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
         return;
       }
       
-      // For subsequent slides, use smooth fade transition
+      // Update slide immediately for low latency; CSS handles fade
       setIsTransitioning(true);
-      setTimeout(() => {
-        setCurrentSlide(displayMsg);
-        // Small delay before fade-in for smoother transition
-        setTimeout(() => {
-          setIsTransitioning(false);
-        }, 50);
-      }, 300);
+      setCurrentSlide(displayMsg);
+      const t = setTimeout(() => setIsTransitioning(false), 50);
+      return () => clearTimeout(t);
     }
   }, [lastMessage, currentSlide]);
 
