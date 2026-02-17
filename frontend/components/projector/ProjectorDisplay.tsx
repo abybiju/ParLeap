@@ -94,6 +94,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       const t = setTimeout(() => setIsTransitioning(false), 50);
       return () => clearTimeout(t);
     }
+    return;
   }, [lastMessage, currentSlide]);
 
   // Keyboard shortcuts
