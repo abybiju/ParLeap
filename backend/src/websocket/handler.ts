@@ -45,7 +45,7 @@ import {
   getBibleFollowSemanticScores,
   findVerseByContent,
 } from '../services/bibleEmbeddingService';
-import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured } from '../services/sttService';
+import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured, isGoogleCloudConfigured } from '../services/sttService';
 import {
   findBestMatchAcrossAllSongs,
   createSongContext,
@@ -490,6 +490,27 @@ function restartElevenLabsStream(session: SessionState, ws: WebSocket, reason: s
   session.lastSttRestartAt = Date.now();
   console.warn(`[STT] 🔄 Restarting ElevenLabs stream (${reason})`);
   initElevenLabsStream(session, ws);
+}
+
+function initGoogleStream(session: SessionState, ws: WebSocket): void {
+  const stream = createStreamingRecognition();
+  stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
+    const processingStart = Date.now();
+    const receivedAtNow = Date.now();
+    void handleTranscriptionResult(ws, session, result, receivedAtNow, processingStart).catch((error) => {
+      console.error('[WS] Error handling transcription result:', error);
+    });
+  });
+  stream.on('error', (error: Error) => {
+    console.error('[STT] ❌ Google stream error:', error);
+    sendError(ws, 'STT_ERROR', 'Google Cloud stream error', { message: error.message });
+  });
+  stream.on('end', () => {
+    console.log('[STT] Google stream ended');
+    session.sttStream = undefined;
+  });
+  session.sttStream = stream;
+  console.log('[STT] ✅ Google Cloud streaming initialized');
 }
 
 // ============================================
@@ -1894,7 +1915,70 @@ async function handleAudioData(
     return;
   }
 
-  // Send audio to STT service (Google Cloud or mock)
+  if (sttProvider === 'google' && isGoogleCloudConfigured) {
+    if (format?.encoding !== 'pcm_s16le') {
+      const receivedFormat = format?.encoding || 'unknown';
+      const receivedSampleRate = format?.sampleRate || 'unknown';
+      const receivedChannels = format?.channels || 'unknown';
+      console.error(`[WS] ❌ Audio format mismatch for Google streaming STT:`);
+      console.error(`[WS]    Received: encoding=${receivedFormat}, sampleRate=${receivedSampleRate}, channels=${receivedChannels}`);
+      console.error(`[WS]    Expected: encoding=pcm_s16le, sampleRate=16000, channels=1`);
+      console.error(`[WS]    Set NEXT_PUBLIC_STT_PROVIDER=google in frontend for PCM audio`);
+      sendError(ws, 'AUDIO_FORMAT_UNSUPPORTED',
+        `Google streaming requires PCM 16-bit (pcm_s16le, 16kHz, mono). Received: ${receivedFormat}. Set NEXT_PUBLIC_STT_PROVIDER=google in frontend.`,
+        { encoding: receivedFormat, sampleRate: receivedSampleRate, channels: receivedChannels }
+      );
+      return;
+    }
+    if (chunkCount === 0) {
+      console.log(`[WS] ✅ Audio format validated for Google: PCM 16-bit (${format.sampleRate}Hz, ${format.channels} channel)`);
+    }
+    if (shouldUseSmartListenGate(session)) {
+      const now = Date.now();
+      const windowActive = session.sttWindowActiveUntil !== undefined && now <= session.sttWindowActiveUntil;
+      if (!windowActive) {
+        if (session.sttStream) {
+          try {
+            session.sttStream.end();
+          } catch (e) {
+            console.warn('[STT] Smart Listen: error ending stream outside active window:', e);
+          }
+          session.sttStream = undefined;
+        }
+        if (session.sttWindowActiveUntil && now > session.sttWindowActiveUntil) {
+          session.sttWindowActiveUntil = undefined;
+        }
+        return;
+      }
+    }
+    if (!session.sttStream) {
+      console.log('[STT] 🚀 Creating Google Cloud streaming recognition (lazy init on first audio)...');
+      initGoogleStream(session, ws);
+      const activeStream = session.sttStream;
+      for (const [otherWs, otherSession] of sessions.entries()) {
+        if (otherSession.eventId === session.eventId && otherSession !== session && !otherSession.sttStream && otherWs.readyState === ws.OPEN) {
+          if (activeStream) otherSession.sttStream = activeStream;
+        }
+      }
+    }
+    try {
+      const byteLength = Math.floor((data.length * 3) / 4);
+      if (!session.sttStream) {
+        sendError(ws, 'STT_ERROR', 'Google stream not initialized');
+        return;
+      }
+      session.sttStream.write(data);
+      if (chunkCount < 3) {
+        console.log(`[WS] ✅ Audio chunk #${chunkCount + 1} sent to Google: ~${byteLength} bytes`);
+      }
+    } catch (error) {
+      console.error('[WS] ❌ Error sending audio to Google:', error);
+      sendError(ws, 'STT_ERROR', 'Error sending audio to Google', { message: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+  // Send audio to STT service (Google Cloud non-streaming or mock)
   try {
     const transcriptionResult = await transcribeAudioChunk(data);
     if (transcriptionResult) {

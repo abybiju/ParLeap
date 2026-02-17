@@ -125,7 +125,7 @@ export function OperatorHUD({
     smartListenMasterEnabled && bibleMode && !isSongLikeItem(activeItemType);
 
   const audioCapture = useAudioCapture({
-    usePcm: sttProvider === 'elevenlabs',
+    usePcm: sttProvider === 'elevenlabs' || sttProvider === 'google',
     sessionActive: sessionStatus === 'active',
     smartListenEnabled: effectiveSmartListen,
     smartListenBufferMs: 5000,
@@ -191,12 +191,12 @@ export function OperatorHUD({
 
   // Environment variable validation and debug logging
   useEffect(() => {
-    if (sttProvider === 'elevenlabs') {
-      console.log('[OperatorHUD] ✅ ElevenLabs STT enabled - PCM mode active');
+    if (sttProvider === 'elevenlabs' || sttProvider === 'google') {
+      console.log(`[OperatorHUD] ✅ ${sttProvider} STT enabled - PCM mode active`);
       console.log('[OperatorHUD] ✅ Audio will be sent as PCM 16-bit (pcm_s16le) format');
     } else {
-      console.warn('[OperatorHUD] ⚠️  NEXT_PUBLIC_STT_PROVIDER is not "elevenlabs" - using WebM format');
-      console.warn('[OperatorHUD] ⚠️  Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs in frontend environment for PCM audio');
+      console.warn('[OperatorHUD] ⚠️  NEXT_PUBLIC_STT_PROVIDER is not "elevenlabs" or "google" - using WebM format');
+      console.warn('[OperatorHUD] ⚠️  Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs or google for PCM audio');
     }
   }, [sttProvider]);
 

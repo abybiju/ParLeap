@@ -37,7 +37,7 @@ export function WebSocketTest() {
 
   const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
   // Audio capture
-  const audioCapture = useAudioCapture({ usePcm: sttProvider === 'elevenlabs' });
+  const audioCapture = useAudioCapture({ usePcm: sttProvider === 'elevenlabs' || sttProvider === 'google' });
 
   // Track message history
   useEffect(() => {
