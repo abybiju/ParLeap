@@ -117,6 +117,8 @@ const END_TRIGGER_THRESHOLD = 0.52; // Primary threshold - advance when end-word
 const END_TRIGGER_SECONDARY_THRESHOLD = 0.48; // Secondary when next-line is also rising
 const NEXT_LINE_SUPPORT_THRESHOLD = 0.55; // Require reasonable next-line confidence for hybrid trigger
 const END_TRIGGER_MATCH_GATE = 0.58; // Allow end-trigger even if full-line confidence is lower
+/** When target line is this similar to current line, block next-line advance; require end-of-line so singer can repeat verse. */
+const SIMILAR_LINE_THRESHOLD = 0.65;
 // Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**
@@ -419,17 +421,37 @@ export function findBestMatch(
         }
       }
     } else {
-      // Moved to next line(s) - original logic: next line already detected
-      result.isLineEnd = true;
-      result.nextLineIndex = bestLineIndex;
-      result.advanceReason = 'next-line';
-      if (config.debug) {
-        console.log(
-          `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (next-line detected, advancing from ${songContext.currentLineIndex})`
-        );
-        console.log(
-          `[MATCHER] isLineEnd=true because bestLineIndex (${bestLineIndex}) > currentLineIndex (${songContext.currentLineIndex}) - transition detected`
-        );
+      // Moved to next line(s) - but if target line is very similar to current, don't advance via next-line
+      // (singer may be repeating the verse; require end-of-line trigger to advance)
+      const currentLineText = songContext.normalizedLines?.[songContext.currentLineIndex]
+        ?? normalizeText(songContext.lines[songContext.currentLineIndex]);
+      const targetLineText = songContext.normalizedLines?.[bestLineIndex]
+        ?? normalizeText(songContext.lines[bestLineIndex]);
+      const lineSimilarity = compareTwoStrings(currentLineText, targetLineText);
+
+      if (lineSimilarity >= SIMILAR_LINE_THRESHOLD) {
+        result.currentLineIndex = songContext.currentLineIndex;
+        result.matchedText = songContext.lines[songContext.currentLineIndex];
+        result.isLineEnd = false;
+        result.nextLineIndex = undefined;
+        result.advanceReason = undefined;
+        if (config.debug) {
+          console.log(
+            `[MATCHER] Similar line detected (${(lineSimilarity * 100).toFixed(1)}%): not advancing to line ${bestLineIndex}; require end-of-line.`
+          );
+        }
+      } else {
+        result.isLineEnd = true;
+        result.nextLineIndex = bestLineIndex;
+        result.advanceReason = 'next-line';
+        if (config.debug) {
+          console.log(
+            `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (next-line detected, advancing from ${songContext.currentLineIndex})`
+          );
+          console.log(
+            `[MATCHER] isLineEnd=true because bestLineIndex (${bestLineIndex}) > currentLineIndex (${songContext.currentLineIndex}) - transition detected`
+          );
+        }
       }
     }
   } else if (bestLineIndex === songContext.currentLineIndex) {
