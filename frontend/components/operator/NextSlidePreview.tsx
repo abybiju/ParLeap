@@ -114,10 +114,13 @@ export function NextSlidePreview() {
   }
 
   if (!nextSlideLines || nextSlideLines.length === 0) {
+    const noSession = !slideCache.setlist;
     return (
       <div className="p-3 rounded-xl border border-white/10 bg-white/5">
         <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] mb-1.5">Next Slide</p>
-        <p className="text-sm text-slate-500 italic">End of setlist</p>
+        <p className="text-sm text-slate-500 italic">
+          {noSession ? 'Start session to see next slide' : 'End of setlist'}
+        </p>
       </div>
     );
   }
