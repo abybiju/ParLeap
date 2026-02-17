@@ -2772,7 +2772,8 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
     ? String((parsed as { type?: unknown }).type)
     : 'UNKNOWN';
 
-  if (isRateLimited(ws, messageType)) {
+  // Never rate-limit START_SESSION so starting a session is never blocked
+  if (messageType !== 'START_SESSION' && isRateLimited(ws, messageType)) {
     sendError(ws, 'RATE_LIMITED', 'Too many messages in a short period');
     return;
   }

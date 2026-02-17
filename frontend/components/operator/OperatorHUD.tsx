@@ -380,6 +380,11 @@ export function OperatorHUD({
         } else if (error.code === 'STT_ERROR' || error.code === 'AUDIO_FORMAT_UNSUPPORTED') {
           // STT errors are handled by STTStatus component, just log here
           console.warn('[OperatorHUD] STT error:', error.message);
+        } else if (error.code === 'RATE_LIMITED') {
+          toast.warning('Rate limited', {
+            description: 'Too many actions in a short period. Wait a moment and try again.',
+            duration: 5000,
+          });
         } else {
           toast.error(`Error: ${error.code}`, {
             description: error.message || 'An error occurred. Check console for details.',
