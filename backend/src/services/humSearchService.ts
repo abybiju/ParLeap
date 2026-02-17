@@ -9,7 +9,9 @@
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 import { getMelodyVector } from './melodyService';
 
-const EMBEDDING_SERVICE_URL = process.env.EMBEDDING_SERVICE_URL?.trim() || '';
+function getEmbeddingServiceUrl(): string {
+  return process.env.EMBEDDING_SERVICE_URL?.trim() || '';
+}
 
 export interface SearchResult {
   songId: string;
@@ -29,8 +31,11 @@ interface EmbeddingResponse {
  * Exported for use by the ingest script.
  */
 export async function getEmbeddingFromService(audioBuffer: Buffer): Promise<number[]> {
-  const base = EMBEDDING_SERVICE_URL.replace(/\/$/, '');
-  const url = `${base}/embed`;
+  const base = getEmbeddingServiceUrl();
+  if (!base) {
+    throw new Error('EMBEDDING_SERVICE_URL is not set');
+  }
+  const url = `${base.replace(/\/$/, '')}/embed`;
   const form = new FormData();
   form.append('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'hum.wav');
 
@@ -68,10 +73,11 @@ export async function searchByHum(
     throw new Error('Supabase not configured - cannot perform hum search');
   }
 
-  const useEmbeddingService = EMBEDDING_SERVICE_URL.length > 0;
+  const embeddingServiceUrl = getEmbeddingServiceUrl();
+  const useEmbeddingService = embeddingServiceUrl.length > 0;
 
   if (useEmbeddingService) {
-    console.log('[HumSearch] Using YouTube-style embedding service:', EMBEDDING_SERVICE_URL);
+    console.log('[HumSearch] Using YouTube-style embedding service:', embeddingServiceUrl);
   } else {
     console.log('[HumSearch] Using BasicPitch melody vector (match_songs)');
   }

@@ -92,11 +92,28 @@ async function processFile(filePath: string): Promise<void> {
     if (embeddingServiceUrl) {
       console.log('   Calling embedding service (YouTube-style)...');
       const buffer = fs.readFileSync(filePath);
-      embedding = await getEmbeddingFromService(buffer);
-      if (embedding.length !== 768) {
+      const maxRetries = 3;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          embedding = await getEmbeddingFromService(buffer);
+          break;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (attempt < maxRetries) {
+            const delay = attempt * 5000;
+            console.log(`   ⚠️  Embedding attempt ${attempt}/${maxRetries} failed (${msg}), retrying in ${delay / 1000}s...`);
+            await new Promise((r) => setTimeout(r, delay));
+          } else {
+            throw err;
+          }
+        }
+      }
+      if (embedding && embedding.length !== 768) {
         throw new Error(`Invalid embedding length: expected 768, got ${embedding.length}`);
       }
-      console.log(`   ✅ Got ${embedding.length}D embedding`);
+      if (embedding) {
+        console.log(`   ✅ Got ${embedding.length}D embedding`);
+      }
     }
 
     const row: Record<string, unknown> = {
