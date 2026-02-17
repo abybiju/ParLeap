@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { X, Music, Loader2, Sparkles, AlertCircle } from 'lucide-react'
+import { X, Music, Sparkles, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { audioBufferToWav, arrayBufferToBase64 } from '@/lib/audioUtils'
 
@@ -533,7 +533,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
 
             {/* Stop button */}
             <button
-              onClick={stopRecording}
+              onClick={() => stopRecording('user')}
               className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
             >
               Stop & Search
