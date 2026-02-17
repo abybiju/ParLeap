@@ -66,6 +66,15 @@ export interface MultiSongMatchResult {
     matchedLine: string;
     matchedLineIndex: number;
   };
+  /** Best match in any other song (always set when we checked others). Used for recovery switch when no match for long time. */
+  bestOtherSong?: {
+    songId: string;
+    songTitle: string;
+    songIndex: number;
+    lineIndex: number;
+    lineText: string;
+    confidence: number;
+  };
 }
 
 /**
@@ -664,6 +673,19 @@ export function findBestMatchAcrossAllSongs(
         `[MULTI-SONG] No strong match in other songs (best: ${(bestOtherSongScore * 100).toFixed(1)}%)`
       );
     }
+  }
+
+  // Always expose best other song for recovery switch (when no match for long time, playing different song from start)
+  if (bestOtherSongIndex >= 0) {
+    const bestSong = allSongs[bestOtherSongIndex];
+    result.bestOtherSong = {
+      songId: bestSong.id,
+      songTitle: bestSong.title,
+      songIndex: bestOtherSongIndex,
+      lineIndex: bestOtherSongLineIndex,
+      lineText: bestOtherSongLineText,
+      confidence: bestOtherSongScore,
+    };
   }
 
   return result;

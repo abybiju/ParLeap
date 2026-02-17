@@ -1614,6 +1614,92 @@ async function handleTranscriptionResult(
           }
         }
 
+        // RECOVERY SWITCH: When no match for a long time (recovery mode) and user is likely singing
+        // a different song from the start (e.g. played "Praise" from Spotify without clicking setlist),
+        // switch to the song that has the best match on an early line so slides can appear.
+        const inRecovery = session.allowBackwardUntil !== undefined && Date.now() < session.allowBackwardUntil;
+        const RECOVERY_SWITCH_MIN_CONFIDENCE = 0.22; // Lower threshold when we've had no match for 12s+
+        const RECOVERY_SWITCH_MAX_LINE_INDEX = 3; // Only switch if best match is near start of song (line 0-3)
+        const noCurrentMatch = !matchResult.matchFound || matchResult.confidence < 0.3;
+        const bestOther = multiSongResult.bestOtherSong;
+        const recoverySwitchOk =
+          inRecovery &&
+          noCurrentMatch &&
+          bestOther &&
+          bestOther.confidence >= RECOVERY_SWITCH_MIN_CONFIDENCE &&
+          bestOther.lineIndex <= RECOVERY_SWITCH_MAX_LINE_INDEX &&
+          session.isAutoFollowing &&
+          (!session.lastSongSwitchAt || now - session.lastSongSwitchAt >= SONG_SWITCH_COOLDOWN_MS);
+
+        if (recoverySwitchOk) {
+          const suggestion = bestOther;
+          const switchedSong = session.songs[suggestion.songIndex];
+          const recoverySlideIndex =
+            switchedSong.lineToSlideIndex && suggestion.lineIndex < switchedSong.lineToSlideIndex.length
+              ? switchedSong.lineToSlideIndex[suggestion.lineIndex]
+              : suggestion.lineIndex;
+          console.log(
+            `[WS] 🔄 RECOVERY SWITCH to "${suggestion.songTitle}" (line ${suggestion.lineIndex} → slide ${recoverySlideIndex}) @ ${(suggestion.confidence * 100).toFixed(1)}% - no match for long time`
+          );
+          session.currentSongIndex = suggestion.songIndex;
+          session.currentSlideIndex = recoverySlideIndex;
+          session.currentLineIndex = suggestion.lineIndex;
+          const setlistItems = session.setlistItems ?? [];
+          const itemIdx = setlistItems.findIndex((i) => i.type === 'SONG' && i.songId === suggestion.songId);
+          if (itemIdx >= 0) session.currentItemIndex = itemIdx;
+          session.songContext = createSongContext(
+            { id: suggestion.songId, sequence_order: suggestion.songIndex + 1 },
+            session.songs[suggestion.songIndex],
+            suggestion.lineIndex
+          );
+          session.rollingBuffer = '';
+          session.lastSongSwitchAt = now;
+          session.lastStrongMatchAt = now;
+          session.allowBackwardUntil = undefined;
+          session.suggestedSongSwitch = undefined;
+
+          const songChangedMsg: SongChangedMessage = {
+            type: 'SONG_CHANGED',
+            payload: {
+              songId: suggestion.songId,
+              songTitle: suggestion.songTitle,
+              songIndex: suggestion.songIndex,
+              totalSlides: session.songs[suggestion.songIndex].lines.length,
+            },
+            timing: createTiming(receivedAt, processingStart),
+          };
+          broadcastToEvent(session.eventId, songChangedMsg);
+
+          let slideLines: string[];
+          let slideText: string;
+          if (switchedSong.slides && recoverySlideIndex < switchedSong.slides.length) {
+            const slide = switchedSong.slides[recoverySlideIndex];
+            slideLines = slide.lines;
+            slideText = slide.slideText;
+          } else {
+            slideLines = [switchedSong.lines[suggestion.lineIndex] ?? suggestion.lineText];
+            slideText = slideLines[0];
+          }
+          const displayMsg: DisplayUpdateMessage = {
+            type: 'DISPLAY_UPDATE',
+            payload: {
+              lineText: slideLines[0],
+              slideText,
+              slideLines,
+              slideIndex: recoverySlideIndex,
+              songId: suggestion.songId,
+              songTitle: suggestion.songTitle,
+              matchConfidence: suggestion.confidence,
+              isAutoAdvance: true,
+              currentItemIndex: session.currentItemIndex,
+            },
+            timing: createTiming(receivedAt, processingStart),
+          };
+          broadcastToEvent(session.eventId, displayMsg);
+          logTiming('song path (recovery switch)');
+          return;
+        }
+
       // Handle current song line matching (normal slide advance)
       const isEndTriggerMatch =
         matchResult.advanceReason === 'end-words' && matchResult.endTriggerScore !== undefined;
