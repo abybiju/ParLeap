@@ -1,15 +1,17 @@
 /**
  * Audio Ingestion Script
- * 
- * Processes WAV files from songs_input/ directory and extracts melody vectors
- * for the "Hum-to-Search" feature.
- * 
+ *
+ * Processes WAV files from songs_input/ and extracts vectors for Hum-to-Search.
+ * - Always: BasicPitch melody vector (128D) → melody_vector.
+ * - When EMBEDDING_SERVICE_URL is set: also POSTs WAV to embedding service → embedding (768D).
+ *
  * Usage:
  *   npm run ingest
- * 
+ *
  * Requirements:
  *   - WAV files in backend/songs_input/
  *   - SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env
+ *   - Optional: EMBEDDING_SERVICE_URL for YouTube-style 768D embeddings
  */
 
 import * as dotenv from 'dotenv';
@@ -18,12 +20,14 @@ import * as fs from 'fs';
 import { glob } from 'glob';
 import { createClient } from '@supabase/supabase-js';
 import { getMelodyVectorFromFile } from '../src/services/melodyService';
+import { getEmbeddingFromService } from '../src/services/humSearchService';
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const embeddingServiceUrl = (process.env.EMBEDDING_SERVICE_URL || '').trim();
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('❌ Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in backend/.env');
@@ -74,16 +78,35 @@ async function processFile(filePath: string): Promise<void> {
   console.log(`   Artist: ${artist}`);
   
   try {
-    // Extract melody vector
+    // Extract melody vector (128D, for match_songs when embedding service not used)
     console.log('   Extracting melody vector...');
     const melodyVector = await getMelodyVectorFromFile(filePath);
-    
+
     if (melodyVector.length !== 128) {
       throw new Error(`Invalid vector length: expected 128, got ${melodyVector.length}`);
     }
-    
-    console.log(`   ✅ Extracted ${melodyVector.length}D vector`);
-    
+
+    console.log(`   ✅ Extracted ${melodyVector.length}D melody vector`);
+
+    let embedding: number[] | undefined;
+    if (embeddingServiceUrl) {
+      console.log('   Calling embedding service (YouTube-style)...');
+      const buffer = fs.readFileSync(filePath);
+      embedding = await getEmbeddingFromService(buffer);
+      if (embedding.length !== 768) {
+        throw new Error(`Invalid embedding length: expected 768, got ${embedding.length}`);
+      }
+      console.log(`   ✅ Got ${embedding.length}D embedding`);
+    }
+
+    const row: Record<string, unknown> = {
+      melody_vector: melodyVector,
+      source: 'manual',
+    };
+    if (embedding) {
+      row.embedding = embedding;
+    }
+
     // Check if fingerprint already exists
     const { data: existing } = await supabase
       .from('song_fingerprints')
@@ -91,32 +114,25 @@ async function processFile(filePath: string): Promise<void> {
       .eq('title', title)
       .eq('artist', artist)
       .single();
-    
+
     if (existing) {
       console.log(`   ⚠️  Fingerprint already exists, updating...`);
       const { error: updateError } = await supabase
         .from('song_fingerprints')
-        .update({
-          melody_vector: melodyVector,
-          source: 'manual',
-        })
+        .update(row)
         .eq('id', existing.id);
-      
+
       if (updateError) {
         throw updateError;
       }
       console.log(`   ✅ Updated existing fingerprint`);
     } else {
-      // Insert new fingerprint
-      const { error: insertError } = await supabase
-        .from('song_fingerprints')
-        .insert({
-          title,
-          artist,
-          melody_vector: melodyVector,
-          source: 'manual',
-        });
-      
+      const { error: insertError } = await supabase.from('song_fingerprints').insert({
+        title,
+        artist,
+        ...row,
+      });
+
       if (insertError) {
         throw insertError;
       }

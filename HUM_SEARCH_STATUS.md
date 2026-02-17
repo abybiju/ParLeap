@@ -5,12 +5,17 @@
 
 ## Overview
 
-Hum-to-Search allows users to find songs by humming the melody. The system extracts a 128-dimensional melody vector from audio and searches for similar songs using pgvector cosine similarity.
+Hum-to-Search allows users to find songs by humming the melody. The system supports two paths:
+
+- **YouTube-style (optional):** When `EMBEDDING_SERVICE_URL` is set, the backend POSTs the user’s WAV to a Python embedding service (e.g. Wav2Vec2), gets a 768D vector, and searches via `match_songs_by_embedding()`. Reference tracks are embedded at ingest time and stored in `song_fingerprints.embedding`.
+- **BasicPitch (default):** When the embedding service is not configured, the backend uses BasicPitch to extract a 128D melody vector and searches via `match_songs()` (column `melody_vector`).
+
+Same API and frontend; only the backend search path changes.
 
 ## Architecture
 
 ```
-User Hum → Frontend (WAV) → Backend (Extract Vector) → Supabase (Search) → Results
+User Hum → Frontend (WAV) → Backend → [Embedding service OR BasicPitch] → Vector → Supabase (pgvector) → Results
 ```
 
 ### Components
@@ -20,19 +25,17 @@ User Hum → Frontend (WAV) → Backend (Extract Vector) → Supabase (Search) �
    - Converts to WAV format using `audioUtils.ts`
    - Sends base64-encoded WAV to backend
 
-2. **Backend Processing** (`melodyService.ts`)
-   - Uses BasicPitch AI to extract MIDI notes
-   - Converts to 128D vector (64 pitch intervals + 64 rhythm ratios)
-   - Key-invariant and tempo-invariant
+2. **Backend Processing**
+   - **If `EMBEDDING_SERVICE_URL` is set (YouTube-style):** `humSearchService.ts` POSTs WAV to the Python service, receives 768D embedding, then calls Supabase `match_songs_by_embedding(query_embedding, threshold, limit)`.
+   - **Otherwise:** `melodyService.ts` (BasicPitch) extracts 128D melody vector; `humSearchService.ts` calls `match_songs(query_vector, threshold, limit)`.
 
-3. **Database Search** (`humSearchService.ts`)
-   - Calls Supabase `match_songs()` RPC function
-   - Returns top matches with similarity scores
+3. **Database**
+   - `song_fingerprints.melody_vector` (128D) — BasicPitch path.
+   - `song_fingerprints.embedding` (768D) — YouTube-style path; migration `017_embedding_column_and_match_songs_by_embedding.sql` adds column and `match_songs_by_embedding()`.
 
 4. **Async Job Queue** (`jobQueue.ts`)
-   - Prevents timeout issues (BasicPitch is slow)
-   - Returns job ID immediately
-   - Frontend polls for results
+   - Prevents timeout issues (BasicPitch or embedding call can be slow)
+   - Returns job ID immediately; frontend polls for results
 
 ## Current Implementation
 
@@ -79,7 +82,9 @@ User Hum → Frontend (WAV) → Backend (Extract Vector) → Supabase (Search) �
 - `frontend/lib/audioUtils.ts` - WAV encoder
 
 ### Database
-- `supabase/migrations/003_add_melody_vectors.sql` - Schema migration
+- `supabase/migrations/003_add_melody_vectors.sql` - Melody vectors (128D)
+- `supabase/migrations/016_match_songs_return_lyrics.sql` - `match_songs` returns lyrics
+- `supabase/migrations/017_embedding_column_and_match_songs_by_embedding.sql` - `embedding` column (768D) and `match_songs_by_embedding()` for YouTube-style search
 
 ## Environment Variables
 
@@ -94,7 +99,10 @@ PORT=8080 (Railway default)
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 CORS_ORIGIN=https://www.parleap.com
+# Optional: YouTube-style hum search (768D embeddings)
+EMBEDDING_SERVICE_URL=https://your-embedding-service.up.railway.app
 ```
+When `EMBEDDING_SERVICE_URL` is set, hum search uses the embedding service and `match_songs_by_embedding`; otherwise BasicPitch + `match_songs` is used.
 
 ## API Endpoints
 
@@ -156,7 +164,21 @@ Hum search only returns matches if the `song_fingerprints` table has rows with m
 
 **Existing data (from January 29, 2026):** Two fingerprints were already ingested and are in `song_fingerprints`: **Amazing Grace** and **Way Maker** (Leeland). If you see 2 records in the Supabase Table Editor for `song_fingerprints`, you already have data—no need to re-run ingest unless you want to add more songs or refresh vectors.
 
-To add more songs or refresh, use one of the options below.
+### Verify row count (fix for "closest query returned empty")
+
+If the backend logs say **"No fingerprints in database (closest query returned empty)"**, the **same** Supabase project that Railway uses has **no rows** (or only rows with null `melody_vector`). Check in the project you use for production (e.g. ParLeap project `ypbqqwevnxqnooplvdyn`):
+
+In Supabase SQL Editor run:
+
+```sql
+SELECT COUNT(*) AS total,
+       COUNT(melody_vector) AS with_vector
+FROM song_fingerprints;
+```
+
+- If **total = 0**: the table is empty. Run **Option A** below with `backend/.env` set to this project’s `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (same as in Railway), then re-test hum search.
+- If **total > 0** but **with_vector = 0**: all rows have null `melody_vector`; re-run ingest to refresh.
+- If **with_vector > 0**: data exists; if hum still doesn’t match, check Railway env points to this project and consider lowering the threshold or the YouTube-style approach (see research section).
 
 ### Option A: Ingest from WAV files (recommended for testing)
 
@@ -178,12 +200,19 @@ To add more songs or refresh, use one of the options below.
    SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
    ```
 
-4. **Run the ingest script**
+4. **Optional: YouTube-style embeddings**  
+   If you run the Python embedding service (`hum-embedding-service/`), set in `backend/.env`:
+   ```env
+   EMBEDDING_SERVICE_URL=http://localhost:8000
+   ```
+   Then run ingest: each WAV gets both a BasicPitch melody vector and a 768D embedding (from the Python service). Hum search will use the embedding path when `EMBEDDING_SERVICE_URL` is set.
+
+5. **Run the ingest script**
    ```bash
    cd backend
    npm run ingest
    ```
-   Each WAV is processed by BasicPitch (about **30–60 seconds per file**). Fingerprints are written to `song_fingerprints` (with `song_id` NULL unless you extend the script to link to `songs`). Search still returns these rows; lyrics will be empty until you link them to songs.
+   Each WAV is processed by BasicPitch (about **30–60 seconds per file**). If `EMBEDDING_SERVICE_URL` is set, each file is also sent to the embedding service. Fingerprints are written to `song_fingerprints` (with `song_id` NULL unless you extend the script to link to `songs`). Search still returns these rows; lyrics will be empty until you link them to songs.
 
 ### Option B: Link existing songs (for production)
 
@@ -209,6 +238,7 @@ If this returns rows, hum search can return matches (after you’ve run migratio
 ## Testing Checklist
 
 - [ ] Apply migration `016_match_songs_return_lyrics.sql` in Supabase (SQL Editor) if using lyrics in results.
+- [ ] If using YouTube-style: apply migration `017_embedding_column_and_match_songs_by_embedding.sql` and set `EMBEDDING_SERVICE_URL`; run ingest to fill `embedding` column.
 - [ ] Ensure `song_fingerprints` has data (Option A or B above).
 - [ ] Verify audio recording works (check browser console on Songs page, click hum button).
 - [ ] Verify WAV format is correct (check network request payload to `POST /api/hum-search`).
@@ -228,6 +258,7 @@ If this returns rows, hum search can return matches (after you’ve run migratio
 
 ## Recent Improvements (February 16, 2026)
 
+- **YouTube-style path**: Optional Python embedding service (`hum-embedding-service/`): POST WAV → 768D vector; backend uses `match_songs_by_embedding` when `EMBEDDING_SERVICE_URL` is set. Migration 017 adds `embedding` column and RPC. Ingest script can call the embedding service to populate `embedding` in addition to `melody_vector`.
 - **Processing UX**: ListeningOverlay now shows "This may take 30–60 seconds" and a live elapsed-time counter during analysis so users know to wait.
 - **API**: `match_songs` RPC extended via migration `016_match_songs_return_lyrics.sql` to return `lyrics` (JOIN songs). Backend tolerates missing lyrics for backward compatibility.
 - **Types**: Removed `any` in ListeningOverlay error handling; strict typing for error response.
