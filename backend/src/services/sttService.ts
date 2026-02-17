@@ -214,6 +214,7 @@ export function createStreamingRecognition(): {
       error?: StreamErrorCallback[];
     } = {};
     const pendingChunks: Buffer[] = [];
+    let lastChunkSentAt = 0;
     const modelId = process.env.ELEVENLABS_MODEL_ID || 'scribe_v2_realtime';
     const languageCode = process.env.ELEVENLABS_LANGUAGE_CODE || 'en';
     const commitStrategy = process.env.ELEVENLABS_COMMIT_STRATEGY || 'vad';
@@ -236,6 +237,7 @@ export function createStreamingRecognition(): {
         if (!chunk) {
           return;
         }
+        lastChunkSentAt = Date.now();
         socket.send(
           JSON.stringify({
             message_type: 'input_audio_chunk',
@@ -260,6 +262,10 @@ export function createStreamingRecognition(): {
         };
 
         if (payload.message_type === 'partial_transcript' || payload.message_type === 'committed_transcript' || payload.message_type === 'committed_transcript_with_timestamps') {
+          if (lastChunkSentAt > 0) {
+            const latencyMs = Date.now() - lastChunkSentAt;
+            console.log(`[STT] ⏱️ latency audio_sent_to_transcript_received=${latencyMs}ms`);
+          }
           const result: TranscriptionResult = {
             text: payload.text || '',
             isFinal: payload.message_type !== 'partial_transcript',
@@ -290,6 +296,7 @@ export function createStreamingRecognition(): {
     return {
       write: (audioData: Buffer) => {
         if (socket.readyState === WebSocket.OPEN) {
+          lastChunkSentAt = Date.now();
           socket.send(
             JSON.stringify({
               message_type: 'input_audio_chunk',

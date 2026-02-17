@@ -893,6 +893,12 @@ async function handleTranscriptionResult(
   receivedAt: number,
   processingStart: number
 ): Promise<void> {
+  const handleStart = Date.now();
+  const logTiming = (label: string, extra?: string) => {
+    const total = Date.now() - handleStart;
+    console.log(`[WS] ⏱️ handleTranscriptionResult ${label} total=${total}ms${extra ? ` ${extra}` : ''}`);
+  };
+
   // Send transcript to the session that received it (usually the one with STT stream)
   // Matching will be processed for this session
   // Default to allowing partial matching to provide faster feedback
@@ -982,6 +988,7 @@ async function handleTranscriptionResult(
     }
 
     if (session.bibleMode) {
+      const biblePathStart = Date.now();
       const versionCommand = detectBibleVersionCommand(transcriptionResult.text);
       if (versionCommand) {
         const versionId = await getBibleVersionIdByAbbrev(versionCommand);
@@ -1010,6 +1017,7 @@ async function handleTranscriptionResult(
           };
           broadcastToEvent(session.eventId, settingsMessage);
         }
+        logTiming('bible path (version)', `bibleMs=${Date.now() - biblePathStart}`);
         return;
       }
 
@@ -1148,6 +1156,7 @@ async function handleTranscriptionResult(
           timing: createTiming(receivedAt, processingStart),
         };
         broadcastToEvent(session.eventId, settingsMessage);
+        logTiming('bible path (ref)', `bibleMs=${Date.now() - biblePathStart}`);
         return;
       }
 
@@ -1167,17 +1176,20 @@ async function handleTranscriptionResult(
         const normalizedBuffer = normalizeMatchText(cleanedBuffer);
         const bufferWordCount = normalizedBuffer.split(/\s+/).filter(Boolean).length;
         if (bufferWordCount < BIBLE_FOLLOW_MIN_WORDS) {
+          logTiming('bible path (min words)', `bibleMs=${Date.now() - biblePathStart}`);
           return;
         }
 
           const followRef = session.bibleFollowRef;
         const followEndVerse = followRef.endVerse ?? null;
         if (followEndVerse !== null && followRef.verse >= followEndVerse) {
+          logTiming('bible path (end verse)', `bibleMs=${Date.now() - biblePathStart}`);
           return;
         }
 
         const currentVerse = await getBibleVerseCached(session, followRef, session.bibleVersionId);
         if (!currentVerse) {
+          logTiming('bible path (no verse)', `bibleMs=${Date.now() - biblePathStart}`);
           return;
         }
 
@@ -1275,6 +1287,7 @@ async function handleTranscriptionResult(
                     `[WS] Bible: cross-chapter jump to ${crossVerse.book} ${crossVerse.chapter}:${crossVerse.verse} (score ${(crossFound.score * 100).toFixed(1)}%)`
                   );
                 }
+                logTiming('bible path (cross-chapter)', `bibleMs=${Date.now() - biblePathStart}`);
                 return;
               }
             } else if (
@@ -1350,6 +1363,7 @@ async function handleTranscriptionResult(
                     `[WS] Bible: jump within passage to ${jumpVerse.book} ${jumpVerse.chapter}:${jumpVerse.verse} (score ${(jumpFound.score * 100).toFixed(1)}%)`
                   );
                 }
+                logTiming('bible path (in-passage)', `bibleMs=${Date.now() - biblePathStart}`);
                 return;
               }
             } else if (session.bibleFollowHit && now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
@@ -1365,6 +1379,7 @@ async function handleTranscriptionResult(
         };
 
         if (followEndVerse !== null && nextRef.verse > followEndVerse && nextRef.chapter === followRef.chapter) {
+          logTiming('bible path (next ref)', `bibleMs=${Date.now() - biblePathStart}`);
           return;
         }
 
@@ -1372,6 +1387,7 @@ async function handleTranscriptionResult(
 
         if (!nextVerse) {
           if (followEndVerse !== null) {
+            logTiming('bible path (no next)', `bibleMs=${Date.now() - biblePathStart}`);
             return;
           }
           const nextChapterRef: BibleReference = {
@@ -1381,6 +1397,7 @@ async function handleTranscriptionResult(
           };
           nextVerse = await getBibleVerseCached(session, nextChapterRef, session.bibleVersionId);
           if (!nextVerse) {
+            logTiming('bible path (no next ch)', `bibleMs=${Date.now() - biblePathStart}`);
             return;
           }
           nextRef = nextChapterRef;
@@ -1504,6 +1521,7 @@ async function handleTranscriptionResult(
             session.bibleFollowHit = undefined;
           }
         }
+        logTiming('bible path (follow)', `bibleMs=${Date.now() - biblePathStart}`);
         return;
       }
     }
@@ -1530,6 +1548,7 @@ async function handleTranscriptionResult(
           : session.matcherConfig;
 
         // PHASE 1: Multi-song matching with debouncing
+        const matchStart = Date.now();
         const multiSongResult: MultiSongMatchResult = findBestMatchAcrossAllSongs(
           cleanedBuffer,
           session.songContext,
@@ -1537,6 +1556,8 @@ async function handleTranscriptionResult(
           session.currentSongIndex,
           matcherConfig
         );
+        const matchMs = Date.now() - matchStart;
+        console.log(`[WS] ⏱️ findBestMatchAcrossAllSongs took ${matchMs}ms`);
 
         const matchResult = multiSongResult.currentSongMatch;
         session.lastMatchConfidence = matchResult.confidence;
@@ -1777,6 +1798,7 @@ async function handleTranscriptionResult(
               `[WS] This prevents jumping back to earlier stanzas when lyrics repeat (e.g., "He will make a way for me")`
             );
           }
+          logTiming('song path (blocked backward)');
           return; // Don't broadcast, stay on current slide
         }
         
@@ -1833,6 +1855,7 @@ async function handleTranscriptionResult(
       } else if (session.endTriggerHit) {
         session.endTriggerHit = undefined;
       }
+      logTiming('song path');
     }
   }
 }
