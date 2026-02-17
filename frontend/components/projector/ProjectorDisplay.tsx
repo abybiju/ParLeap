@@ -196,7 +196,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
           src={slideImageUrl}
           alt=""
           className={cn(
-            'absolute inset-0 w-full h-full object-cover opacity-40 transition-opacity duration-300',
+            'absolute inset-0 w-full h-full object-cover opacity-40 transition-opacity duration-150',
             isTransitioning ? 'opacity-0' : 'opacity-40'
           )}
         />
@@ -262,7 +262,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
           src={slideImageUrl}
           alt={songTitle ?? 'Announcement'}
           className={cn(
-            'max-h-full max-w-full object-contain transition-opacity duration-300',
+            'max-h-full max-w-full object-contain transition-opacity duration-150',
             isTransitioning ? 'opacity-0' : 'opacity-100'
           )}
         />
@@ -275,7 +275,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
         <video
           src={slideVideoUrl}
           className={cn(
-            'max-h-full max-w-full object-contain transition-opacity duration-300',
+            'max-h-full max-w-full object-contain transition-opacity duration-150',
             isTransitioning ? 'opacity-0' : 'opacity-100'
           )}
           autoPlay
@@ -304,7 +304,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       {songTitle && (
         <div 
           className={cn(
-            'mb-8 text-center transition-all duration-500',
+            'mb-8 text-center transition-all duration-200',
             isTransitioning ? 'opacity-0 translate-y-[-10px]' : 'opacity-100 translate-y-0'
           )}
         >
@@ -316,7 +316,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       <div className="flex-1 flex items-center justify-center w-full max-w-6xl">
         <div
           className={cn(
-            'w-full transition-all duration-500 ease-in-out',
+            'w-full transition-all duration-200 ease-in-out',
             isTransitioning 
               ? 'opacity-0 scale-95 translate-y-4 blur-sm' 
               : 'opacity-100 scale-100 translate-y-0 blur-0'
@@ -328,7 +328,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
                 key={index}
                 className={cn(
                   'text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-light leading-relaxed text-center text-white',
-                  'transition-all duration-300'
+                  'transition-all duration-150'
                 )}
                 style={{
                   textShadow: '0 2px 20px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.1)',
