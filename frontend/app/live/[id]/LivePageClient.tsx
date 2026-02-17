@@ -22,7 +22,8 @@ interface LivePageClientProps {
   frontendProjectRef: string | null;
   backendProjectRef: string | null;
   backendConfigured: boolean;
-  backendHealthError: Error | null;
+  /** Serialized error message (Server cannot pass Error instances to Client). */
+  backendHealthError: string | null;
 }
 
 /**
@@ -65,7 +66,7 @@ export function LivePageClient({
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                 <span className="text-slate-400">Backend Project:</span>
                 <span className="font-mono text-sm text-white">
-                  {backendProjectRef || (backendHealthError ? 'Health check failed' : (backendConfigured ? 'Configured but no ref' : 'Not configured'))}
+                  {backendProjectRef || (backendHealthError != null && backendHealthError !== '' ? 'Health check failed' : (backendConfigured ? 'Configured but no ref' : 'Not configured'))}
                 </span>
               </div>
             </div>

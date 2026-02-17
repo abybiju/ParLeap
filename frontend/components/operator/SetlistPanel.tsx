@@ -34,7 +34,7 @@ type DisplayItem =
  * Uses setlistItems when available (polymorphic), otherwise falls back to songs-only.
  */
 export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPanelProps) {
-  const { lastMessage, goToItem } = useWebSocket(false);
+  const { lastMessage, goToItem, isConnected } = useWebSocket(false);
   const slideCache = useSlideCache();
   const [currentSongId, setCurrentSongId] = useState<string | null>(null);
   const [currentItemIndex, setCurrentItemIndex] = useState<number>(0);
@@ -44,9 +44,22 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
   const [displayIsBible, setDisplayIsBible] = useState(false);
 
   const handleItemClick = (index: number, item: DisplayItem) => {
+    // #region agent log
+    const label = item.kind === 'SONG' ? item.title : item.kind === 'BIBLE' ? item.bibleRef : item.kind === 'MEDIA' ? item.mediaTitle : 'Announcement';
+    fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'SetlistPanel.tsx:handleItemClick',
+        message: 'Setlist item clicked',
+        data: { isConnected, itemIndex: index, itemId: item.id, kind: item.kind, label: String(label).slice(0, 60) },
+        timestamp: Date.now(),
+        hypothesisId: 'H1',
+      }),
+    }).catch(() => {});
+    // #endregion
     goToItem(index, item.id);
     onItemActivated?.(index, item.kind);
-    const label = item.kind === 'SONG' ? item.title : item.kind === 'BIBLE' ? item.bibleRef : item.kind === 'MEDIA' ? item.mediaTitle : 'Announcement';
     console.log(`[SetlistPanel] Manual override: Jumping to item ${index} (${item.kind}) "${label}"`);
   };
 
