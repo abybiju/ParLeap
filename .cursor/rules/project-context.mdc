@@ -39,8 +39,20 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 4. **State**: Zustand for frontend, in-memory session state for backend
 5. **Audio Format**: PCM for ElevenLabs, WebM Opus for Google
 6. **Matching Philosophy**: Single source of truth (backend only, no client-side matching)
+7. **Hum-to-Search**: Dual-path — YouTube-style (768D Wav2Vec2 via Python microservice) preferred; BasicPitch (128D) fallback. Live streaming hum match available.
+8. **Supabase client**: Lazy-initialized (`getSupabaseClient()`) — reads env on first access, not module load. Critical for scripts using dotenv.
 
 ### Recent Features
+
+**Hum-to-Search: YouTube-style embedding + live hum** (February 16, 2026)
+- Python embedding microservice (`hum-embedding-service/`): FastAPI + Wav2Vec2, POST WAV → 768D vector. Deployed to Railway.
+- Audio trimmed to 30s max to prevent OOM on full-length tracks (was causing EPIPE errors).
+- Supabase migration 017: `embedding vector(768)` column, IVFFlat index, `match_songs_by_embedding()` RPC.
+- Dual-path: YouTube-style (768D, when `EMBEDDING_SERVICE_URL` set) or BasicPitch (128D, default).
+- Live hum-to-search: stream 2s chunks, 5s rolling buffer, match on the fly. Endpoints: `live/available`, `live/start`, `live/chunk`, `live/stop`.
+- Ingest script: dual-vector (128D + 768D), retry 3x with backoff. 2 songs ingested.
+- **Lazy Supabase init**: `supabase.ts` refactored to read env on first access (not module load). Fixes false "not configured" warning in scripts. All 8 consumer files updated to `getSupabaseClient()` / `isSupabaseConfigured()`.
+- Status: Deployed, end-to-end testing pending.
 
 **Event edit workspace + structured announcement text**
 - Event edit page: Spotify-style — left sidebar (event form + Setlist/Content Library nav), full-width main switching between Setlist and Content Library. View-switch animation (Framer Motion); overflow-x-hidden on main. Components: EventEditWorkspace, EventEditSidebar, EventFormCompact, SetlistView.
@@ -90,7 +102,8 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 - Smart optimization: Current song checked first, others only if confidence drops
 
 ### Session Summaries Location
-Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
+Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files and `memory/` daily logs.
+- **Hum-to-search (Feb 16)**: `memory/2026-02-16.md`
 - **Password reset**: `SESSION_SUMMARY_PASSWORD_RESET.md`
 - **Bible/Smart Listen**: `SESSION_SUMMARY_FEB_11_2026.md`
 
@@ -103,10 +116,11 @@ Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files.
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap and to-do list
+- `HUM_SEARCH_STATUS.md` - Hum-to-Search status (dual-path, live hum, deployment, testing)
+- `hum-embedding-service/` - Python FastAPI embedding microservice (Wav2Vec2, 768D)
 - `CANVA_GRAB_TEXT_RESEARCH.md` - Grab Text research (Canva behavior, build-your-own OCR + eraser)
 - `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md` - Background visuals and announcement slides (ProPresenter/ProContent context, ParLeap roadmap)
 - `BIBLE_SEMANTIC_BACKLOG.md` - Bible semantic shipped behavior and backlog (cross-chapter jump, latency, open-source semantic brainstorm)
-- `HUM_SEARCH_STATUS.md` - Hum-to-Search status and next steps
 - `TESTING_INFRASTRUCTURE_COMPLETE.md` - Test coverage details
 - `.cursorrules` - Full architecture specification
 - `CLAWDBOT_INSTRUCTIONS.md` - Operational directives for autonomous AI work (Governor System)
