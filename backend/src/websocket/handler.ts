@@ -886,6 +886,408 @@ function handleUpdateEventSettings(
   }
 }
 
+/** Runs Bible path in background so song matching is never blocked. */
+async function runBiblePathAsync(
+  session: SessionState,
+  transcriptionResult: { text: string; isFinal: boolean; confidence: number },
+  receivedAt: number,
+  processingStart: number,
+  cleanedBuffer: string,
+  logTiming: (label: string, extra?: string) => void
+): Promise<void> {
+  const biblePathStart = Date.now();
+  const versionCommand = detectBibleVersionCommand(transcriptionResult.text);
+  if (versionCommand) {
+    const versionId = await getBibleVersionIdByAbbrev(versionCommand);
+    if (versionId) {
+      session.bibleVersionId = versionId;
+      const supabase = getSupabaseClient();
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          await supabase
+            .from('events')
+            .update({ bible_version_id: versionId, bible_mode: true })
+            .eq('id', session.eventId);
+        } catch (error) {
+          console.warn('[WS] Failed to persist bible version change:', error);
+        }
+      }
+      const settingsMessage: EventSettingsUpdatedMessage = {
+        type: 'EVENT_SETTINGS_UPDATED',
+        payload: {
+          projectorFont: session.projectorFont ?? null,
+          bibleMode: session.bibleMode ?? true,
+          bibleVersionId: session.bibleVersionId ?? null,
+          bibleFollow: session.bibleFollow ?? false,
+        },
+        timing: createTiming(receivedAt, processingStart),
+      };
+      broadcastToEvent(session.eventId, settingsMessage);
+    }
+    logTiming('bible path (version)', `bibleMs=${Date.now() - biblePathStart}`);
+    return;
+  }
+  let reference =
+    findBibleReference(transcriptionResult.text) ?? findBibleReference(cleanedBuffer);
+  if (!reference && isBibleSemanticFollowEnabled()) {
+    const versionId = session.bibleVersionId ?? (await getDefaultBibleVersionId());
+    const bufferWordCount = normalizeMatchText(cleanedBuffer).split(/\s+/).filter(Boolean).length;
+    if (versionId && bufferWordCount >= 6) {
+      const stopwords = new Set([
+        'the', 'is', 'my', 'i', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'it', 'that', 'for',
+        'we', 'you', 'he', 'she', 'they', 'when', 'what', 'anything', 'everything', 'wont',
+        'will', 'shall', 'not', 'no', 'so', 'but', 'if', 'with', 'at', 'on', 'be', 'have',
+        'has', 'had', 'do', 'does', 'did', 'this', 'these', 'those', 'am', 'are', 'was', 'were',
+      ]);
+      const words = normalizeMatchText(cleanedBuffer)
+        .split(/\s+/)
+        .filter((w) => w.length >= 2 && !stopwords.has(w.toLowerCase()))
+        .slice(0, 10);
+      const candidateRows = await searchVerseCandidatesByWords(versionId, words, 80);
+      if (candidateRows.length === 0) {
+        const fallbackRefs: Array<{ book: string; chapter: number; verse: number }> = [
+          { book: 'Psalms', chapter: 23, verse: 1 }, { book: 'John', chapter: 3, verse: 16 },
+          { book: 'Romans', chapter: 8, verse: 28 }, { book: 'Philippians', chapter: 4, verse: 13 },
+          { book: 'Proverbs', chapter: 3, verse: 5 }, { book: 'Psalms', chapter: 91, verse: 1 },
+          { book: 'Matthew', chapter: 11, verse: 28 }, { book: 'Isaiah', chapter: 41, verse: 10 },
+          { book: 'Jeremiah', chapter: 29, verse: 11 }, { book: 'Psalms', chapter: 46, verse: 1 },
+          { book: 'Genesis', chapter: 1, verse: 1 }, { book: 'Psalms', chapter: 119, verse: 105 },
+          { book: 'Matthew', chapter: 28, verse: 19 }, { book: 'John', chapter: 1, verse: 1 },
+          { book: 'Psalms', chapter: 4, verse: 1 },
+        ];
+        for (const ref of fallbackRefs) {
+          const verse = await getBibleVerseCached(session, ref, versionId);
+          if (verse?.text) {
+            candidateRows.push({ book: ref.book, chapter: ref.chapter, verse: ref.verse, text: verse.text });
+          }
+        }
+      }
+      const candidates = candidateRows.map((r) => ({ ref: { book: r.book, chapter: r.chapter, verse: r.verse }, text: r.text }));
+      if (candidates.length > 0) {
+        const found = await findVerseByContent(cleanedBuffer, candidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
+        if (found) {
+          reference = found.ref;
+          console.log(`[WS] Bible: verse-by-content match "${found.ref.book} ${found.ref.chapter}:${found.ref.verse}" (score ${(found.score * 100).toFixed(1)}%)`);
+        }
+      }
+    }
+  }
+  if (reference) {
+    if (!session.bibleVersionId) {
+      const fallbackVersionId = await getDefaultBibleVersionId();
+      if (fallbackVersionId) {
+        session.bibleVersionId = fallbackVersionId;
+      } else {
+        console.warn('[WS] Bible mode active but no bibleVersionId set.');
+        return;
+      }
+    }
+    const verse = await getBibleVerseCached(session, reference, session.bibleVersionId);
+    if (!verse) return;
+    const refKey = `${verse.book}:${verse.chapter}:${verse.verse}:${verse.versionAbbrev}`;
+    const now = Date.now();
+    if (session.lastBibleRefKey === refKey && session.lastBibleRefAt && now - session.lastBibleRefAt < 2500) return;
+    session.lastBibleRefKey = refKey;
+    session.lastBibleRefAt = now;
+    session.bibleFollow = true;
+    session.bibleFollowRef = reference;
+    session.bibleFollowHit = undefined;
+    const verseLines = wrapBibleText(verse.text);
+    const verseTitle = `${verse.book} ${verse.chapter}:${verse.verse} • ${verse.versionAbbrev}`;
+    let nextVerseText: string | undefined;
+    let nextVerseRef: string | undefined;
+    const nextRefOpen: BibleReference = { book: reference.book, chapter: reference.chapter, verse: reference.verse + 1 };
+    const nextVerseOpen = await getBibleVerseCached(session, nextRefOpen, session.bibleVersionId);
+    if (nextVerseOpen?.text) {
+      nextVerseText = nextVerseOpen.text;
+      nextVerseRef = `${nextVerseOpen.book} ${nextVerseOpen.chapter}:${nextVerseOpen.verse}`;
+    } else {
+      const nextChRef: BibleReference = { book: reference.book, chapter: reference.chapter + 1, verse: 1 };
+      const nextChVerse = await getBibleVerseCached(session, nextChRef, session.bibleVersionId);
+      if (nextChVerse?.text) {
+        nextVerseText = nextChVerse.text;
+        nextVerseRef = `${nextChVerse.book} ${nextChVerse.chapter}:${nextChVerse.verse}`;
+      }
+    }
+    const displayMsg: DisplayUpdateMessage = {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: verseLines[0] ?? verse.text,
+        slideText: verseLines.join('\n'),
+        slideLines: verseLines,
+        slideIndex: 0,
+        songId: `bible:${verse.book}:${verse.chapter}:${verse.verse}`,
+        songTitle: verseTitle,
+        isAutoAdvance: true,
+        currentItemIndex: session.currentItemIndex,
+        nextVerseText,
+        nextVerseRef,
+      },
+      timing: createTiming(receivedAt, processingStart),
+    };
+    broadcastToEvent(session.eventId, displayMsg);
+    const settingsMessage: EventSettingsUpdatedMessage = {
+      type: 'EVENT_SETTINGS_UPDATED',
+      payload: {
+        projectorFont: session.projectorFont ?? null,
+        bibleMode: session.bibleMode ?? true,
+        bibleVersionId: session.bibleVersionId ?? null,
+        bibleFollow: session.bibleFollow ?? false,
+      },
+      timing: createTiming(receivedAt, processingStart),
+    };
+    broadcastToEvent(session.eventId, settingsMessage);
+    logTiming('bible path (ref)', `bibleMs=${Date.now() - biblePathStart}`);
+    return;
+  }
+  if (!session.bibleFollow || !session.bibleFollowRef) return;
+  if (!session.bibleVersionId) {
+    const fallbackVersionId = await getDefaultBibleVersionId();
+    if (fallbackVersionId) session.bibleVersionId = fallbackVersionId;
+    else {
+      console.warn('[WS] Bible mode active but no bibleVersionId set.');
+      return;
+    }
+  }
+  const normalizedBuffer = normalizeMatchText(cleanedBuffer);
+  const bufferWordCount = normalizedBuffer.split(/\s+/).filter(Boolean).length;
+  if (bufferWordCount < BIBLE_FOLLOW_MIN_WORDS) {
+    logTiming('bible path (min words)', `bibleMs=${Date.now() - biblePathStart}`);
+    return;
+  }
+  const followRef = session.bibleFollowRef;
+  const followEndVerse = followRef.endVerse ?? null;
+  if (followEndVerse !== null && followRef.verse >= followEndVerse) {
+    logTiming('bible path (end verse)', `bibleMs=${Date.now() - biblePathStart}`);
+    return;
+  }
+  const currentVerse = await getBibleVerseCached(session, followRef, session.bibleVersionId);
+  if (!currentVerse) {
+    logTiming('bible path (no verse)', `bibleMs=${Date.now() - biblePathStart}`);
+    return;
+  }
+  if (!isBibleSemanticFollowEnabled()) {
+    const now = Date.now();
+    if (session.lastBibleSemanticDisabledLogAt == null || now - session.lastBibleSemanticDisabledLogAt > 60000) {
+      console.log('[WS] Bible Follow active but semantic disabled (in-chapter/cross-chapter jump requires BIBLE_SEMANTIC_FOLLOW_ENABLED=true and API key)');
+      session.lastBibleSemanticDisabledLogAt = now;
+    }
+  }
+  if (isBibleSemanticFollowEnabled() && bufferWordCount >= 6 && session.bibleVersionId) {
+    const stopwords = new Set([
+      'the', 'is', 'my', 'i', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'it', 'that', 'for',
+      'we', 'you', 'he', 'she', 'they', 'when', 'what', 'anything', 'everything', 'wont',
+      'will', 'shall', 'not', 'no', 'so', 'but', 'if', 'with', 'at', 'on', 'be', 'have',
+      'has', 'had', 'do', 'does', 'did', 'this', 'these', 'those', 'am', 'are', 'was', 'were',
+    ]);
+    const words = normalizedBuffer.split(/\s+/).filter((w) => w.length >= 2 && !stopwords.has(w.toLowerCase())).slice(0, 10);
+    const crossCandidateRows = await searchVerseCandidatesByWords(session.bibleVersionId, words, 80);
+    const crossCandidates = crossCandidateRows.map((r) => ({ ref: { book: r.book, chapter: r.chapter, verse: r.verse }, text: r.text }));
+    if (crossCandidates.length > 0) {
+      const crossFound = await findVerseByContent(normalizedBuffer, crossCandidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
+      const isDifferentVerse = crossFound && (crossFound.ref.book !== followRef.book || crossFound.ref.chapter !== followRef.chapter || crossFound.ref.verse !== followRef.verse);
+      if (isDifferentVerse && crossFound) {
+        const crossRef: BibleReference = { book: crossFound.ref.book, chapter: crossFound.ref.chapter, verse: crossFound.ref.verse };
+        const now = Date.now();
+        const targetKey = buildBibleRefKey(crossRef, session.bibleVersionId);
+        if (session.bibleFollowHit?.targetKey === targetKey && now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+          session.bibleFollowHit.hitCount += 1;
+          session.bibleFollowHit.lastHitAt = now;
+        } else {
+          session.bibleFollowHit = { targetKey, hitCount: 1, lastHitAt: now };
+        }
+        if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
+          session.bibleFollowHit = undefined;
+          session.bibleFollowRef = crossRef;
+          const crossVerse = await getBibleVerseCached(session, crossRef, session.bibleVersionId);
+          if (crossVerse) {
+            const verseLines = wrapBibleText(crossVerse.text);
+            const verseTitle = `${crossVerse.book} ${crossVerse.chapter}:${crossVerse.verse} • ${crossVerse.versionAbbrev}`;
+            broadcastToEvent(session.eventId, {
+              type: 'DISPLAY_UPDATE',
+              payload: {
+                lineText: verseLines[0] ?? crossVerse.text,
+                slideText: verseLines.join('\n'),
+                slideLines: verseLines,
+                slideIndex: 0,
+                songId: `bible:${crossVerse.book}:${crossVerse.chapter}:${crossVerse.verse}`,
+                songTitle: verseTitle,
+                isAutoAdvance: true,
+                currentItemIndex: session.currentItemIndex,
+              },
+              timing: createTiming(receivedAt, processingStart),
+            });
+            session.lastBibleRefKey = `${crossVerse.book}:${crossVerse.chapter}:${crossVerse.verse}:${crossVerse.versionAbbrev}`;
+            session.lastBibleRefAt = now;
+            console.log(`[WS] Bible: cross-chapter jump to ${crossVerse.book} ${crossVerse.chapter}:${crossVerse.verse} (score ${(crossFound.score * 100).toFixed(1)}%)`);
+          }
+          logTiming('bible path (cross-chapter)', `bibleMs=${Date.now() - biblePathStart}`);
+          return;
+        }
+      } else if (session.bibleFollowHit && Date.now() - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+        session.bibleFollowHit = undefined;
+      }
+    }
+  }
+  const endVerseNum = followEndVerse !== null ? followEndVerse : followRef.verse + 19;
+  if (isBibleSemanticFollowEnabled() && endVerseNum > followRef.verse) {
+    const passageCandidates: Array<{ ref: { book: string; chapter: number; verse: number }; text: string }> = [];
+    for (let v = followRef.verse; v <= endVerseNum; v++) {
+      const ref: BibleReference = { book: followRef.book, chapter: followRef.chapter, verse: v };
+      const verse = await getBibleVerseCached(session, ref, session.bibleVersionId);
+      if (verse?.text) passageCandidates.push({ ref: { book: verse.book, chapter: verse.chapter, verse: verse.verse }, text: verse.text });
+    }
+    if (passageCandidates.length > 1) {
+      const jumpFound = await findVerseByContent(normalizedBuffer, passageCandidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
+      const now = Date.now();
+      if (jumpFound && jumpFound.ref.verse !== followRef.verse && jumpFound.ref.book === followRef.book && jumpFound.ref.chapter === followRef.chapter) {
+        const jumpRef: BibleReference = { book: followRef.book, chapter: followRef.chapter, verse: jumpFound.ref.verse, endVerse: followEndVerse ?? undefined };
+        const targetKey = buildBibleRefKey(jumpRef, session.bibleVersionId);
+        if (session.bibleFollowHit?.targetKey === targetKey && now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+          session.bibleFollowHit.hitCount += 1;
+          session.bibleFollowHit.lastHitAt = now;
+        } else {
+          session.bibleFollowHit = { targetKey, hitCount: 1, lastHitAt: now };
+        }
+        if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
+          session.bibleFollowHit = undefined;
+          session.bibleFollowRef = { ...jumpRef, endVerse: followEndVerse ?? undefined };
+          const jumpVerse = await getBibleVerseCached(session, jumpRef, session.bibleVersionId);
+          if (jumpVerse) {
+            const verseLines = wrapBibleText(jumpVerse.text);
+            const verseTitle = `${jumpVerse.book} ${jumpVerse.chapter}:${jumpVerse.verse} • ${jumpVerse.versionAbbrev}`;
+            broadcastToEvent(session.eventId, {
+              type: 'DISPLAY_UPDATE',
+              payload: {
+                lineText: verseLines[0] ?? jumpVerse.text,
+                slideText: verseLines.join('\n'),
+                slideLines: verseLines,
+                slideIndex: 0,
+                songId: `bible:${jumpVerse.book}:${jumpVerse.chapter}:${jumpVerse.verse}`,
+                songTitle: verseTitle,
+                isAutoAdvance: true,
+                currentItemIndex: session.currentItemIndex,
+              },
+              timing: createTiming(receivedAt, processingStart),
+            });
+            session.lastBibleRefKey = `${jumpVerse.book}:${jumpVerse.chapter}:${jumpVerse.verse}:${jumpVerse.versionAbbrev}`;
+            session.lastBibleRefAt = now;
+            console.log(`[WS] Bible: jump within passage to ${jumpVerse.book} ${jumpVerse.chapter}:${jumpVerse.verse} (score ${(jumpFound.score * 100).toFixed(1)}%)`);
+          }
+          logTiming('bible path (in-passage)', `bibleMs=${Date.now() - biblePathStart}`);
+          return;
+        }
+      } else if (session.bibleFollowHit && now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+        session.bibleFollowHit = undefined;
+      }
+    }
+  }
+  let nextRef: BibleReference = { book: followRef.book, chapter: followRef.chapter, verse: followRef.verse + 1 };
+  if (followEndVerse !== null && nextRef.verse > followEndVerse && nextRef.chapter === followRef.chapter) {
+    logTiming('bible path (next ref)', `bibleMs=${Date.now() - biblePathStart}`);
+    return;
+  }
+  let nextVerse = await getBibleVerseCached(session, nextRef, session.bibleVersionId);
+  if (!nextVerse) {
+    if (followEndVerse !== null) {
+      logTiming('bible path (no next)', `bibleMs=${Date.now() - biblePathStart}`);
+      return;
+    }
+    const nextChapterRef: BibleReference = { book: followRef.book, chapter: followRef.chapter + 1, verse: 1 };
+    nextVerse = await getBibleVerseCached(session, nextChapterRef, session.bibleVersionId);
+    if (!nextVerse) {
+      logTiming('bible path (no next ch)', `bibleMs=${Date.now() - biblePathStart}`);
+      return;
+    }
+    nextRef = nextChapterRef;
+  }
+  const bufferWords = normalizedBuffer.split(/\s+/).filter(Boolean);
+  const bufferTail = bufferWords.length >= BIBLE_END_OF_VERSE_BUFFER_WORDS ? bufferWords.slice(-BIBLE_END_OF_VERSE_BUFFER_WORDS).join(' ') : normalizedBuffer;
+  const verseEndTrigger = getBibleEndOfVerseTrigger(currentVerse.text);
+  const endOfVerseScore = compareTwoStrings(normalizeMatchText(bufferTail), normalizeMatchText(verseEndTrigger));
+  const inScopeEndOfVerse = endOfVerseScore >= BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD;
+  const requiredMatches = inScopeEndOfVerse ? 1 : BIBLE_FOLLOW_DEBOUNCE_MATCHES;
+  let currentScore: number;
+  let nextScore: number;
+  if (isBibleSemanticFollowEnabled()) {
+    const semantic = await getBibleFollowSemanticScores(normalizedBuffer, currentVerse.text, nextVerse.text);
+    if (semantic) {
+      currentScore = semantic.currentScore;
+      nextScore = semantic.nextScore;
+    } else {
+      currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
+      nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
+    }
+  } else {
+    currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
+    nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
+  }
+  const advanceThresholdMet = inScopeEndOfVerse
+    ? nextScore >= BIBLE_END_OF_VERSE_NEXT_THRESHOLD
+    : nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN;
+  if (advanceThresholdMet) {
+    const now = Date.now();
+    const targetKey = buildBibleRefKey(nextRef, session.bibleVersionId);
+    if (session.bibleFollowHit?.targetKey === targetKey && now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
+      session.bibleFollowHit.hitCount += 1;
+      session.bibleFollowHit.lastHitAt = now;
+    } else {
+      session.bibleFollowHit = { targetKey, hitCount: 1, lastHitAt: now };
+    }
+    if (session.bibleFollowHit.hitCount >= requiredMatches) {
+      session.bibleFollowHit = undefined;
+      const nextEndVerse = followEndVerse !== null && nextRef.chapter === followRef.chapter ? followEndVerse : null;
+      session.bibleFollowRef = { ...nextRef, endVerse: nextEndVerse };
+      session.bibleFollow = true;
+      const refKey = `${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}:${nextVerse.versionAbbrev}`;
+      session.lastBibleRefKey = refKey;
+      session.lastBibleRefAt = now;
+      const verseLines = wrapBibleText(nextVerse.text);
+      const verseTitle = `${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} • ${nextVerse.versionAbbrev}`;
+      let nextVersePreviewText: string | undefined;
+      let nextVersePreviewRef: string | undefined;
+      const nextNextRef: BibleReference = { book: nextVerse.book, chapter: nextVerse.chapter, verse: nextVerse.verse + 1 };
+      const nextNextVerse = await getBibleVerseCached(session, nextNextRef, session.bibleVersionId);
+      if (nextNextVerse?.text) {
+        nextVersePreviewText = nextNextVerse.text;
+        nextVersePreviewRef = `${nextNextVerse.book} ${nextNextVerse.chapter}:${nextNextVerse.verse}`;
+      } else {
+        const nextNextCh: BibleReference = { book: nextVerse.book, chapter: nextVerse.chapter + 1, verse: 1 };
+        const nextNextChVerse = await getBibleVerseCached(session, nextNextCh, session.bibleVersionId);
+        if (nextNextChVerse?.text) {
+          nextVersePreviewText = nextNextChVerse.text;
+          nextVersePreviewRef = `${nextNextChVerse.book} ${nextNextChVerse.chapter}:${nextNextChVerse.verse}`;
+        }
+      }
+      const displayMsg: DisplayUpdateMessage = {
+        type: 'DISPLAY_UPDATE',
+        payload: {
+          lineText: verseLines[0] ?? nextVerse.text,
+          slideText: verseLines.join('\n'),
+          slideLines: verseLines,
+          slideIndex: 0,
+          songId: `bible:${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}`,
+          songTitle: verseTitle,
+          isAutoAdvance: true,
+          currentItemIndex: session.currentItemIndex,
+          nextVerseText: nextVersePreviewText,
+          nextVerseRef: nextVersePreviewRef,
+        },
+        timing: createTiming(receivedAt, processingStart),
+      };
+      broadcastToEvent(session.eventId, displayMsg);
+      if (inScopeEndOfVerse) {
+        console.log(`[WS] Bible: end-of-verse advance to ${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} (trigger ${(endOfVerseScore * 100).toFixed(0)}%)`);
+      }
+      session.rollingBuffer = '';
+    }
+  } else if (session.bibleFollowHit) {
+    const now = Date.now();
+    if (now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) session.bibleFollowHit = undefined;
+  }
+  logTiming('bible path (follow)', `bibleMs=${Date.now() - biblePathStart}`);
+}
+
 async function handleTranscriptionResult(
   ws: WebSocket,
   session: SessionState,
@@ -988,542 +1390,9 @@ async function handleTranscriptionResult(
     }
 
     if (session.bibleMode) {
-      const biblePathStart = Date.now();
-      const versionCommand = detectBibleVersionCommand(transcriptionResult.text);
-      if (versionCommand) {
-        const versionId = await getBibleVersionIdByAbbrev(versionCommand);
-        if (versionId) {
-          session.bibleVersionId = versionId;
-          const supabase = getSupabaseClient();
-          if (isSupabaseConfigured() && supabase) {
-            try {
-              await supabase
-                .from('events')
-                .update({ bible_version_id: versionId, bible_mode: true })
-                .eq('id', session.eventId);
-            } catch (error) {
-              console.warn('[WS] Failed to persist bible version change:', error);
-            }
-          }
-          const settingsMessage: EventSettingsUpdatedMessage = {
-            type: 'EVENT_SETTINGS_UPDATED',
-            payload: {
-              projectorFont: session.projectorFont ?? null,
-              bibleMode: session.bibleMode ?? true,
-              bibleVersionId: session.bibleVersionId ?? null,
-              bibleFollow: session.bibleFollow ?? false,
-            },
-            timing: createTiming(receivedAt, processingStart),
-          };
-          broadcastToEvent(session.eventId, settingsMessage);
-        }
-        logTiming('bible path (version)', `bibleMs=${Date.now() - biblePathStart}`);
-        return;
-      }
-
-      let reference =
-        findBibleReference(transcriptionResult.text) ?? findBibleReference(cleanedBuffer);
-
-      // If no reference detected but semantic lookup is enabled, try to find verse by spoken content
-      // (full-Bible: keyword search on bible_verses then semantic rerank; fallback to 15 well-known verses)
-      if (!reference && isBibleSemanticFollowEnabled()) {
-        const versionId = session.bibleVersionId ?? (await getDefaultBibleVersionId());
-        const bufferWordCount = normalizeMatchText(cleanedBuffer).split(/\s+/).filter(Boolean).length;
-        if (versionId && bufferWordCount >= 6) {
-          const stopwords = new Set([
-            'the', 'is', 'my', 'i', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'it', 'that', 'for',
-            'we', 'you', 'he', 'she', 'they', 'when', 'what', 'anything', 'everything', 'wont',
-            'will', 'shall', 'not', 'no', 'so', 'but', 'if', 'with', 'at', 'on', 'be', 'have',
-            'has', 'had', 'do', 'does', 'did', 'this', 'these', 'those', 'am', 'are', 'was', 'were',
-          ]);
-          const words = normalizeMatchText(cleanedBuffer)
-            .split(/\s+/)
-            .filter((w) => w.length >= 2 && !stopwords.has(w.toLowerCase()))
-            .slice(0, 10);
-          const candidateRows = await searchVerseCandidatesByWords(versionId, words, 80);
-          if (candidateRows.length === 0) {
-            const fallbackRefs: Array<{ book: string; chapter: number; verse: number }> = [
-              { book: 'Psalms', chapter: 23, verse: 1 },
-              { book: 'John', chapter: 3, verse: 16 },
-              { book: 'Romans', chapter: 8, verse: 28 },
-              { book: 'Philippians', chapter: 4, verse: 13 },
-              { book: 'Proverbs', chapter: 3, verse: 5 },
-              { book: 'Psalms', chapter: 91, verse: 1 },
-              { book: 'Matthew', chapter: 11, verse: 28 },
-              { book: 'Isaiah', chapter: 41, verse: 10 },
-              { book: 'Jeremiah', chapter: 29, verse: 11 },
-              { book: 'Psalms', chapter: 46, verse: 1 },
-              { book: 'Genesis', chapter: 1, verse: 1 },
-              { book: 'Psalms', chapter: 119, verse: 105 },
-              { book: 'Matthew', chapter: 28, verse: 19 },
-              { book: 'John', chapter: 1, verse: 1 },
-              { book: 'Psalms', chapter: 4, verse: 1 },
-            ];
-            for (const ref of fallbackRefs) {
-              const verse = await getBibleVerseCached(session, ref, versionId);
-              if (verse?.text) {
-                candidateRows.push({ book: ref.book, chapter: ref.chapter, verse: ref.verse, text: verse.text });
-              }
-            }
-          }
-          const candidates = candidateRows.map((r) => ({ ref: { book: r.book, chapter: r.chapter, verse: r.verse }, text: r.text }));
-          if (candidates.length > 0) {
-            const found = await findVerseByContent(cleanedBuffer, candidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
-            if (found) {
-              reference = found.ref;
-              console.log(
-                `[WS] Bible: verse-by-content match "${found.ref.book} ${found.ref.chapter}:${found.ref.verse}" (score ${(found.score * 100).toFixed(1)}%)`
-              );
-            }
-          }
-        }
-      }
-
-      if (reference) {
-        if (!session.bibleVersionId) {
-          const fallbackVersionId = await getDefaultBibleVersionId();
-          if (fallbackVersionId) {
-            session.bibleVersionId = fallbackVersionId;
-          } else {
-            console.warn('[WS] Bible mode active but no bibleVersionId set.');
-            return;
-          }
-        }
-
-        const verse = await getBibleVerseCached(session, reference, session.bibleVersionId);
-        if (!verse) {
-          return;
-        }
-
-        const refKey = `${verse.book}:${verse.chapter}:${verse.verse}:${verse.versionAbbrev}`;
-        const now = Date.now();
-        if (session.lastBibleRefKey === refKey && session.lastBibleRefAt && now - session.lastBibleRefAt < 2500) {
-          return;
-        }
-
-        session.lastBibleRefKey = refKey;
-        session.lastBibleRefAt = now;
-        session.bibleFollow = true;
-        session.bibleFollowRef = reference;
-        session.bibleFollowHit = undefined;
-
-        const verseLines = wrapBibleText(verse.text);
-        const verseTitle = `${verse.book} ${verse.chapter}:${verse.verse} • ${verse.versionAbbrev}`;
-
-        let nextVerseText: string | undefined;
-        let nextVerseRef: string | undefined;
-        const nextRefOpen: BibleReference = { book: reference.book, chapter: reference.chapter, verse: reference.verse + 1 };
-        const nextVerseOpen = await getBibleVerseCached(session, nextRefOpen, session.bibleVersionId);
-        if (nextVerseOpen?.text) {
-          nextVerseText = nextVerseOpen.text;
-          nextVerseRef = `${nextVerseOpen.book} ${nextVerseOpen.chapter}:${nextVerseOpen.verse}`;
-        } else {
-          const nextChRef: BibleReference = { book: reference.book, chapter: reference.chapter + 1, verse: 1 };
-          const nextChVerse = await getBibleVerseCached(session, nextChRef, session.bibleVersionId);
-          if (nextChVerse?.text) {
-            nextVerseText = nextChVerse.text;
-            nextVerseRef = `${nextChVerse.book} ${nextChVerse.chapter}:${nextChVerse.verse}`;
-          }
-        }
-
-        const displayMsg: DisplayUpdateMessage = {
-          type: 'DISPLAY_UPDATE',
-          payload: {
-            lineText: verseLines[0] ?? verse.text,
-            slideText: verseLines.join('\n'),
-            slideLines: verseLines,
-            slideIndex: 0,
-            songId: `bible:${verse.book}:${verse.chapter}:${verse.verse}`,
-            songTitle: verseTitle,
-            isAutoAdvance: true,
-            currentItemIndex: session.currentItemIndex,
-            nextVerseText,
-            nextVerseRef,
-          },
-          timing: createTiming(receivedAt, processingStart),
-        };
-
-        broadcastToEvent(session.eventId, displayMsg);
-
-        const settingsMessage: EventSettingsUpdatedMessage = {
-          type: 'EVENT_SETTINGS_UPDATED',
-          payload: {
-            projectorFont: session.projectorFont ?? null,
-            bibleMode: session.bibleMode ?? true,
-            bibleVersionId: session.bibleVersionId ?? null,
-            bibleFollow: session.bibleFollow ?? false,
-          },
-          timing: createTiming(receivedAt, processingStart),
-        };
-        broadcastToEvent(session.eventId, settingsMessage);
-        logTiming('bible path (ref)', `bibleMs=${Date.now() - biblePathStart}`);
-        return;
-      }
-
-      // Only run bible-follow verse advance when actively following a passage.
-      // When no bible ref in transcript and not following, fall through to song matching.
-      if (session.bibleFollow && session.bibleFollowRef) {
-        if (!session.bibleVersionId) {
-          const fallbackVersionId = await getDefaultBibleVersionId();
-          if (fallbackVersionId) {
-            session.bibleVersionId = fallbackVersionId;
-          } else {
-            console.warn('[WS] Bible mode active but no bibleVersionId set.');
-            return;
-          }
-        }
-
-        const normalizedBuffer = normalizeMatchText(cleanedBuffer);
-        const bufferWordCount = normalizedBuffer.split(/\s+/).filter(Boolean).length;
-        if (bufferWordCount < BIBLE_FOLLOW_MIN_WORDS) {
-          logTiming('bible path (min words)', `bibleMs=${Date.now() - biblePathStart}`);
-          return;
-        }
-
-          const followRef = session.bibleFollowRef;
-        const followEndVerse = followRef.endVerse ?? null;
-        if (followEndVerse !== null && followRef.verse >= followEndVerse) {
-          logTiming('bible path (end verse)', `bibleMs=${Date.now() - biblePathStart}`);
-          return;
-        }
-
-        const currentVerse = await getBibleVerseCached(session, followRef, session.bibleVersionId);
-        if (!currentVerse) {
-          logTiming('bible path (no verse)', `bibleMs=${Date.now() - biblePathStart}`);
-          return;
-        }
-
-        if (!isBibleSemanticFollowEnabled()) {
-          const now = Date.now();
-          if (
-            session.lastBibleSemanticDisabledLogAt == null ||
-            now - session.lastBibleSemanticDisabledLogAt > 60000
-          ) {
-            console.log(
-              '[WS] Bible Follow active but semantic disabled (in-chapter/cross-chapter jump requires BIBLE_SEMANTIC_FOLLOW_ENABLED=true and API key)'
-            );
-            session.lastBibleSemanticDisabledLogAt = now;
-          }
-        }
-
-        // Cross-chapter/cross-book jump by content: say rephrased content of any verse -> jump there
-        if (
-          isBibleSemanticFollowEnabled() &&
-          bufferWordCount >= 6 &&
-          session.bibleVersionId
-        ) {
-          const stopwords = new Set([
-            'the', 'is', 'my', 'i', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'it', 'that', 'for',
-            'we', 'you', 'he', 'she', 'they', 'when', 'what', 'anything', 'everything', 'wont',
-            'will', 'shall', 'not', 'no', 'so', 'but', 'if', 'with', 'at', 'on', 'be', 'have',
-            'has', 'had', 'do', 'does', 'did', 'this', 'these', 'those', 'am', 'are', 'was', 'were',
-          ]);
-          const words = normalizedBuffer
-            .split(/\s+/)
-            .filter((w) => w.length >= 2 && !stopwords.has(w.toLowerCase()))
-            .slice(0, 10);
-          const crossCandidateRows = await searchVerseCandidatesByWords(
-            session.bibleVersionId,
-            words,
-            80
-          );
-          const crossCandidates = crossCandidateRows.map((r) => ({
-            ref: { book: r.book, chapter: r.chapter, verse: r.verse },
-            text: r.text,
-          }));
-          if (crossCandidates.length === 0) {
-            console.log(
-              '[WS] Bible: cross-chapter jump skipped (no verse candidates for version/words; check DB has verses for selected version)'
-            );
-          }
-          if (crossCandidates.length > 0) {
-            const crossFound = await findVerseByContent(normalizedBuffer, crossCandidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
-            const isDifferentVerse =
-              crossFound &&
-              (crossFound.ref.book !== followRef.book ||
-                crossFound.ref.chapter !== followRef.chapter ||
-                crossFound.ref.verse !== followRef.verse);
-            if (isDifferentVerse && crossFound) {
-              const crossRef: BibleReference = {
-                book: crossFound.ref.book,
-                chapter: crossFound.ref.chapter,
-                verse: crossFound.ref.verse,
-              };
-              const now = Date.now();
-              const targetKey = buildBibleRefKey(crossRef, session.bibleVersionId);
-              if (
-                session.bibleFollowHit?.targetKey === targetKey &&
-                now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS
-              ) {
-                session.bibleFollowHit.hitCount += 1;
-                session.bibleFollowHit.lastHitAt = now;
-              } else {
-                session.bibleFollowHit = { targetKey, hitCount: 1, lastHitAt: now };
-              }
-              if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
-                session.bibleFollowHit = undefined;
-                session.bibleFollowRef = crossRef;
-                const crossVerse = await getBibleVerseCached(session, crossRef, session.bibleVersionId);
-                if (crossVerse) {
-                  const verseLines = wrapBibleText(crossVerse.text);
-                  const verseTitle = `${crossVerse.book} ${crossVerse.chapter}:${crossVerse.verse} • ${crossVerse.versionAbbrev}`;
-                  broadcastToEvent(session.eventId, {
-                    type: 'DISPLAY_UPDATE',
-                    payload: {
-                      lineText: verseLines[0] ?? crossVerse.text,
-                      slideText: verseLines.join('\n'),
-                      slideLines: verseLines,
-                      slideIndex: 0,
-                      songId: `bible:${crossVerse.book}:${crossVerse.chapter}:${crossVerse.verse}`,
-                      songTitle: verseTitle,
-                      isAutoAdvance: true,
-                      currentItemIndex: session.currentItemIndex,
-                    },
-                    timing: createTiming(receivedAt, processingStart),
-                  });
-                  session.lastBibleRefKey = `${crossVerse.book}:${crossVerse.chapter}:${crossVerse.verse}:${crossVerse.versionAbbrev}`;
-                  session.lastBibleRefAt = now;
-                  console.log(
-                    `[WS] Bible: cross-chapter jump to ${crossVerse.book} ${crossVerse.chapter}:${crossVerse.verse} (score ${(crossFound.score * 100).toFixed(1)}%)`
-                  );
-                }
-                logTiming('bible path (cross-chapter)', `bibleMs=${Date.now() - biblePathStart}`);
-                return;
-              }
-            } else if (
-              session.bibleFollowHit &&
-              Date.now() - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS
-            ) {
-              session.bibleFollowHit = undefined;
-            }
-          }
-        }
-
-        // Jump within passage: if semantic enabled, match buffer against all verses in range;
-        // if best match is a different verse, jump to it (e.g. say verse 4 content -> show verse 4)
-        const endVerseNum = followEndVerse !== null ? followEndVerse : followRef.verse + 19;
-        if (isBibleSemanticFollowEnabled() && endVerseNum > followRef.verse) {
-          const passageCandidates: Array<{ ref: { book: string; chapter: number; verse: number }; text: string }> = [];
-          for (let v = followRef.verse; v <= endVerseNum; v++) {
-            const ref: BibleReference = { book: followRef.book, chapter: followRef.chapter, verse: v };
-            const verse = await getBibleVerseCached(session, ref, session.bibleVersionId);
-            if (verse?.text) {
-              passageCandidates.push({ ref: { book: verse.book, chapter: verse.chapter, verse: verse.verse }, text: verse.text });
-            }
-          }
-          if (passageCandidates.length > 1) {
-            const jumpFound = await findVerseByContent(normalizedBuffer, passageCandidates, BIBLE_JUMP_BY_CONTENT_MIN_SCORE);
-            const now = Date.now();
-            if (
-              jumpFound &&
-              jumpFound.ref.verse !== followRef.verse &&
-              jumpFound.ref.book === followRef.book &&
-              jumpFound.ref.chapter === followRef.chapter
-            ) {
-              const jumpRef: BibleReference = {
-                book: followRef.book,
-                chapter: followRef.chapter,
-                verse: jumpFound.ref.verse,
-                endVerse: followEndVerse ?? undefined,
-              };
-              const targetKey = buildBibleRefKey(jumpRef, session.bibleVersionId);
-              if (
-                session.bibleFollowHit?.targetKey === targetKey &&
-                now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS
-              ) {
-                session.bibleFollowHit.hitCount += 1;
-                session.bibleFollowHit.lastHitAt = now;
-              } else {
-                session.bibleFollowHit = { targetKey, hitCount: 1, lastHitAt: now };
-              }
-              if (session.bibleFollowHit.hitCount >= BIBLE_FOLLOW_DEBOUNCE_MATCHES) {
-                session.bibleFollowHit = undefined;
-                session.bibleFollowRef = { ...jumpRef, endVerse: followEndVerse ?? undefined };
-                const jumpVerse = await getBibleVerseCached(session, jumpRef, session.bibleVersionId);
-                if (jumpVerse) {
-                  const verseLines = wrapBibleText(jumpVerse.text);
-                  const verseTitle = `${jumpVerse.book} ${jumpVerse.chapter}:${jumpVerse.verse} • ${jumpVerse.versionAbbrev}`;
-                  broadcastToEvent(session.eventId, {
-                    type: 'DISPLAY_UPDATE',
-                    payload: {
-                      lineText: verseLines[0] ?? jumpVerse.text,
-                      slideText: verseLines.join('\n'),
-                      slideLines: verseLines,
-                      slideIndex: 0,
-                      songId: `bible:${jumpVerse.book}:${jumpVerse.chapter}:${jumpVerse.verse}`,
-                      songTitle: verseTitle,
-                      isAutoAdvance: true,
-                      currentItemIndex: session.currentItemIndex,
-                    },
-                    timing: createTiming(receivedAt, processingStart),
-                  });
-                  session.lastBibleRefKey = `${jumpVerse.book}:${jumpVerse.chapter}:${jumpVerse.verse}:${jumpVerse.versionAbbrev}`;
-                  session.lastBibleRefAt = now;
-                  console.log(
-                    `[WS] Bible: jump within passage to ${jumpVerse.book} ${jumpVerse.chapter}:${jumpVerse.verse} (score ${(jumpFound.score * 100).toFixed(1)}%)`
-                  );
-                }
-                logTiming('bible path (in-passage)', `bibleMs=${Date.now() - biblePathStart}`);
-                return;
-              }
-            } else if (session.bibleFollowHit && now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
-              session.bibleFollowHit = undefined;
-            }
-          }
-        }
-
-        let nextRef: BibleReference = {
-          book: followRef.book,
-          chapter: followRef.chapter,
-          verse: followRef.verse + 1,
-        };
-
-        if (followEndVerse !== null && nextRef.verse > followEndVerse && nextRef.chapter === followRef.chapter) {
-          logTiming('bible path (next ref)', `bibleMs=${Date.now() - biblePathStart}`);
-          return;
-        }
-
-        let nextVerse = await getBibleVerseCached(session, nextRef, session.bibleVersionId);
-
-        if (!nextVerse) {
-          if (followEndVerse !== null) {
-            logTiming('bible path (no next)', `bibleMs=${Date.now() - biblePathStart}`);
-            return;
-          }
-          const nextChapterRef: BibleReference = {
-            book: followRef.book,
-            chapter: followRef.chapter + 1,
-            verse: 1,
-          };
-          nextVerse = await getBibleVerseCached(session, nextChapterRef, session.bibleVersionId);
-          if (!nextVerse) {
-            logTiming('bible path (no next ch)', `bibleMs=${Date.now() - biblePathStart}`);
-            return;
-          }
-          nextRef = nextChapterRef;
-        }
-
-        // End-of-verse: when buffer tail matches last 3–4 words of current verse, allow advance with 1 match and lower bar (mirror song end-of-line).
-        const bufferWords = normalizedBuffer.split(/\s+/).filter(Boolean);
-        const bufferTail =
-          bufferWords.length >= BIBLE_END_OF_VERSE_BUFFER_WORDS
-            ? bufferWords.slice(-BIBLE_END_OF_VERSE_BUFFER_WORDS).join(' ')
-            : normalizedBuffer;
-        const verseEndTrigger = getBibleEndOfVerseTrigger(currentVerse.text);
-        const endOfVerseScore = compareTwoStrings(
-          normalizeMatchText(bufferTail),
-          normalizeMatchText(verseEndTrigger)
-        );
-        const inScopeEndOfVerse = endOfVerseScore >= BIBLE_END_OF_VERSE_TRIGGER_THRESHOLD;
-        const requiredMatches = inScopeEndOfVerse ? 1 : BIBLE_FOLLOW_DEBOUNCE_MATCHES;
-
-        let currentScore: number;
-        let nextScore: number;
-        if (isBibleSemanticFollowEnabled()) {
-          const semantic = await getBibleFollowSemanticScores(
-            normalizedBuffer,
-            currentVerse.text,
-            nextVerse.text
-          );
-          if (semantic) {
-            currentScore = semantic.currentScore;
-            nextScore = semantic.nextScore;
-          } else {
-            currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
-            nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
-          }
-        } else {
-          currentScore = getMatchScore(normalizedBuffer, currentVerse.text);
-          nextScore = getMatchScore(normalizedBuffer, nextVerse.text);
-        }
-
-        const advanceThresholdMet = inScopeEndOfVerse
-          ? nextScore >= BIBLE_END_OF_VERSE_NEXT_THRESHOLD
-          : nextScore >= BIBLE_FOLLOW_MATCH_THRESHOLD && nextScore >= currentScore + BIBLE_FOLLOW_MATCH_MARGIN;
-
-        if (advanceThresholdMet) {
-          const now = Date.now();
-          const targetKey = buildBibleRefKey(nextRef, session.bibleVersionId);
-          if (session.bibleFollowHit &&
-              session.bibleFollowHit.targetKey === targetKey &&
-              now - session.bibleFollowHit.lastHitAt <= BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
-            session.bibleFollowHit.hitCount += 1;
-            session.bibleFollowHit.lastHitAt = now;
-          } else {
-            session.bibleFollowHit = {
-              targetKey,
-              hitCount: 1,
-              lastHitAt: now,
-            };
-          }
-
-          if (session.bibleFollowHit.hitCount >= requiredMatches) {
-            session.bibleFollowHit = undefined;
-            const nextEndVerse =
-              followEndVerse !== null && nextRef.chapter === followRef.chapter ? followEndVerse : null;
-            session.bibleFollowRef = {
-              ...nextRef,
-              endVerse: nextEndVerse,
-            };
-            session.bibleFollow = true;
-
-            const refKey = `${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}:${nextVerse.versionAbbrev}`;
-            session.lastBibleRefKey = refKey;
-            session.lastBibleRefAt = now;
-
-            const verseLines = wrapBibleText(nextVerse.text);
-            const verseTitle = `${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} • ${nextVerse.versionAbbrev}`;
-
-            let nextVersePreviewText: string | undefined;
-            let nextVersePreviewRef: string | undefined;
-            const nextNextRef: BibleReference = { book: nextVerse.book, chapter: nextVerse.chapter, verse: nextVerse.verse + 1 };
-            const nextNextVerse = await getBibleVerseCached(session, nextNextRef, session.bibleVersionId);
-            if (nextNextVerse?.text) {
-              nextVersePreviewText = nextNextVerse.text;
-              nextVersePreviewRef = `${nextNextVerse.book} ${nextNextVerse.chapter}:${nextNextVerse.verse}`;
-            } else {
-              const nextNextCh: BibleReference = { book: nextVerse.book, chapter: nextVerse.chapter + 1, verse: 1 };
-              const nextNextChVerse = await getBibleVerseCached(session, nextNextCh, session.bibleVersionId);
-              if (nextNextChVerse?.text) {
-                nextVersePreviewText = nextNextChVerse.text;
-                nextVersePreviewRef = `${nextNextChVerse.book} ${nextNextChVerse.chapter}:${nextNextChVerse.verse}`;
-              }
-            }
-
-            const displayMsg: DisplayUpdateMessage = {
-              type: 'DISPLAY_UPDATE',
-              payload: {
-                lineText: verseLines[0] ?? nextVerse.text,
-                slideText: verseLines.join('\n'),
-                slideLines: verseLines,
-                slideIndex: 0,
-                songId: `bible:${nextVerse.book}:${nextVerse.chapter}:${nextVerse.verse}`,
-                songTitle: verseTitle,
-                isAutoAdvance: true,
-                currentItemIndex: session.currentItemIndex,
-                nextVerseText: nextVersePreviewText,
-                nextVerseRef: nextVersePreviewRef,
-              },
-              timing: createTiming(receivedAt, processingStart),
-            };
-
-            broadcastToEvent(session.eventId, displayMsg);
-            if (inScopeEndOfVerse) {
-              console.log(
-                `[WS] Bible: end-of-verse advance to ${nextVerse.book} ${nextVerse.chapter}:${nextVerse.verse} (trigger ${(endOfVerseScore * 100).toFixed(0)}%)`
-              );
-            }
-            session.rollingBuffer = '';
-          }
-        } else if (session.bibleFollowHit) {
-          const now = Date.now();
-          if (now - session.bibleFollowHit.lastHitAt > BIBLE_FOLLOW_DEBOUNCE_WINDOW_MS) {
-            session.bibleFollowHit = undefined;
-          }
-        }
-        logTiming('bible path (follow)', `bibleMs=${Date.now() - biblePathStart}`);
-        return;
-      }
+      void runBiblePathAsync(session, transcriptionResult, receivedAt, processingStart, cleanedBuffer, logTiming).catch((err) => {
+        console.error('[WS] Bible path error:', err);
+      });
     }
 
     if (!session.songContext) {
@@ -1531,7 +1400,8 @@ async function handleTranscriptionResult(
       return;
     }
 
-      // Always log matcher attempt for debugging production issues
+    // Fast path: song matching (never blocked by Bible)
+    // Always log matcher attempt for debugging production issues
       console.log(`[WS] 🔍 Attempting match with buffer: "${cleanedBuffer.slice(0, 50)}..."`);
       console.log(`[WS] 🔍 Current song: "${session.songContext?.title || 'N/A'}"`);
       console.log(`[WS] 🔍 Current line: "${session.songContext?.lines[session.songContext?.currentLineIndex || 0] || 'N/A'}"`);
