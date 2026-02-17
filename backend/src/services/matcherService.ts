@@ -168,6 +168,9 @@ function getAdaptiveEndTrigger(text: string): {
   totalWords: number;
   mode: 'short' | 'medium' | 'percentage';
 } {
+  if (text == null || typeof text !== 'string' || text.trim() === '') {
+    return { triggerText: '', triggerWords: 0, totalWords: 0, mode: 'short' };
+  }
   const words = text.trim().split(/\s+/).filter(w => w.length > 0);
   const totalWords = words.length;
 
@@ -255,9 +258,15 @@ export function findBestMatch(
     return result;
   }
 
+  // Clamp currentLineIndex to valid range (fixes crash when e.g. switching song and index was past end)
+  const effectiveLineIndex = Math.min(
+    Math.max(0, songContext.currentLineIndex),
+    songContext.lines.length - 1
+  );
+
   if (config.debug) {
     console.log(`[MATCHER] Starting match with cleaned buffer: "${buffer}"`);
-    console.log(`[MATCHER] Current line index: ${songContext.currentLineIndex}, Total lines: ${songContext.lines.length}`);
+    console.log(`[MATCHER] Current line index: ${effectiveLineIndex}, Total lines: ${songContext.lines.length}`);
     console.log(`[MATCHER] Forward-only mode: ENABLED (prevents repeated lyrics backtracking)`);
   }
 
@@ -287,10 +296,10 @@ export function findBestMatch(
   const lookAheadWindow = config.lookAheadWindow ?? 3; // Look at current + next N lines
   
   if (config.debug) {
-    console.log(`[MATCHER] Search window: lines ${songContext.currentLineIndex} to ${Math.min(songContext.currentLineIndex + lookAheadWindow, songContext.lines.length - 1)}`);
+    console.log(`[MATCHER] Search window: lines ${effectiveLineIndex} to ${Math.min(effectiveLineIndex + lookAheadWindow, songContext.lines.length - 1)}`);
   }
   let bestScore = 0;
-  let bestLineIndex = songContext.currentLineIndex;
+  let bestLineIndex = effectiveLineIndex;
   let matchedLineText = '';
 
   // For better line transition detection, also check if the END of buffer matches next line
@@ -302,8 +311,8 @@ export function findBestMatch(
   const normalizedEndBuffer = normalizeText(endBuffer);
 
   for (
-    let i = songContext.currentLineIndex;
-    i < Math.min(songContext.currentLineIndex + lookAheadWindow, songContext.lines.length);
+    let i = effectiveLineIndex;
+    i < Math.min(effectiveLineIndex + lookAheadWindow, songContext.lines.length);
     i++
   ) {
     const line = songContext.lines[i];
@@ -313,12 +322,12 @@ export function findBestMatch(
     const fullSimilarity = compareTwoStrings(normalizedBuffer, normalizedLine);
     
     // Also check if end of buffer matches this line (helps detect transitions)
-    const endSimilarity = i > songContext.currentLineIndex 
+    const endSimilarity = i > effectiveLineIndex 
       ? compareTwoStrings(normalizedEndBuffer, normalizedLine)
       : 0;
     
     // Use the higher of the two similarities, but weight end similarity more for next lines
-    const similarity = i > songContext.currentLineIndex
+    const similarity = i > effectiveLineIndex
       ? Math.min(1.0, Math.max(fullSimilarity, endSimilarity * 1.2)) // Boost end match for next lines, cap at 1.0
       : fullSimilarity;
 
@@ -337,10 +346,10 @@ export function findBestMatch(
 
   // FORWARD-ONLY CONSTRAINT: Never allow backward progression
   // This prevents issues with repeated lyrics (e.g., same line at end of each stanza)
-  if (!config.allowBackward && bestScore >= config.similarityThreshold && bestLineIndex < songContext.currentLineIndex) {
+  if (!config.allowBackward && bestScore >= config.similarityThreshold && bestLineIndex < effectiveLineIndex) {
     if (config.debug) {
       console.log(
-        `[MATCHER] ⚠️  REJECTED BACKWARD MATCH: Line ${bestLineIndex} < current ${songContext.currentLineIndex} - "${matchedLineText.slice(0, 40)}..."`
+        `[MATCHER] ⚠️  REJECTED BACKWARD MATCH: Line ${bestLineIndex} < current ${effectiveLineIndex} - "${matchedLineText.slice(0, 40)}..."`
       );
       console.log(
         `[MATCHER] This prevents jumping back to repeated lyrics from earlier stanzas`
@@ -356,12 +365,12 @@ export function findBestMatch(
     result.currentLineIndex = bestLineIndex;
     result.confidence = bestScore;
     result.matchedText = matchedLineText;
-    result.wasForwardProgress = bestLineIndex >= songContext.currentLineIndex;
+    result.wasForwardProgress = bestLineIndex >= effectiveLineIndex;
 
     // Determine if we should auto-advance
-    if (bestLineIndex === songContext.currentLineIndex) {
+    if (bestLineIndex === effectiveLineIndex) {
       // Still on current line - check if we've reached the END of this line
-      const currentLine = songContext.lines[songContext.currentLineIndex];
+      const currentLine = songContext.lines[effectiveLineIndex];
       const endTriggerInfo = getAdaptiveEndTrigger(currentLine);
       const normalizedEndTrigger = normalizeText(endTriggerInfo.triggerText);
 
@@ -371,7 +380,7 @@ export function findBestMatch(
 
       // Hybrid trigger: also consider next-line confidence
       let nextLineConfidence = 0;
-      const nextLineIndex = songContext.currentLineIndex + 1;
+      const nextLineIndex = effectiveLineIndex + 1;
       if (nextLineIndex < songContext.lines.length) {
         const nextLine = songContext.lines[nextLineIndex];
         const normalizedNextLine = songContext.normalizedLines?.[nextLineIndex] ?? normalizeText(nextLine);
@@ -403,7 +412,7 @@ export function findBestMatch(
       if (endTriggerStrong || endTriggerSupported) {
         // We've reached the END of this line - advance immediately!
         result.isLineEnd = true;
-        result.nextLineIndex = songContext.currentLineIndex + 1;
+        result.nextLineIndex = effectiveLineIndex + 1;
         result.advanceReason = 'end-words';
         
         if (config.debug) {
@@ -423,15 +432,15 @@ export function findBestMatch(
     } else {
       // Moved to next line(s) - but if target line is very similar to current, don't advance via next-line
       // (singer may be repeating the verse; require end-of-line trigger to advance)
-      const currentLineText = songContext.normalizedLines?.[songContext.currentLineIndex]
-        ?? normalizeText(songContext.lines[songContext.currentLineIndex]);
+      const currentLineText = songContext.normalizedLines?.[effectiveLineIndex]
+        ?? normalizeText(songContext.lines[effectiveLineIndex]);
       const targetLineText = songContext.normalizedLines?.[bestLineIndex]
         ?? normalizeText(songContext.lines[bestLineIndex]);
       const lineSimilarity = compareTwoStrings(currentLineText, targetLineText);
 
       if (lineSimilarity >= SIMILAR_LINE_THRESHOLD) {
-        result.currentLineIndex = songContext.currentLineIndex;
-        result.matchedText = songContext.lines[songContext.currentLineIndex];
+        result.currentLineIndex = effectiveLineIndex;
+        result.matchedText = songContext.lines[effectiveLineIndex];
         result.isLineEnd = false;
         result.nextLineIndex = undefined;
         result.advanceReason = undefined;
@@ -446,23 +455,23 @@ export function findBestMatch(
         result.advanceReason = 'next-line';
         if (config.debug) {
           console.log(
-            `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (next-line detected, advancing from ${songContext.currentLineIndex})`
+            `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (next-line detected, advancing from ${effectiveLineIndex})`
           );
           console.log(
-            `[MATCHER] isLineEnd=true because bestLineIndex (${bestLineIndex}) > currentLineIndex (${songContext.currentLineIndex}) - transition detected`
+            `[MATCHER] isLineEnd=true because bestLineIndex (${bestLineIndex}) > currentLineIndex (${effectiveLineIndex}) - transition detected`
           );
         }
       }
     }
-  } else if (bestLineIndex === songContext.currentLineIndex) {
+  } else if (bestLineIndex === effectiveLineIndex) {
     // Allow end-trigger to advance even if overall confidence is lower
-    const currentLine = songContext.lines[songContext.currentLineIndex];
+    const currentLine = songContext.lines[effectiveLineIndex];
     const endTriggerInfo = getAdaptiveEndTrigger(currentLine);
     const normalizedEndTrigger = normalizeText(endTriggerInfo.triggerText);
     const endMatchScore = compareTwoStrings(normalizedEndBuffer, normalizedEndTrigger);
 
     let nextLineConfidence = 0;
-    const nextLineIndex = songContext.currentLineIndex + 1;
+    const nextLineIndex = effectiveLineIndex + 1;
     if (nextLineIndex < songContext.lines.length) {
       const nextLine = songContext.lines[nextLineIndex];
       const normalizedNextLine = songContext.normalizedLines?.[nextLineIndex] ?? normalizeText(nextLine);
@@ -483,7 +492,7 @@ export function findBestMatch(
       result.matchedText = matchedLineText;
       result.wasForwardProgress = true;
       result.isLineEnd = true;
-      result.nextLineIndex = songContext.currentLineIndex + 1;
+      result.nextLineIndex = effectiveLineIndex + 1;
       result.advanceReason = 'end-words';
       result.endTriggerScore = endMatchScore;
       result.nextLineConfidence = nextLineConfidence;

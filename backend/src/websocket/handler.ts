@@ -640,7 +640,12 @@ async function handleStartSession(
     currentLineIndex = currentSong.lineToSlideIndex.findIndex(slideIdx => slideIdx === currentSlideIndex);
     if (currentLineIndex === -1) currentLineIndex = 0;
   }
-  
+  // Clamp to valid line range (prevents matcher crash when index >= lines.length)
+  const currentLineCount = currentSong?.lines?.length ?? 0;
+  if (currentLineCount > 0 && currentLineIndex >= currentLineCount) {
+    currentLineIndex = currentLineCount - 1;
+  }
+
   const songContext = currentSong ? createSongContext(
     { id: currentSong.id, sequence_order: actualSongIndex + 1 },
     currentSong,
@@ -2614,6 +2619,12 @@ async function handleManualOverride(
   } else {
     // Ultimate fallback: assume 1:1 mapping
     newLineIndex = newSlideIndex;
+  }
+
+  // Clamp to valid line range (prevents matcher crash when index >= lines.length)
+  const lineCount = targetSong.lines?.length ?? 0;
+  if (lineCount > 0 && newLineIndex >= lineCount) {
+    newLineIndex = lineCount - 1;
   }
 
   // Update session state
