@@ -1681,11 +1681,19 @@ async function handleTranscriptionResult(
 
         // Only broadcast DISPLAY_UPDATE when slide actually changes
         const slideChanged = newSlideIndex !== session.currentSlideIndex;
-        
-        // FORWARD-ONLY PROTECTION: Prevent backward slide jumps (repeated lyrics issue)
-        if (slideChanged && newSlideIndex < session.currentSlideIndex) {
+        // Block only when we're going backward in song content (line index), not just slide index.
+        // This allows advancing to the next line even when line-to-slide mapping puts it on a lower
+        // slide. Block when: slide would go down AND we're not strictly advancing in line index.
+        const advancingInContent =
+          typeof session.currentLineIndex === 'number' && matchedLineIndex > session.currentLineIndex;
+        const wouldGoToLowerSlide =
+          slideChanged && newSlideIndex < session.currentSlideIndex;
+        const shouldBlockBackward =
+          wouldGoToLowerSlide && !advancingInContent;
+
+        if (shouldBlockBackward) {
           console.warn(
-            `[WS] ⚠️  BLOCKED BACKWARD SLIDE: ${newSlideIndex} < ${session.currentSlideIndex} (repeated lyrics detected)`
+            `[WS] ⚠️  BLOCKED BACKWARD SLIDE: line ${matchedLineIndex} < current line ${session.currentLineIndex} (repeated lyrics detected)`
           );
           console.warn(
             `[WS] Matched line: "${matchResult.matchedText.slice(0, 50)}..." - staying on current slide to prevent confusion`
