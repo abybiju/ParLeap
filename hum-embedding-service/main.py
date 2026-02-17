@@ -31,6 +31,7 @@ app.add_middleware(
 MODEL_ID = "facebook/wav2vec2-base"
 TARGET_SR = 16000
 EMBEDDING_DIM = 768
+MAX_DURATION_SECONDS = 30  # Trim audio to this length to avoid OOM on long tracks
 
 processor = None
 model = None
@@ -79,6 +80,12 @@ async def embed(audio: UploadFile = File(...)) -> dict:
 
     if len(y) < 1600:  # 0.1s at 16kHz
         raise HTTPException(status_code=400, detail="Audio too short after load")
+
+    # Trim to MAX_DURATION_SECONDS to avoid OOM on full-length tracks
+    max_samples = TARGET_SR * MAX_DURATION_SECONDS
+    if len(y) > max_samples:
+        logger.info("Trimming audio from %.1fs to %ds", len(y) / TARGET_SR, MAX_DURATION_SECONDS)
+        y = y[:max_samples]
 
     with torch.no_grad():
         inputs = processor(
