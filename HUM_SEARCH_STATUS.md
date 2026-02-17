@@ -249,6 +249,12 @@ If this returns rows, hum search can return matches (after you’ve run migratio
 - [ ] Verify results display correctly (match list with similarity %).
 - [ ] Test with "Amazing Grace" or "Way Maker" if those songs have been ingested.
 
+## Confidence threshold (avoid false matches)
+
+- **Minimum to show results**: 55% (`MIN_CONFIDENCE_TO_SHOW = 0.55`). The frontend only shows the result list when the best match has similarity ≥ 55%.
+- **Request threshold**: Batch hum-search and live hum both use 0.55 so silence or random humming does not return the catalog. Lower thresholds (e.g. 35–40%) caused "no hum" or "random hum" to still show the two ingested songs.
+- **UX**: If the best match is below 55%, the user sees "No confident match. Try humming the main tune of a song clearly for 5–10 seconds."
+
 ## Performance Notes
 
 - **Recording**: 10 seconds max (user can click "Stop & Search" earlier). Auto-stops and analyzes when time is up.

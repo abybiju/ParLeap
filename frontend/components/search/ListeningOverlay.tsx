@@ -7,6 +7,21 @@ import { audioBufferToWav, arrayBufferToBase64 } from '@/lib/audioUtils'
 
 /** Max recording duration (seconds). User can stop earlier with "Stop & Search". */
 const RECORDING_MAX_SECONDS = 10
+/** In live mode, keep listening up to this many seconds. */
+const LIVE_MAX_SECONDS = 60
+/** Send this many seconds of audio per chunk in live mode. */
+const LIVE_CHUNK_SECONDS = 2
+const SAMPLE_RATE = 22050
+/** Only show results when best match is at least this confident (avoids showing songs for silence/random hum). */
+const MIN_CONFIDENCE_TO_SHOW = 0.55
+
+function getBackendUrl(): string {
+  if (typeof window === 'undefined') return ''
+  return process.env.NEXT_PUBLIC_BACKEND_URL ||
+    (window.location?.hostname === 'www.parleap.com'
+      ? 'https://parleapbackend-production.up.railway.app'
+      : 'http://localhost:3001')
+}
 
 interface SearchResult {
   songId: string
@@ -31,6 +46,8 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(16).fill(0.1))
   const [recordingTime, setRecordingTime] = useState(0)
   const [processingElapsed, setProcessingElapsed] = useState(0)
+  const [liveAvailable, setLiveAvailable] = useState(false)
+  const [liveMode, setLiveMode] = useState(false)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -42,6 +59,8 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
   const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isRecordingRef = useRef<boolean>(false)
+  const liveSessionIdRef = useRef<string | null>(null)
+  const liveChunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Clean up on unmount or close
   useEffect(() => {
@@ -50,12 +69,13 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       if (timerRef.current) clearInterval(timerRef.current)
       if (autoStopTimeoutRef.current) clearTimeout(autoStopTimeoutRef.current)
       if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
+      if (liveChunkIntervalRef.current) clearInterval(liveChunkIntervalRef.current)
       stopRecording()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reset state when opening
+  // When opening: check if live hum is available; do not auto-start (user clicks Start)
   useEffect(() => {
     if (open) {
       setState('idle')
@@ -63,32 +83,50 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       setResults([])
       setRecordingTime(0)
       isRecordingRef.current = false
-      // Auto-start recording after a brief delay
-      const timeout = setTimeout(() => {
-        startRecording()
-      }, 500)
-      return () => clearTimeout(timeout)
+      liveSessionIdRef.current = null
+      if (liveChunkIntervalRef.current) {
+        clearInterval(liveChunkIntervalRef.current)
+        liveChunkIntervalRef.current = null
+      }
+      const url = getBackendUrl()
+      if (url) {
+        fetch(`${url}/api/hum-search/live/available`)
+          .then((r) => r.json())
+          .then((d: { available?: boolean }) => setLiveAvailable(!!d?.available))
+          .catch(() => setLiveAvailable(false))
+      }
     } else {
       isRecordingRef.current = false
       stopRecording()
-      return undefined
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const startRecording = async () => {
     try {
+      const maxSeconds = liveMode ? LIVE_MAX_SECONDS : RECORDING_MAX_SECONDS
+
+      if (liveMode) {
+        const url = getBackendUrl()
+        const res = await fetch(`${url}/api/hum-search/live/start`, { method: 'POST' })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({})) as { error?: string }
+          throw new Error(data?.error ?? 'Live search not available')
+        }
+        const data = await res.json() as { sessionId?: string }
+        if (data.sessionId) liveSessionIdRef.current = data.sessionId
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 22050, // Match BasicPitch's expected sample rate
+          sampleRate: 22050,
         } 
       })
 
       mediaStreamRef.current = stream
 
-      // Set up AudioContext for recording and visualization
       const ctx = new AudioContext({ sampleRate: 22050 })
       audioContextRef.current = ctx
       if (ctx.state === 'suspended') {
@@ -96,65 +134,103 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       }
       const source = ctx.createMediaStreamSource(stream)
       
-      // Set up analyser for visualization
-      analyserRef.current = audioContextRef.current.createAnalyser()
+      analyserRef.current = ctx.createAnalyser()
       analyserRef.current.fftSize = 64
       source.connect(analyserRef.current)
 
-      // Set up ScriptProcessorNode to capture raw audio samples
-      // Note: ScriptProcessorNode is deprecated but widely supported
-      // Alternative would be AudioWorklet but requires separate file
       const bufferSize = 4096
-      const scriptProcessor = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1)
+      const scriptProcessor = ctx.createScriptProcessor(bufferSize, 1, 1)
       scriptProcessorRef.current = scriptProcessor
       
       audioChunksRef.current = []
       
       scriptProcessor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0)
-        // Copy the audio data
         audioChunksRef.current.push(new Float32Array(inputData))
       }
       
       source.connect(scriptProcessor)
-      scriptProcessor.connect(audioContextRef.current.destination)
+      scriptProcessor.connect(ctx.destination)
 
-      // Start visualizing
       visualize()
 
       isRecordingRef.current = true
       setState('recording')
       setRecordingTime(0)
 
-      // Start timer and auto-stop when we hit the limit
+      // Live mode: send chunk every 2s and check for match
+      if (liveMode && liveSessionIdRef.current) {
+        const url = getBackendUrl()
+        const samplesPerChunk = SAMPLE_RATE * LIVE_CHUNK_SECONDS
+
+        liveChunkIntervalRef.current = setInterval(async () => {
+          const chunks = audioChunksRef.current
+          if (chunks.length === 0) return
+          const total = chunks.reduce((s, c) => s + c.length, 0)
+          if (total < samplesPerChunk) return
+
+          const combined = new Float32Array(total)
+          let offset = 0
+          for (const c of chunks) {
+            combined.set(c, offset)
+            offset += c.length
+          }
+          const last = combined.slice(-samplesPerChunk)
+
+          const audioBuffer = ctx.createBuffer(1, last.length, SAMPLE_RATE)
+          audioBuffer.copyToChannel(last, 0)
+          const wavBuffer = audioBufferToWav(audioBuffer)
+          const base64Audio = arrayBufferToBase64(wavBuffer)
+
+          try {
+            const chunkRes = await fetch(`${url}/api/hum-search/live/chunk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: liveSessionIdRef.current,
+                audio: base64Audio,
+              }),
+            })
+            const chunkData = await chunkRes.json() as { status: string; results?: SearchResult[] }
+            const list = chunkData.results ?? []
+            const bestSim = list.length > 0 ? list[0].similarity : 0
+            if (chunkData.status === 'match' && list.length > 0 && bestSim >= MIN_CONFIDENCE_TO_SHOW) {
+              if (liveChunkIntervalRef.current) {
+                clearInterval(liveChunkIntervalRef.current)
+                liveChunkIntervalRef.current = null
+              }
+              setResults(list)
+              setState('results')
+              stopRecording('match')
+            }
+          } catch (e) {
+            console.error('[HumSearch] Live chunk error:', e)
+          }
+        }, 2000)
+      }
+
       timerRef.current = setInterval(() => {
         setRecordingTime((t) => {
           const next = t + 1
-          if (next >= RECORDING_MAX_SECONDS) {
-            if (isRecordingRef.current) {
-              stopRecording()
-            }
-            return RECORDING_MAX_SECONDS
+          if (next >= maxSeconds) {
+            if (isRecordingRef.current) stopRecording()
+            return maxSeconds
           }
           return next
         })
       }, 1000)
 
-      // Auto-stop after max duration (backup in case interval is slow)
       autoStopTimeoutRef.current = setTimeout(() => {
-        if (isRecordingRef.current) {
-          stopRecording()
-        }
-      }, RECORDING_MAX_SECONDS * 1000)
+        if (isRecordingRef.current) stopRecording()
+      }, maxSeconds * 1000)
     } catch (err) {
       console.error('Failed to start recording:', err)
-      setError('Could not access microphone. Please grant permission.')
+      setError(err instanceof Error ? err.message : 'Could not access microphone. Please grant permission.')
       setState('error')
     }
   }
 
-  const stopRecording = () => {
-    // Prevent multiple calls
+  const stopRecording = (reason?: 'match' | 'user' | 'timeout') => {
     if (!isRecordingRef.current) return
     
     isRecordingRef.current = false
@@ -162,6 +238,10 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
+    }
+    if (liveChunkIntervalRef.current) {
+      clearInterval(liveChunkIntervalRef.current)
+      liveChunkIntervalRef.current = null
     }
     
     if (autoStopTimeoutRef.current) {
@@ -174,27 +254,37 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
       animationFrameRef.current = null
     }
     
-    // Disconnect script processor
     if (scriptProcessorRef.current) {
       scriptProcessorRef.current.disconnect()
       scriptProcessorRef.current = null
     }
     
-    // Stop media stream tracks
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop())
       mediaStreamRef.current = null
     }
+
+    if (liveMode && liveSessionIdRef.current) {
+      const url = getBackendUrl()
+      fetch(`${url}/api/hum-search/live/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: liveSessionIdRef.current }),
+      }).catch(() => {})
+      liveSessionIdRef.current = null
+      if (reason !== 'match') {
+        setError('No match yet. Try humming a bit longer or use record-then-search (uncheck "Match as you hum").')
+        setState('error')
+      }
+    }
     
-    // Process the recording only if we have data
-    if (audioChunksRef.current.length > 0) {
+    if (!liveMode && audioChunksRef.current.length > 0) {
       processRecording()
-    } else {
+    } else if (!liveMode && audioChunksRef.current.length === 0) {
       setError('No audio recorded. Please try again.')
       setState('error')
     }
     
-    // Close audio context
     if (audioContextRef.current?.state !== 'closed') {
       audioContextRef.current?.close()
     }
@@ -273,7 +363,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
           body: JSON.stringify({
             audio: base64Audio,
             limit: 5,
-            threshold: 0.35,
+            threshold: MIN_CONFIDENCE_TO_SHOW,
           }),
         })
         console.log('[HumSearch] Response status:', response.status, response.statusText)
@@ -337,12 +427,14 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
           console.log(`[HumSearch] Job ${jobData.jobId} status:`, statusData.status)
           
           if (statusData.status === 'completed') {
-            if (statusData.results && statusData.results.length > 0) {
-              setResults(statusData.results)
+            const list = statusData.results ?? []
+            const bestSimilarity = list.length > 0 ? list[0].similarity : 0
+            if (list.length > 0 && bestSimilarity >= MIN_CONFIDENCE_TO_SHOW) {
+              setResults(list)
               setState('results')
             } else {
-              console.log('[HumSearch] Job completed but no matches (0 results)')
-              setError('No matching songs found. Try humming the main tune of a song in your library (e.g. Amazing Grace or Way Maker) for 5–10 seconds.')
+              console.log('[HumSearch] Job completed but no confident match (best:', bestSimilarity, ')')
+              setError('No confident match. Try humming the main tune of a song clearly for 5–10 seconds.')
               setState('error')
             }
           } else if (statusData.status === 'failed') {
@@ -408,24 +500,21 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
         {/* Recording State */}
         {state === 'recording' && (
           <div className="text-center">
-            {/* Animated Microphone */}
             <div className="relative w-32 h-32 mx-auto mb-8">
-              {/* Pulsing rings */}
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-red-500 animate-pulse-ring" />
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-red-500 animate-pulse-ring-slow" style={{ animationDelay: '0.5s' }} />
-              
-              {/* Center circle */}
               <div className="absolute inset-4 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/50">
                 <Music className="w-12 h-12 text-white animate-bounce-subtle" />
               </div>
             </div>
 
-            {/* Text */}
             <p className="text-2xl font-bold text-white mb-2">
-              Listening...
+              {liveMode ? 'Keep humming...' : 'Listening...'}
             </p>
             <p className="text-white/60 mb-6">
-              Hum your melody ({Math.max(0, RECORDING_MAX_SECONDS - recordingTime)}s remaining)
+              {liveMode
+                ? `Matching as you sing (${Math.max(0, LIVE_MAX_SECONDS - recordingTime)}s left)`
+                : `Hum your melody (${Math.max(0, RECORDING_MAX_SECONDS - recordingTime)}s remaining)`}
             </p>
 
             {/* Real Waveform Visualization */}
@@ -552,11 +641,28 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
           </div>
         )}
 
-        {/* Idle State (brief loading before recording starts) */}
+        {/* Idle State: Start button and optional "Match as you hum" */}
         {state === 'idle' && (
           <div className="text-center py-8">
-            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-4" />
-            <p className="text-white/60">Preparing microphone...</p>
+            <p className="text-white/80 mb-4">Hum a melody to find a song</p>
+            {liveAvailable && (
+              <label className="flex items-center justify-center gap-2 mb-6 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={liveMode}
+                  onChange={(e) => setLiveMode(e.target.checked)}
+                  className="rounded border-white/30 bg-white/10 text-orange-500 focus:ring-orange-500"
+                />
+                <span className="text-sm text-white/70">Match as you hum (keep going until we find it)</span>
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={() => startRecording()}
+              className="px-6 py-3 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium hover:opacity-90 transition-opacity"
+            >
+              Start humming
+            </button>
           </div>
         )}
       </div>
