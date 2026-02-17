@@ -203,7 +203,7 @@ type StreamEndCallback = () => void;
 type StreamErrorCallback = (error: Error) => void;
 
 export function createStreamingRecognition(): {
-  write: (audioData: Buffer) => void;
+  write: (audioData: Buffer | string) => void;
   end: () => void;
   on: (event: 'data' | 'end' | 'error', callback: StreamCallback | StreamEndCallback | StreamErrorCallback) => void;
 } {
@@ -213,7 +213,7 @@ export function createStreamingRecognition(): {
       end?: StreamEndCallback[];
       error?: StreamErrorCallback[];
     } = {};
-    const pendingChunks: Buffer[] = [];
+    const pendingChunks: (Buffer | string)[] = [];
     let lastChunkSentAt = 0;
     const modelId = process.env.ELEVENLABS_MODEL_ID || 'scribe_v2_realtime';
     const languageCode = process.env.ELEVENLABS_LANGUAGE_CODE || 'en';
@@ -238,10 +238,11 @@ export function createStreamingRecognition(): {
           return;
         }
         lastChunkSentAt = Date.now();
+        const base64 = typeof chunk === 'string' ? chunk : chunk.toString('base64');
         socket.send(
           JSON.stringify({
             message_type: 'input_audio_chunk',
-            audio_base_64: chunk.toString('base64'),
+            audio_base_64: base64,
             sample_rate: 16000,
           })
         );
@@ -294,13 +295,14 @@ export function createStreamingRecognition(): {
     });
 
     return {
-      write: (audioData: Buffer) => {
+      write: (audioData: Buffer | string) => {
         if (socket.readyState === WebSocket.OPEN) {
           lastChunkSentAt = Date.now();
+          const base64 = typeof audioData === 'string' ? audioData : audioData.toString('base64');
           socket.send(
             JSON.stringify({
               message_type: 'input_audio_chunk',
-              audio_base_64: audioData.toString('base64'),
+              audio_base_64: base64,
               sample_rate: 16000,
             })
           );
@@ -335,8 +337,9 @@ export function createStreamingRecognition(): {
     const mockCallbacks: { [key: string]: Array<StreamCallback | StreamEndCallback | StreamErrorCallback> } = {};
     
     return {
-      write: (audioData: Buffer) => {
-        const result = generateMockTranscription(audioData);
+      write: (audioData: Buffer | string) => {
+        const buf = typeof audioData === 'string' ? Buffer.from(audioData, 'base64') : audioData;
+        const result = generateMockTranscription(buf);
         if (mockCallbacks['data']) {
           (mockCallbacks['data'] as StreamCallback[]).forEach(cb => (cb as StreamCallback)(result));
         }
@@ -396,8 +399,9 @@ export function createStreamingRecognition(): {
   });
   
   return {
-    write: (audioData: Buffer) => {
-      stream.write({ audioContent: audioData });
+    write: (audioData: Buffer | string) => {
+      const buf = typeof audioData === 'string' ? Buffer.from(audioData, 'base64') : audioData;
+      stream.write({ audioContent: buf });
     },
     end: () => {
       stream.end();
