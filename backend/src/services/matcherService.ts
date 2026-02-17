@@ -12,8 +12,30 @@
  * - Confidence-based threshold (0.85+) triggers auto-advance
  */
 
-import { compareTwoStrings } from 'string-similarity';
+import { compareTwoStrings as compareTwoStringsLib } from 'string-similarity';
 import type { SongData } from './eventService';
+
+const SIMILARITY_CACHE_MAX = 500;
+const SIMILARITY_CACHE_TTL_MS = 5000;
+const similarityCache = new Map<string, { value: number; ts: number }>();
+
+function cacheKey(a: string, b: string): string {
+  return a <= b ? `${a}\0${b}` : `${b}\0${a}`;
+}
+
+function compareTwoStrings(a: string, b: string): number {
+  const key = cacheKey(a, b);
+  const now = Date.now();
+  const hit = similarityCache.get(key);
+  if (hit && now - hit.ts < SIMILARITY_CACHE_TTL_MS) return hit.value;
+  const value = compareTwoStringsLib(a, b);
+  if (similarityCache.size >= SIMILARITY_CACHE_MAX) {
+    const firstKey = similarityCache.keys().next().value as string | undefined;
+    if (firstKey !== undefined) similarityCache.delete(firstKey);
+  }
+  similarityCache.set(key, { value, ts: now });
+  return value;
+}
 
 /**
  * Represents a matched line with confidence
