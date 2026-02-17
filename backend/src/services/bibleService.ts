@@ -1,5 +1,5 @@
 import { compareTwoStrings } from 'string-similarity';
-import { supabase, isSupabaseConfigured } from '../config/supabase';
+import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
 import { BIBLE_BOOKS } from '../data/bibleBooks';
 
 export type BibleReference = {
@@ -222,7 +222,8 @@ export function detectBibleVersionCommand(input: string): 'ESV' | 'KJV' | null {
 
 async function ensureBookCache(): Promise<BookCache | null> {
   if (bookCache) return bookCache;
-  if (!isSupabaseConfigured || !supabase) return null;
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return null;
 
   const { data, error } = await supabase
     .from('bible_books')
@@ -247,7 +248,8 @@ async function ensureBookCache(): Promise<BookCache | null> {
 
 async function ensureVersionCache(): Promise<VersionCache | null> {
   if (versionCache) return versionCache;
-  if (!isSupabaseConfigured || !supabase) return null;
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return null;
 
   const { data, error } = await supabase
     .from('bible_versions')
@@ -271,7 +273,8 @@ export async function fetchBibleVerse(
   reference: BibleReference,
   versionId?: string | null
 ): Promise<BibleVerseResult | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return null;
   if (!versionId) return null;
 
   const books = await ensureBookCache();
@@ -326,7 +329,8 @@ export async function fetchBibleVerse(
 
 export async function getDefaultBibleVersionId(): Promise<string | null> {
   if (defaultVersionId) return defaultVersionId;
-  if (!isSupabaseConfigured || !supabase) return null;
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return null;
 
   const { data, error } = await supabase
     .from('bible_versions')
@@ -346,7 +350,7 @@ export async function getDefaultBibleVersionId(): Promise<string | null> {
 }
 
 export async function getBibleVersionIdByAbbrev(abbrev: string): Promise<string | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
+  if (!isSupabaseConfigured()) return null;
   const versions = await ensureVersionCache();
   if (!versions) return null;
   const match = Array.from(versions.byId.values()).find(
@@ -461,7 +465,8 @@ export async function searchVerseCandidatesByWords(
   words: string[],
   limit: number = 80
 ): Promise<VerseCandidateRow[]> {
-  if (!isSupabaseConfigured || !supabase) return [];
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return [];
   if (!words.length) return [];
 
   const books = await ensureBookCache();

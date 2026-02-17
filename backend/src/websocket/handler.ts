@@ -4,6 +4,8 @@
  * Processes incoming WebSocket messages and manages session state
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import type { WebSocket } from 'ws';
 import { compareTwoStrings } from 'string-similarity';
 import {
@@ -27,7 +29,7 @@ import {
 } from '../types/websocket';
 import { validateClientMessage } from '../types/schemas';
 import { fetchEventData, fetchEventItemById, type SongData, type SetlistItemData } from '../services/eventService';
-import { supabase, isSupabaseConfigured } from '../config/supabase';
+import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
 import {
   type BibleReference,
   detectBibleVersionCommand,
@@ -67,6 +69,15 @@ function createTiming(receivedAt: number, processingStartAt: number): TimingMeta
     serverSentAt: now,
     processingTimeMs: now - processingStartAt,
   };
+}
+
+const DEBUG_LOG_PATH = path.join(__dirname, '..', '..', '..', '..', '.cursor', 'debug.log');
+function debugLog(payload: Record<string, unknown>): void {
+  try {
+    fs.appendFileSync(DEBUG_LOG_PATH, JSON.stringify(payload) + '\n');
+  } catch {
+    // ignore
+  }
 }
 
 function parseNumberEnv(value: string | undefined, fallback: number): number {
@@ -976,7 +987,8 @@ async function handleTranscriptionResult(
         const versionId = await getBibleVersionIdByAbbrev(versionCommand);
         if (versionId) {
           session.bibleVersionId = versionId;
-          if (isSupabaseConfigured && supabase) {
+          const supabase = getSupabaseClient();
+          if (isSupabaseConfigured() && supabase) {
             try {
               await supabase
                 .from('events')
@@ -2096,6 +2108,22 @@ async function handleManualOverride(
         : `itemIndex ${itemIndex} out of range (0-${Math.max(0, setlistItems.length - 1)})`);
       return;
     }
+    // #region agent log
+    const h2Payload = {
+      location: 'handler.ts:GO_TO_ITEM',
+      message: 'GO_TO_ITEM target resolved',
+      data: {
+        itemIndex,
+        itemId,
+        targetType: targetItem.type,
+        mediaUrlSnippet: targetItem.type === 'MEDIA' ? String((targetItem as { mediaUrl?: string }).mediaUrl ?? '').slice(0, 80) : undefined,
+      },
+      timestamp: Date.now(),
+      hypothesisId: 'H2',
+    };
+    debugLog(h2Payload);
+    fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(h2Payload) }).catch(() => {});
+    // #endregion
     session.currentItemIndex = itemIndex; // Use client index so operator highlight is correct when setlists differ
     session.isAutoFollowing = false;
     session.suggestedSongSwitch = undefined;
@@ -2163,6 +2191,25 @@ async function handleManualOverride(
       const urlLower = mediaUrl.toLowerCase();
       const isVideo = /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(urlLower);
       const isImage = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(urlLower);
+      const slideImageUrl = isImage ? mediaUrl : undefined;
+      const slideVideoUrl = isVideo ? mediaUrl : undefined;
+      // #region agent log
+      const h3Payload = {
+        location: 'handler.ts:MEDIA payload',
+        message: 'MEDIA DISPLAY_UPDATE built',
+        data: {
+          mediaUrlSnippet: mediaUrl.slice(0, 80),
+          isImage,
+          isVideo,
+          hasSlideImageUrl: Boolean(slideImageUrl),
+          hasSlideVideoUrl: Boolean(slideVideoUrl),
+        },
+        timestamp: Date.now(),
+        hypothesisId: 'H3',
+      };
+      debugLog(h3Payload);
+      fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(h3Payload) }).catch(() => {});
+      // #endregion
       const displayUpdate: DisplayUpdateMessage = {
         type: 'DISPLAY_UPDATE',
         payload: {
@@ -2175,8 +2222,8 @@ async function handleManualOverride(
           songTitle: targetItem.mediaTitle ?? 'Media',
           isAutoAdvance: false,
           currentItemIndex: itemIndex,
-          slideImageUrl: isImage ? mediaUrl : undefined,
-          slideVideoUrl: isVideo ? mediaUrl : undefined,
+          slideImageUrl,
+          slideVideoUrl,
           displayType: isVideo ? 'video' : isImage ? 'image' : 'lyrics',
         },
         timing: createTiming(receivedAt, Date.now()),

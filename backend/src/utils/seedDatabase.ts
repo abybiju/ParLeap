@@ -5,7 +5,7 @@
  * Run with: npx ts-node backend/src/utils/seedDatabase.ts
  */
 
-import { supabase, isSupabaseConfigured } from '../config/supabase';
+import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
 
 // Sample songs with lyrics
 const SAMPLE_SONGS = [
@@ -84,7 +84,8 @@ async function seedDatabase() {
   console.log('🌱 Starting database seed...\n');
 
   // Check if Supabase is configured
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     console.error('❌ Supabase is not configured!');
     console.error('   Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env file');
     process.exit(1);

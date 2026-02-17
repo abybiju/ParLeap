@@ -5,7 +5,7 @@
  * Falls back to mock data when Supabase isn't configured
  */
 
-import { supabase, isSupabaseConfigured } from '../config/supabase';
+import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
 import {
   compileSlides,
   mergeSlideConfig,
@@ -124,7 +124,8 @@ const fallbackToMockData = process.env.SUPABASE_FALLBACK_TO_MOCK === 'true';
  */
 export async function fetchEventData(eventId: string): Promise<EventData | null> {
   // Use mock data if Supabase isn't configured
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     console.log('[EventService] Using mock data (Supabase not configured)');
     return getMockEventData(eventId);
   }
@@ -355,7 +356,8 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
  * Fetch a single song by ID
  */
 export async function fetchSongById(songId: string): Promise<SongData | null> {
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     console.log('[EventService] Cannot fetch song - Supabase not configured');
     return null;
   }
@@ -420,7 +422,8 @@ export async function fetchEventItemById(
   eventId: string,
   itemId: string
 ): Promise<SetlistItemData | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return null;
   try {
     const { data, error } = await supabase
       .from('event_items')
@@ -482,7 +485,8 @@ export async function createSong(
   artist: string | null,
   lyrics: string
 ): Promise<string | null> {
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     console.log('[EventService] Cannot create song - Supabase not configured');
     return null;
   }
@@ -521,7 +525,8 @@ export async function createEvent(
   name: string,
   eventDate?: Date
 ): Promise<string | null> {
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     console.log('[EventService] Cannot create event - Supabase not configured');
     return null;
   }
@@ -560,7 +565,8 @@ export async function addSongToEvent(
   songId: string,
   sequenceOrder: number
 ): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     console.log('[EventService] Cannot add song to event - Supabase not configured');
     return false;
   }

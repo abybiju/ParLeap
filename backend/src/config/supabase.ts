@@ -1,23 +1,28 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Check if Supabase is configured
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Lazy-initialized Supabase client.
+// Reads process.env at first access so dotenv can load before the check runs
+// (fixes "Supabase not configured" false alarm in scripts that call dotenv.config after imports).
+let _supabase: SupabaseClient | null | undefined;
+let _isConfigured: boolean | undefined;
+let _supabaseUrl: string | undefined;
 
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseServiceKey);
+function ensureInit(): void {
+  if (_isConfigured !== undefined) return;
 
-if (!isSupabaseConfigured) {
-  console.warn('⚠️  Supabase not configured - using mock data mode');
-  console.warn('   Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env for real data');
-} else {
-  console.log('✅ Supabase configured and connected');
-  console.log(`   URL: ${supabaseUrl?.substring(0, 30)}...`);
-}
+  _supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  _isConfigured = !!(_supabaseUrl && supabaseServiceKey);
 
-// Create Supabase client (or null if not configured)
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(
-      supabaseUrl!,
+  if (!_isConfigured) {
+    console.warn('⚠️  Supabase not configured - using mock data mode');
+    console.warn('   Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env for real data');
+    _supabase = null;
+  } else {
+    console.log('✅ Supabase configured and connected');
+    console.log(`   URL: ${_supabaseUrl?.substring(0, 30)}...`);
+    _supabase = createClient(
+      _supabaseUrl!,
       supabaseServiceKey!,
       {
         auth: {
@@ -25,21 +30,34 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
           persistSession: false,
         },
       }
-    )
-  : null;
+    );
+  }
+}
+
+/** Whether Supabase credentials are present in the environment. */
+export function isSupabaseConfigured(): boolean {
+  ensureInit();
+  return _isConfigured!;
+}
+
+/** Lazy Supabase client (null when not configured). */
+export function getSupabaseClient(): SupabaseClient | null {
+  ensureInit();
+  return _supabase ?? null;
+}
 
 /**
  * Extract Supabase project reference from URL
  * e.g., "https://xxxx.supabase.co" -> "xxxx"
  */
 export function getSupabaseProjectRef(): string | null {
-  if (!supabaseUrl) {
+  ensureInit();
+  if (!_supabaseUrl) {
     return null;
   }
   try {
-    const url = new URL(supabaseUrl);
+    const url = new URL(_supabaseUrl);
     const hostname = url.hostname;
-    // Extract project ref from hostname (e.g., "xxxx.supabase.co" -> "xxxx")
     const match = hostname.match(/^([^.]+)\.supabase\.co$/);
     return match ? match[1] : null;
   } catch {
@@ -51,14 +69,16 @@ export function getSupabaseProjectRef(): string | null {
  * Get safe prefix of Supabase URL for logging (first 30 chars)
  */
 export function getSupabaseUrlPrefix(): string {
-  if (!supabaseUrl) {
+  ensureInit();
+  if (!_supabaseUrl) {
     return '';
   }
-  return supabaseUrl.substring(0, 30);
+  return _supabaseUrl.substring(0, 30);
 }
 
 // Helper function to verify user authentication
 export async function verifyUserToken(token: string): Promise<string | null> {
+  const supabase = getSupabaseClient();
   if (!supabase) {
     console.warn('[Auth] Cannot verify token - Supabase not configured');
     return null;
