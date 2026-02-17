@@ -574,8 +574,8 @@ async function handleStartSession(
   const eventData = await fetchEventData(eventId);
   
   if (!eventData) {
-    console.error(`[WS] Failed to fetch event data for ${eventId}`);
-    sendError(ws, 'EVENT_NOT_FOUND', `Event ${eventId} not found or no setlist configured`, { eventId });
+    console.error(`[WS] Failed to fetch event data for ${eventId} (check Supabase URL/service role key and RLS)`);
+    sendError(ws, 'EVENT_NOT_FOUND', `Event not found or backend could not load it. Check that the backend has the correct Supabase URL and service role key.`, { eventId });
     return;
   }
 
