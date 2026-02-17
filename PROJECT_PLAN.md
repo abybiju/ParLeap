@@ -38,6 +38,9 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📌 To-Do List
 
+### Fix later (deferred)
+- **Avatar storage (migration 005)** — Review/fix `supabase/migrations/005_setup_avatar_storage.sql` when circling back; documented here so we can focus on other work now.
+
 - **Brainstorm semantic AI / Hugging Face** — Explore open-source embedding/semantic models (e.g. Hugging Face) runnable in Node.js or Edge for cost/latency/on-prem. See `BIBLE_SEMANTIC_BACKLOG.md` §4.
 - **Work on humming search feature** — Hum-to-Search (find songs by humming) is implemented but testing/performance pending. See `HUM_SEARCH_STATUS.md` for status, next steps, and BasicPitch/queue notes.
 - **Background visuals for projector view** — Optional image/video/motion layer behind lyrics; operator-selectable per event or per slide; possible integration with media library or stock. See `BACKGROUND_AND_ANNOUNCEMENTS_ROADMAP.md`.
