@@ -54,6 +54,8 @@ export interface SongContext {
   title: string;
   artist?: string;
   lines: string[]; // Individual lines of lyrics
+  /** Pre-normalized lines (set at session start to avoid repeated work in hot path) */
+  normalizedLines?: string[];
   currentLineIndex: number;
 }
 
@@ -272,7 +274,7 @@ export function findBestMatch(
     i++
   ) {
     const line = songContext.lines[i];
-    const normalizedLine = normalizeText(line);
+    const normalizedLine = songContext.normalizedLines?.[i] ?? normalizeText(line);
 
     // Calculate similarity with full buffer
     const fullSimilarity = compareTwoStrings(normalizedBuffer, normalizedLine);
@@ -329,7 +331,7 @@ export function findBestMatch(
       const currentLine = songContext.lines[songContext.currentLineIndex];
       const endTriggerInfo = getAdaptiveEndTrigger(currentLine);
       const normalizedEndTrigger = normalizeText(endTriggerInfo.triggerText);
-      
+
       // Check if buffer contains the end trigger words (last 40% of current line)
       const endMatchScore = compareTwoStrings(normalizedEndBuffer, normalizedEndTrigger);
       result.endTriggerScore = endMatchScore;
@@ -339,7 +341,7 @@ export function findBestMatch(
       const nextLineIndex = songContext.currentLineIndex + 1;
       if (nextLineIndex < songContext.lines.length) {
         const nextLine = songContext.lines[nextLineIndex];
-        const normalizedNextLine = normalizeText(nextLine);
+        const normalizedNextLine = songContext.normalizedLines?.[nextLineIndex] ?? normalizeText(nextLine);
         const nextFullSimilarity = compareTwoStrings(normalizedBuffer, normalizedNextLine);
         const nextEndSimilarity = compareTwoStrings(normalizedEndBuffer, normalizedNextLine);
         nextLineConfidence = Math.min(1.0, Math.max(nextFullSimilarity, nextEndSimilarity * 1.2));
@@ -410,7 +412,7 @@ export function findBestMatch(
     const nextLineIndex = songContext.currentLineIndex + 1;
     if (nextLineIndex < songContext.lines.length) {
       const nextLine = songContext.lines[nextLineIndex];
-      const normalizedNextLine = normalizeText(nextLine);
+      const normalizedNextLine = songContext.normalizedLines?.[nextLineIndex] ?? normalizeText(nextLine);
       const nextFullSimilarity = compareTwoStrings(normalizedBuffer, normalizedNextLine);
       const nextEndSimilarity = compareTwoStrings(normalizedEndBuffer, normalizedNextLine);
       nextLineConfidence = Math.min(1.0, Math.max(nextFullSimilarity, nextEndSimilarity * 1.2));
@@ -480,11 +482,13 @@ export function createSongContext(
       ? songData.lines
       : splitLyricsIntoLines(songData.lyrics || '');
 
+  const normalizedLines = lines.map((l) => normalizeText(l));
   return {
     id: songData.id,
     title: songData.title,
     artist: songData.artist,
     lines,
+    normalizedLines,
     currentLineIndex: Math.min(currentLineIndex, lines.length - 1),
   };
 }
