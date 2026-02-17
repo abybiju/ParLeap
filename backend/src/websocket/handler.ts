@@ -47,6 +47,7 @@ import {
 } from '../services/bibleEmbeddingService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured, isGoogleCloudConfigured } from '../services/sttService';
 import {
+  findBestMatch,
   findBestMatchAcrossAllSongs,
   createSongContext,
   validateConfig,
@@ -167,6 +168,13 @@ const BIBLE_END_OF_VERSE_NEXT_THRESHOLD = parseNumberEnv(process.env.BIBLE_END_O
 const BIBLE_END_OF_VERSE_BUFFER_WORDS = 6;
 /** Min semantic score for verse-by-content open and in-chapter/cross-chapter jump (paraphrased speech). */
 const BIBLE_JUMP_BY_CONTENT_MIN_SCORE = parseNumberEnv(process.env.BIBLE_JUMP_BY_CONTENT_MIN_SCORE, 0.65);
+
+/** Song lock: only match current song for this long (ms) after a switch. Reduces latency and false song switches. */
+const SONG_LOCK_MS = parseNumberEnv(process.env.SONG_LOCK_MS, 25000);
+/** After this many consecutive low/no matches we clear the lock and check other songs. */
+const SONG_LOCK_CONSECUTIVE_LOW = parseNumberEnv(process.env.SONG_LOCK_CONSECUTIVE_LOW, 2);
+/** Confidence below this counts as "low" for song lock (clears lock after N consecutive). */
+const SONG_LOCK_LOW_THRESHOLD = parseNumberEnv(process.env.SONG_LOCK_LOW_THRESHOLD, 0.4);
 
 /** Smart Bible Listen server kill switch: set to 'false' to force-disable Smart Listen for all clients. Defaults to true (allow client to enable). */
 const BIBLE_SMART_LISTEN_KILL_SWITCH = process.env.BIBLE_SMART_LISTEN_ENABLED === 'false';
@@ -354,6 +362,10 @@ interface SessionState {
     matchCount: number; // How many consecutive times we've seen this match
   };
   lastSongSwitchAt?: number; // Timestamp of last song switch (for cooldown)
+  /** Song lock: while set, only match current song (no other-songs check). Cleared on timer or consecutive low matches. */
+  songLockUntil?: number;
+  /** Consecutive transcripts with no/low match; when >= threshold we clear song lock and check other songs. */
+  consecutiveLowMatchCount?: number;
   // End-trigger debouncing for slide advance
   endTriggerHit?: {
     lineIndex: number;
@@ -1444,22 +1456,53 @@ async function handleTranscriptionResult(
             }
           : session.matcherConfig;
 
-        // PHASE 1: Multi-song matching with debouncing
-        const matchStart = Date.now();
-        const multiSongResult: MultiSongMatchResult = findBestMatchAcrossAllSongs(
-          cleanedBuffer,
-          session.songContext,
-          session.songs,
-          session.currentSongIndex,
-          matcherConfig
-        );
-        const matchMs = Date.now() - matchStart;
-        console.log(`[WS] ⏱️ findBestMatchAcrossAllSongs took ${matchMs}ms`);
+        const now = Date.now();
+        const lockActive = session.songLockUntil != null && now < session.songLockUntil;
+
+        let multiSongResult: MultiSongMatchResult;
+        if (lockActive) {
+          // Song lock: only match current song (no other-songs check) to cut latency
+          const matchStart = Date.now();
+          const currentMatch = findBestMatch(cleanedBuffer, session.songContext, matcherConfig);
+          const matchMs = Date.now() - matchStart;
+          console.log(`[WS] ⏱️ findBestMatch (song lock) took ${matchMs}ms`);
+          multiSongResult = { currentSongMatch: currentMatch };
+        } else {
+          // PHASE 1: Multi-song matching with debouncing
+          const matchStart = Date.now();
+          multiSongResult = findBestMatchAcrossAllSongs(
+            cleanedBuffer,
+            session.songContext,
+            session.songs,
+            session.currentSongIndex,
+            matcherConfig
+          );
+          const matchMs = Date.now() - matchStart;
+          console.log(`[WS] ⏱️ findBestMatchAcrossAllSongs took ${matchMs}ms`);
+        }
 
         const matchResult = multiSongResult.currentSongMatch;
         session.lastMatchConfidence = matchResult.confidence;
         if (session.allowBackwardUntil && matchResult.matchFound) {
           session.allowBackwardUntil = undefined;
+        }
+
+        // Update song lock state: clear lock after consecutive low matches so we check other songs
+        if (session.songLockUntil != null && now >= session.songLockUntil) {
+          session.songLockUntil = undefined;
+        }
+        const isLowMatch = !matchResult.matchFound || matchResult.confidence < SONG_LOCK_LOW_THRESHOLD;
+        if (isLowMatch) {
+          session.consecutiveLowMatchCount = (session.consecutiveLowMatchCount ?? 0) + 1;
+          if ((session.consecutiveLowMatchCount ?? 0) >= SONG_LOCK_CONSECUTIVE_LOW) {
+            session.songLockUntil = undefined;
+            session.consecutiveLowMatchCount = 0;
+            if (session.matcherConfig.debug) {
+              console.log('[WS] Song lock cleared (consecutive low matches)');
+            }
+          }
+        } else {
+          session.consecutiveLowMatchCount = 0;
         }
 
         // Always log match result for debugging
@@ -1471,7 +1514,6 @@ async function handleTranscriptionResult(
         // PHASE 1: Handle song switch suggestions with debouncing
         const SONG_SWITCH_COOLDOWN_MS = 3000; // 3 seconds cooldown after any song switch
         const SONG_SWITCH_DEBOUNCE_MATCHES = 2; // Require 2 consecutive matches before switching
-        const now = Date.now();
 
         if (multiSongResult.suggestedSongSwitch && session.isAutoFollowing) {
           const suggestion = multiSongResult.suggestedSongSwitch;
@@ -1510,6 +1552,8 @@ async function handleTranscriptionResult(
               session.lastSongSwitchAt = now;
               session.lastStrongMatchAt = now;
               session.suggestedSongSwitch = undefined; // Clear suggestion
+              session.songLockUntil = now + SONG_LOCK_MS;
+              session.consecutiveLowMatchCount = 0;
 
               // Broadcast SONG_CHANGED to all clients
               const songChangedMsg: SongChangedMessage = {
@@ -1657,6 +1701,8 @@ async function handleTranscriptionResult(
           session.lastStrongMatchAt = now;
           session.allowBackwardUntil = undefined;
           session.suggestedSongSwitch = undefined;
+          session.songLockUntil = now + SONG_LOCK_MS;
+          session.consecutiveLowMatchCount = 0;
 
           const songChangedMsg: SongChangedMessage = {
             type: 'SONG_CHANGED',
@@ -2235,6 +2281,9 @@ async function handleManualOverride(
           0
         );
         session.rollingBuffer = '';
+        const now = Date.now();
+        session.songLockUntil = now + SONG_LOCK_MS;
+        session.consecutiveLowMatchCount = 0;
         const slideText = targetSong.slides?.[0]?.slideText ?? targetSong.lines[0] ?? '';
         const slideLines = targetSong.slides?.[0]?.lines ?? [slideText];
         const displayUpdate: DisplayUpdateMessage = {
@@ -2581,6 +2630,9 @@ async function handleManualOverride(
       newLineIndex // Use line index for matching
     );
     session.rollingBuffer = ''; // Clear buffer on song change
+    const now = Date.now();
+    session.songLockUntil = now + SONG_LOCK_MS;
+    session.consecutiveLowMatchCount = 0;
   } else if (session.songContext) {
     // Update line index within same song
     session.songContext.currentLineIndex = newLineIndex;
