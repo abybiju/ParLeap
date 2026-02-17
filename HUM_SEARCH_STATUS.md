@@ -1,7 +1,7 @@
 # Hum-to-Search Feature Status
 
 **Last Updated:** February 16, 2026  
-**Status:** ⚠️ Implementation Complete, Testing Pending
+**Status:** ⚠️ Implementation Complete + Deployed, End-to-End Testing Pending
 
 ## Overview
 
@@ -258,16 +258,38 @@ If this returns rows, hum search can return matches (after you’ve run migratio
 
 ## Recent Improvements (February 16, 2026)
 
+- **Live hum (YouTube-style)**: When `EMBEDDING_SERVICE_URL` is set, the overlay offers "Match as you hum": user clicks Start, hums, and the app streams 2s chunks to the backend; backend keeps a 5s rolling window, calls the embedding service, and runs `match_songs_by_embedding`. When similarity crosses the threshold, the match is shown immediately ("keep going until we find it"). Endpoints: `GET /api/hum-search/live/available`, `POST /api/hum-search/live/start`, `POST /api/hum-search/live/chunk`, `POST /api/hum-search/live/stop`.
 - **YouTube-style path**: Optional Python embedding service (`hum-embedding-service/`): POST WAV → 768D vector; backend uses `match_songs_by_embedding` when `EMBEDDING_SERVICE_URL` is set. Migration 017 adds `embedding` column and RPC. Ingest script can call the embedding service to populate `embedding` in addition to `melody_vector`.
+- **Audio trimming (EPIPE fix)**: Embedding service trims audio to **30 seconds max** before processing. Full-length tracks (17–36 min) caused Railway OOM/EPIPE. 30s at 16kHz = 480K samples — more than enough for a representative embedding.
+- **Retry logic**: Ingest script retries embedding calls up to 3 times with 5s/10s/15s backoff. Catches transient failures when Railway container restarts.
+- **Lazy Supabase init**: `supabase.ts` now reads `process.env` on first access (not module load). Fixes false "Supabase not configured" warning in scripts that call `dotenv.config()` after imports. All 8 backend consumer files updated to use `getSupabaseClient()` / `isSupabaseConfigured()`.
+- **Ingestion verified**: Both Way Maker (96MB) and Amazing Grace (45MB) successfully processed with 128D melody + 768D embedding vectors in Supabase.
 - **Processing UX**: ListeningOverlay now shows "This may take 30–60 seconds" and a live elapsed-time counter during analysis so users know to wait.
 - **API**: `match_songs` RPC extended via migration `016_match_songs_return_lyrics.sql` to return `lyrics` (JOIN songs). Backend tolerates missing lyrics for backward compatibility.
 - **Types**: Removed `any` in ListeningOverlay error handling; strict typing for error response.
 
+## Deployment
+
+### Embedding Service (Railway)
+- **Service**: Separate Railway service in same project, root directory `hum-embedding-service/`
+- **Start command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **URL**: Set as `EMBEDDING_SERVICE_URL` on both Railway backend and local `backend/.env`
+- **No env vars required** (model downloads automatically on first startup)
+- Model: `facebook/wav2vec2-base` (Wav2Vec2, 768D output)
+
+### Backend Environment
+```env
+EMBEDDING_SERVICE_URL=https://your-embedding-service.up.railway.app
+```
+When set: hum search uses YouTube-style 768D path. When absent: falls back to BasicPitch 128D.
+
 ## Next Steps
 
-1. Deploy and test end-to-end (run migration 016 in Supabase if not applied).
-2. Monitor Railway logs for processing times.
-3. Consider performance optimizations if needed (e.g. Redis-backed job queue for persistence).
+1. Test end-to-end hum search (both batch and live mode) on production.
+2. Run migration 017 in Supabase SQL Editor if not applied.
+3. Monitor Railway logs for embedding service latency and memory usage.
+4. Consider performance optimizations if needed (e.g. Redis-backed job queue for persistence).
+5. Add more songs to `song_fingerprints` via ingest to improve match quality.
 
 ## Backup Plan: Fastify Server Approach
 

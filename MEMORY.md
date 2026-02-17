@@ -1,5 +1,30 @@
 # ParLeap AI - Memory Log
 
+## Session: February 16, 2026 — Hum-to-Search: YouTube-style embedding + live hum + lazy Supabase
+
+### What we did
+- **Python embedding microservice** (`hum-embedding-service/`): FastAPI + Wav2Vec2 (`facebook/wav2vec2-base`), POST WAV → 768D vector. Deployed to Railway. Audio trimmed to 30s max to prevent OOM on full-length tracks.
+- **Supabase migration 017**: `embedding vector(768)` column on `song_fingerprints`, IVFFlat index, `match_songs_by_embedding()` RPC.
+- **Dual-path hum search**: `humSearchService.ts` uses YouTube-style (768D via embedding service + `match_songs_by_embedding`) when `EMBEDDING_SERVICE_URL` is set; falls back to BasicPitch (128D + `match_songs`).
+- **Live hum-to-search**: `humSearchLiveService.ts` — stream 2s audio chunks, 5s rolling buffer, embedding service lookup, returns match on the fly. Frontend `ListeningOverlay.tsx` has "Match as you hum" toggle. Endpoints: `live/available`, `live/start`, `live/chunk`, `live/stop`.
+- **Ingest script**: Dual-vector (128D + 768D), retry 3x with backoff. Successfully processed Way Maker + Amazing Grace.
+- **Lazy Supabase init**: Refactored `supabase.ts` from module-load to first-access init (`getSupabaseClient()`, `isSupabaseConfigured()`). Fixed false "not configured" warning in scripts. Updated all 8 consumer files.
+- **EPIPE root cause**: Full-length WAVs (17–36 min) caused Railway OOM. Fixed by trimming to 30s + retry logic.
+- **Type-check fixes**: Unused `req` param, `wav.fmt` cast.
+
+### Commits
+- `ce41b7c` — feat: YouTube-style hum search
+- `2471838` — fix: trim audio to 30s, env at call time, retry
+- `f5c421e` — refactor: lazy-init Supabase client
+- `f6d7e2c` — fix: type-check errors
+
+### Key technical lessons
+- **Module load order**: ES imports execute before any code in the importing file. `dotenv.config()` cannot run before transitive imports. Solution: lazy init (read env on first access, not import time).
+- **Railway memory**: Wav2Vec2 + large audio files can exceed Railway container limits. Always trim/limit input size.
+- **Retry is cheap insurance**: Transient EPIPE from container restarts is caught by simple retry with backoff.
+
+---
+
 ## Session: Event edit workspace + structured announcement text (this session)
 
 ### What we did
@@ -901,8 +926,8 @@ frontend/tailwind.config.ts               (new animations)
 
 ---
 
-**Last Updated:** February 15, 2026  
-**Status:** Grab Text + device upload + canvas eraser for announcement slides shipped. Bible in live setlist fix deployed earlier; debug endpoint available if needed.
+**Last Updated:** February 16, 2026  
+**Status:** YouTube-style hum-to-search (embedding service + live hum + dual-path search) shipped. Lazy Supabase init refactored across all 8 backend consumers. Ingest pipeline verified (2 songs, both 128D + 768D). End-to-end testing pending.
 
 ---
 
