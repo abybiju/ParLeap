@@ -108,11 +108,11 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   useEffect(() => {
     if (usePcm && typeof window !== 'undefined') {
       const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
-      if (sttProvider !== 'elevenlabs') {
-        console.warn('[useAudioCapture] ⚠️  PCM mode enabled but NEXT_PUBLIC_STT_PROVIDER is not "elevenlabs"');
-        console.warn('[useAudioCapture] ⚠️  Backend expects PCM format for ElevenLabs. Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs');
+      if (sttProvider !== 'elevenlabs' && sttProvider !== 'google') {
+        console.warn('[useAudioCapture] ⚠️  PCM mode enabled but NEXT_PUBLIC_STT_PROVIDER is not "elevenlabs" or "google"');
+        console.warn('[useAudioCapture] ⚠️  Backend expects PCM for ElevenLabs/Google streaming. Set NEXT_PUBLIC_STT_PROVIDER=elevenlabs or google');
       } else {
-        console.log('[useAudioCapture] ✅ PCM mode enabled for ElevenLabs STT');
+        console.log(`[useAudioCapture] ✅ PCM mode enabled for ${sttProvider} STT`);
       }
     }
   }, [usePcm]);
