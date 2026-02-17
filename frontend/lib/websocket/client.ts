@@ -172,6 +172,22 @@ class WebSocketClient {
    * Send a typed message to the server
    */
   send(message: ClientMessage, micCaptureTime?: number): void {
+    // #region agent log
+    const payload = (message as { type: string; payload?: { action?: string; itemIndex?: number; itemId?: string } }).payload;
+    if (message.type === 'MANUAL_OVERRIDE' && payload?.action === 'GO_TO_ITEM') {
+      fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'client.ts:send',
+          message: 'GO_TO_ITEM send attempt',
+          data: { isConnected: this.isConnected(), itemIndex: payload.itemIndex, itemId: payload.itemId },
+          timestamp: Date.now(),
+          hypothesisId: 'H1',
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
     if (!this.isConnected() || !this.ws) {
       console.error('Cannot send message: WebSocket not connected');
       return;

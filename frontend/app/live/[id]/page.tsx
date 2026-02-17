@@ -18,11 +18,10 @@ function getBackendHttpUrl(): string {
     return process.env.NEXT_PUBLIC_BACKEND_URL
   }
 
-  // Derive from WebSocket URL (wss://... -> https://...)
+  // Derive from WebSocket URL (wss:// -> https://, ws:// -> http://)
   if (process.env.NEXT_PUBLIC_WS_URL) {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL
-    // Convert wss:// to https:// or ws:// to http://
-    return wsUrl.replace(/^wss?:\/\//, 'https://')
+    return wsUrl.startsWith('wss://') ? wsUrl.replace(/^wss:\/\//, 'https://') : wsUrl.replace(/^ws:\/\//, 'http://')
   }
 
   // Fallback: production or localhost
@@ -177,7 +176,7 @@ export default async function LivePage({ params }: LivePageProps) {
       frontendProjectRef={frontendProjectRef}
       backendProjectRef={backendProjectRef}
       backendConfigured={backendConfigured}
-      backendHealthError={healthError}
+      backendHealthError={healthError?.message ?? null}
     />
   )
 }

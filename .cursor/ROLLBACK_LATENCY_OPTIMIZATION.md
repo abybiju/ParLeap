@@ -24,4 +24,4 @@ Each phase is committed separately so you can revert individual commits:
 - Phase 3c: Memoize similarity
 - Phase 3d: Skip base64 re-encode
 - Phase 3e: Cap rolling buffer
-- Phase 4a: CSS transitions
+- Phase 4a: CSS transitions (300→150ms, 500→200ms)
