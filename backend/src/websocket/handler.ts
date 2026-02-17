@@ -1860,27 +1860,23 @@ async function handleAudioData(
     }
 
     try {
-      const audioBuffer = Buffer.from(data, 'base64');
-      
-      // Validate audio buffer size (should be reasonable for PCM 16-bit)
-      // 128 samples * 2 bytes = 256 bytes minimum per chunk
-      if (audioBuffer.length < 256 && chunkCount < 3) {
-        console.warn(`[WS] ⚠️  Small audio chunk detected: ${audioBuffer.length} bytes (expected >=256 for 128-sample buffer)`);
+      // Pass base64 through to avoid decode+re-encode (latency)
+      const byteLength = Math.floor((data.length * 3) / 4);
+      if (byteLength < 256 && chunkCount < 3) {
+        console.warn(`[WS] ⚠️  Small audio chunk detected: ~${byteLength} bytes (expected >=256 for 128-sample buffer)`);
       }
-      
       if (!session.sttStream) {
         console.error('[STT] ❌ ElevenLabs stream not initialized');
         sendError(ws, 'STT_ERROR', 'ElevenLabs stream not initialized');
         return;
       }
-      session.sttStream.write(audioBuffer);
+      session.sttStream.write(data);
       
       // Log first few chunks, then periodically
       if (chunkCount < 3) {
-        console.log(`[WS] ✅ Audio chunk #${chunkCount + 1} sent to ElevenLabs: ${audioBuffer.length} bytes (${(audioBuffer.length / 2).toFixed(0)} samples)`);
+        console.log(`[WS] ✅ Audio chunk #${chunkCount + 1} sent to ElevenLabs: ~${byteLength} bytes (${(byteLength / 2).toFixed(0)} samples)`);
       } else if (Math.random() < 0.02) {
-        // Log periodically (every ~50 chunks) to avoid spam
-        console.log(`[WS] ✅ Audio chunk sent to ElevenLabs: ${audioBuffer.length} bytes`);
+        console.log(`[WS] ✅ Audio chunk sent to ElevenLabs: ~${byteLength} bytes`);
       }
     } catch (error) {
       console.error('[WS] ❌ Error sending audio to ElevenLabs:', error);
@@ -1945,10 +1941,10 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
 
   if (payload.catchUpAudio) {
     try {
-      const buffer = Buffer.from(payload.catchUpAudio, 'base64');
-      if (session.sttStream && buffer.length > 0) {
-        session.sttStream.write(buffer);
-        console.log(`[STT] Smart Listen: sent ${buffer.length} bytes catch-up audio`);
+      if (session.sttStream && payload.catchUpAudio?.length > 0) {
+        session.sttStream.write(payload.catchUpAudio);
+        const bytes = Math.floor((payload.catchUpAudio.length * 3) / 4);
+        console.log(`[STT] Smart Listen: sent ~${bytes} bytes catch-up audio`);
       }
     } catch (err) {
       console.warn('[STT] Smart Listen: failed to write catch-up audio:', err);
