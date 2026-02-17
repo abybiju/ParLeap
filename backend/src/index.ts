@@ -3,8 +3,14 @@ import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
 import { searchByHum, SearchResult } from './services/humSearchService';
+import {
+  createSession as createLiveSession,
+  processChunk as processLiveChunk,
+  stopSession as stopLiveSession,
+  isLiveHumAvailable,
+} from './services/humSearchLiveService';
 import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
-import { supabase, isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
+import { getSupabaseClient, isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
 import {
   submitTemplate,
   fetchTemplates,
@@ -125,7 +131,7 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     activeSessions: getSessionCount(),
-    supabaseConfigured: isSupabaseConfigured,
+    supabaseConfigured: isSupabaseConfigured(),
     supabaseUrlPrefix: getSupabaseUrlPrefix(),
     supabaseProjectRef: getSupabaseProjectRef(),
   });
@@ -133,7 +139,8 @@ app.get('/health', (_req, res) => {
 
 // Debug: show raw event_items for an event (temporary diagnostic)
 app.get('/api/debug/event-items/:eventId', async (req, res) => {
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     res.json({ error: 'Supabase not configured' });
     return;
   }
@@ -333,6 +340,54 @@ app.get('/api/hum-search/:jobId', (req, res) => {
       error: err instanceof Error ? err.message : 'Internal server error',
     });
   }
+});
+
+// Live hum-to-search (YouTube-style: stream chunks, match on the go). Requires EMBEDDING_SERVICE_URL.
+app.get('/api/hum-search/live/available', (_req, res) => {
+  res.json({ available: isLiveHumAvailable() });
+});
+
+app.post('/api/hum-search/live/start', (req, res) => {
+  if (!isLiveHumAvailable()) {
+    res.status(503).json({
+      error: 'Live hum search requires the embedding service. Set EMBEDDING_SERVICE_URL on the backend.',
+    });
+    return;
+  }
+  const sessionId = createLiveSession();
+  res.json({ success: true, sessionId });
+});
+
+app.post('/api/hum-search/live/chunk', async (req, res) => {
+  if (!isLiveHumAvailable()) {
+    res.status(503).json({
+      error: 'Live hum search requires the embedding service.',
+    });
+    return;
+  }
+  try {
+    const { sessionId, audio } = req.body;
+    if (!sessionId || !audio) {
+      res.status(400).json({ error: 'Missing sessionId or audio' });
+      return;
+    }
+    const result = await processLiveChunk(sessionId, audio);
+    res.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Processing failed';
+    if (msg.includes('Session not found')) {
+      res.status(404).json({ error: msg });
+      return;
+    }
+    console.error('[HumSearchLive] Chunk error:', err);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.post('/api/hum-search/live/stop', (req, res) => {
+  const { sessionId } = req.body;
+  if (sessionId) stopLiveSession(sessionId);
+  res.json({ success: true });
 });
 
 app.use((err: Error, _req: express.Request, res: express.Response) => {

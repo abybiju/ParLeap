@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { supabase, isSupabaseConfigured } from '../config/supabase';
+import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
 import { CompiledSlide } from './slideService';
 
 export type TemplateStatus = 'pending' | 'active' | 'flagged';
@@ -125,7 +125,8 @@ function computeStructureHash(structure: TemplateStructure): string {
 }
 
 export async function submitTemplate(structure: TemplateStructure, createdBy?: string): Promise<{ id: string | null; error?: string }> {
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     return { id: null, error: 'Supabase not configured' };
   }
 
@@ -168,7 +169,8 @@ export async function submitTemplate(structure: TemplateStructure, createdBy?: s
 }
 
 export async function fetchTemplates(ccliNumber: string, lineCount?: number): Promise<CommunityTemplate[]> {
-  if (!isSupabaseConfigured || !supabase) return [];
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return [];
 
   const query = (supabase
     .from('template_stats') as ReturnType<typeof supabase.from>)
@@ -249,7 +251,8 @@ export function applyTemplateToLines(lines: string[], slides: Array<{ start_line
 }
 
 export async function incrementTemplateUsage(templateId: string): Promise<void> {
-  if (!isSupabaseConfigured || !supabase) return;
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return;
   const { error } = await supabase.rpc('increment_template_usage', { tmpl_id: templateId });
   if (error) {
     console.warn('[TemplateService] increment usage rpc error:', error.message);
@@ -257,7 +260,8 @@ export async function incrementTemplateUsage(templateId: string): Promise<void> 
 }
 
 export async function voteTemplate(templateId: string, userId: string | null, vote: 1 | -1): Promise<{ success: boolean; error?: string }> {
-  if (!isSupabaseConfigured || !supabase) return { success: false, error: 'Supabase not configured' };
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return { success: false, error: 'Supabase not configured' };
   if (!userId) return { success: false, error: 'userId required for voting' };
 
   const { error } = await (supabase

@@ -6,7 +6,7 @@
  * - Otherwise: BasicPitch melody vector (128-dim) + match_songs().
  */
 
-import { supabase, isSupabaseConfigured } from '../config/supabase';
+import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
 import { getMelodyVector } from './melodyService';
 
 function getEmbeddingServiceUrl(): string {
@@ -69,7 +69,8 @@ export async function searchByHum(
   limit: number = 5,
   threshold: number = 0.5
 ): Promise<SearchResult[]> {
-  if (!isSupabaseConfigured || !supabase) {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) {
     throw new Error('Supabase not configured - cannot perform hum search');
   }
 
