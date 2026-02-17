@@ -33,7 +33,7 @@ const SESSION_TTL_MS = 2 * 60 * 1000;
 function getSamplesFromWav(buffer: Buffer): { samples: number[]; sampleRate: number } {
   const wav = new WaveFile(buffer);
   const samples = wav.getSamples(false, Int16Array);
-  const sr = wav.fmt.sampleRate;
+  const sr = (wav.fmt as { sampleRate: number }).sampleRate;
   const arr: number[] = Array.isArray(samples)
     ? Array.from(samples[0] as unknown as Int16Array)
     : Array.from(samples as unknown as Int16Array);

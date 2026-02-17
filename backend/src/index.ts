@@ -347,7 +347,7 @@ app.get('/api/hum-search/live/available', (_req, res) => {
   res.json({ available: isLiveHumAvailable() });
 });
 
-app.post('/api/hum-search/live/start', (req, res) => {
+app.post('/api/hum-search/live/start', (_req, res) => {
   if (!isLiveHumAvailable()) {
     res.status(503).json({
       error: 'Live hum search requires the embedding service. Set EMBEDDING_SERVICE_URL on the backend.',
