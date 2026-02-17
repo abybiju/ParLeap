@@ -163,7 +163,7 @@ export function CurrentSlideDisplay({ fontClassName }: CurrentSlideDisplayProps)
                 className={cn(
                   'text-2xl md:text-4xl font-light leading-snug text-center text-white',
                   'tracking-wide drop-shadow-[0_2px_10px_rgba(0,0,0,0.4)]',
-                  'transition-all duration-500'
+                  'transition-all duration-200'
                 )}
               >
                 {line}
