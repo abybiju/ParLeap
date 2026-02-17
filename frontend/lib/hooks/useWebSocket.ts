@@ -81,6 +81,26 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
 
       // Preload next slides when display updates
       if (isDisplayUpdateMessage(message)) {
+        const receivedAt = Date.now();
+        console.log(`[WS] ⏱️ DISPLAY_UPDATE received at ${receivedAt}`);
+        // #region agent log
+        const p = message.payload as { slideImageUrl?: string; slideVideoUrl?: string; songTitle?: string };
+        fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: 'useWebSocket.ts:messageHandler',
+            message: 'DISPLAY_UPDATE received',
+            data: {
+              hasSlideImageUrl: Boolean(p.slideImageUrl),
+              hasSlideVideoUrl: Boolean(p.slideVideoUrl),
+              songTitle: String(p.songTitle ?? '').slice(0, 50),
+            },
+            timestamp: receivedAt,
+            hypothesisId: 'H3',
+          }),
+        }).catch(() => {});
+        // #endregion
         // Find current song index from cached setlist
         const setlist = slideCache.setlist;
         if (setlist) {
