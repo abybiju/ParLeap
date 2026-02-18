@@ -26,6 +26,17 @@ function parseLyricLines(lyrics: string): string[] {
     .filter((l) => l.length > 0);
 }
 
+/** Section labels (Chorus, Verse 1, Bridge, etc.) — not counted as content lines in slide preview */
+const SECTION_LABEL_PATTERN = /^(verse\s*\d*|chorus|bridge|outro|intro|pre\s*-?\s*chorus|post\s*-?\s*chorus|tag|interlude|ending)$/i;
+
+function isSectionLabel(line: string): boolean {
+  return SECTION_LABEL_PATTERN.test(line.trim());
+}
+
+function contentLineCount(stanza: string[]): number {
+  return stanza.filter((l) => !isSectionLabel(l)).length;
+}
+
 function isUsableTemplate(tpl: CommunityTemplate) {
   if (!tpl) return false;
   if (typeof tpl.id !== 'string' || tpl.id.length === 0) return false;
@@ -146,18 +157,25 @@ export function SongPreviewCards({
                 Slide {index + 1}
               </span>
               <Badge variant="secondary" className="text-xs bg-orange-500/20 text-orange-400 border-orange-500/30">
-                {stanza.length} {stanza.length === 1 ? 'line' : 'lines'}
+                {contentLineCount(stanza)} {contentLineCount(stanza) === 1 ? 'line' : 'lines'}
               </Badge>
             </div>
             <div className="space-y-1">
-              {stanza.map((line, lineIndex) => (
-                <p 
-                  key={lineIndex} 
-                  className="text-foreground text-sm leading-relaxed font-light"
-                >
-                  {line}
-                </p>
-              ))}
+              {stanza.map((line, lineIndex) => {
+                const isLabel = isSectionLabel(line);
+                return (
+                  <p
+                    key={lineIndex}
+                    className={
+                      isLabel
+                        ? 'text-xs text-muted-foreground font-medium uppercase tracking-wider'
+                        : 'text-foreground text-sm leading-relaxed font-light'
+                    }
+                  >
+                    {line}
+                  </p>
+                );
+              })}
             </div>
           </div>
         ))}
