@@ -9,6 +9,8 @@ export interface CommunityTemplate {
   slides: TemplateSlide[];
   lines_per_slide?: number | null;
   score?: number;
+  upvotes?: number;
+  downvotes?: number;
   usage_count?: number;
   created_at?: string;
 }
