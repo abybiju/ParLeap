@@ -10,6 +10,13 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Songs UX: strict metadata, iTunes Auto-Fill, CCLI templates, community save (February 2026) ✅
+- **Strict metadata + iTunes Auto-Fill**: formatSongService METADATA RULES — fill artist only from explicit cues (By, Written by, Artist:, ©); no guessing. `frontend/lib/utils/metadataSearch.ts`: `findSongMetadata(query)` via iTunes Search API (no key). Song editor: Wand2 "Auto-Fill" next to Title; fills Artist from title lookup; toast on success / no match / error.
+- **CCLI-only template fetch**: When CCLI is entered (debounced), fetch templates by CCLI only (no line count). "Community formats for this CCLI" block: line count, upvotes, "Use this format". SongPreviewCards: `templatesFromCcliOnly`, `selectedTemplateId`; no duplicate fetch when lyrics pasted; section labels (Verse, Chorus, Bridge, etc.) not counted in content line count / slide preview.
+- **Community template after Create Song**: On Create Song (new, with CCLI), dialog "Save this format to Template Community?" [No, just create] [Yes, save to community]. Backend: max 3 distinct formats per CCLI; when limit reached returns `limitReached`, song still created. Toasts: saved / "already 3 community formats" / just created.
+- **Similar-line matcher**: matcherService: when best match is a later line, compare current vs target with `compareTwoStrings`; if ≥ SIMILAR_LINE_THRESHOLD (0.65), block next-line advance (stay on current); advance only via end-of-line. Prevents skipping on repeated/similar lines.
+- **Commit**: `1e54af3` (strict metadata + iTunes Auto-Fill; CCLI-only template fetch UX).
+
 ### Auto-Format (Smart Paste) – Song lyrics formatting ✅
 - **Feature**: In the song editor (New Song / Edit), user pastes raw lyrics and clicks "Auto-Format". Backend calls OpenAI gpt-4o-mini with structured JSON output; frontend fills Title, Artist, and Lyrics.
 - **Backend**: `POST /api/format-song` (body: `{ rawText }`). Service: [backend/src/services/formatSongService.ts](backend/src/services/formatSongService.ts). Uses `OPENAI_API_KEY` (same as Bible Follow).

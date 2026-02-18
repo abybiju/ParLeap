@@ -1,5 +1,26 @@
 # ParLeap AI - Memory Log
 
+## Session: February 2026 — Songs UX, community templates, matcher, latency
+
+### What we did
+- **Strict metadata + iTunes Auto-Fill**: Format-song prompt now has METADATA RULES — fill artist only from explicit cues (By, Written by, Artist:, ©); do not guess (e.g. no "Hillsong" from style). New `frontend/lib/utils/metadataSearch.ts`: `findSongMetadata(query)` via iTunes Search API (free, no key). Song editor: Wand2 "Auto-Fill" button next to Title; on click fills Artist from title lookup; toast on success / "No match found".
+- **CCLI-only template fetch**: When user enters CCLI, we fetch all community templates for that CCLI (no lyrics). "Community formats for this CCLI" block shows line count + upvotes + "Use this format". Selecting one sets `selectedTemplateId`; hint: "Paste lyrics with N lines to apply it." SongPreviewCards receives `templatesFromCcliOnly` and `selectedTemplateId`; no duplicate fetch when lyrics are pasted; applies template when line count matches.
+- **Community template after Create Song**: On Create Song (new, with CCLI), dialog asks "Save this format to Template Community?" [No, just create] [Yes, save to community]. Backend enforces max 3 distinct formats per CCLI; when limit reached returns `limitReached`, song still created, toast: "Created. This song already has 3 community formats; your format is saved to your song only."
+- **Section labels in slide preview**: SongPreviewCards treats Chorus, Verse, Bridge, etc. as section labels — not counted in "X lines" badge; rendered as small muted headers. `isSectionLabel()` + `contentLineCount()` in preview.
+- **Similar-line matcher**: In matcherService, when best match is a *later* line, we compare current vs target line with `compareTwoStrings`. If similarity ≥ SIMILAR_LINE_THRESHOLD (0.65), we block next-line advance and stay on current line; advance only via end-of-line. Prevents jumping to repeated/similar lines (e.g. "To sing the song of ages" / "Will sing the song of ages").
+- **Live session fixes (Feb 17)** (already in MEMORY): Matcher crash when jumping songs (clamp currentLineIndex, guard getAdaptiveEndTrigger); Event Not Found + Next Slide copy; RATE_LIMITED exempt START_SESSION + friendlier toast.
+- **Latency / STT**: Instrumentation in handler and STT service; docs (STT_LATENCY_MEASUREMENT.md, read logs). Quick wins: remove projector setTimeout, 1024-sample buffer. Decided to stick with ElevenLabs; Google STT comparison optional later.
+- **Hum-to-Search**: YouTube-style (768D embedding service) + BasicPitch fallback; ingest retry; templates store structure only so we cannot auto-paste lyrics when user clicks "Use this format" (line count must match pasted lyrics).
+
+### Commits (representative)
+- `1e54af3` — feat(songs): strict metadata prompt + iTunes Auto-Fill; CCLI-only template fetch UX
+
+### Key lessons
+- Community templates are structure-only (slide ranges); no lyric text stored — so "Use this format" means "paste lyrics with this line count," not "paste lyrics for me."
+- Line count match is strict: template applies only when `parseLyricLines(lyrics).length === template.line_count`. Auto-Format helps get structure; does not fetch by CCLI.
+
+---
+
 ## Session: February 17, 2026 — Live session fixes (matcher crash, Event Not Found, RATE_LIMITED)
 
 ### What we did
@@ -943,8 +964,8 @@ frontend/tailwind.config.ts               (new animations)
 
 ---
 
-**Last Updated:** February 16, 2026  
-**Status:** YouTube-style hum-to-search (embedding service + live hum + dual-path search) shipped. Lazy Supabase init refactored across all 8 backend consumers. Ingest pipeline verified (2 songs, both 128D + 768D). End-to-end testing pending.
+**Last Updated:** February 18, 2026  
+**Status:** Songs UX: strict metadata + iTunes Auto-Fill, CCLI-only template fetch, community save dialog (max 3/CCLI), section labels in preview. Matcher: similar-line block (no premature advance). Live fixes: matcher crash on jump, Event Not Found, RATE_LIMITED. Latency instrumentation and docs. Hum-to-Search dual-path (YouTube-style + BasicPitch); templates structure-only.
 
 ---
 
