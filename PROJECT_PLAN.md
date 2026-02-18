@@ -10,6 +10,16 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Auto-Format (Smart Paste) – Song lyrics formatting ✅
+- **Feature**: In the song editor (New Song / Edit), user pastes raw lyrics and clicks "Auto-Format". Backend calls OpenAI gpt-4o-mini with structured JSON output; frontend fills Title, Artist, and Lyrics.
+- **Backend**: `POST /api/format-song` (body: `{ rawText }`). Service: [backend/src/services/formatSongService.ts](backend/src/services/formatSongService.ts). Uses `OPENAI_API_KEY` (same as Bible Follow).
+- **Prompt rules**:
+  - **Title & artist**: Fill the title field and the artist field whenever the song title or artist name appears in the text; return null only when not explicitly present.
+  - **Sections**: Structure into Verse 1, Verse 2, Chorus, Bridge, etc.; infer labels if missing.
+  - **Pagination (critical)**: Target 4 lines per slide, max 6. If a section exceeds 6 lines, split into balanced slides (e.g. 8→4+4, 7→4+3, 6→3+3). Orphan rule: never a slide with only 1 line (unless the whole section is 1 line). Split at end of sentence or phrase; keep rhyming couplets together when possible. When splitting, use the same label for each part (e.g. "Bridge" for both).
+- **Schema**: `{ title, artist, sections: [{ label, lines }] }`. Multiple sections may share the same label when a long section is split. No schema change required for pagination.
+- **Commit**: `0d0cb54` (initial); prompt updated for musician-grade pagination (balanced splits, orphan rule) without separate commit ref.
+
 ### Event edit workspace + structured announcement text ✅
 - **Event edit page**: Spotify-style layout — left sidebar (event form + Setlist / Content Library nav) and full-width main that switches between Setlist view and Content Library view. No cramped scroll frames. Components: EventEditWorkspace, EventEditSidebar, EventFormCompact, SetlistView. View-switch animation (Framer Motion, 0.2s) with overflow-x-hidden to avoid horizontal scrollbar.
 - **Structured announcement text**: Optional exact wording per slide (`structuredText`: title, subtitle, date, lines). Editor has "Exact wording (recommended for names, dates)" in Announcement tab. Projector shows operator-typed text in a fixed layout (with optional image as dimmed background). Avoids AI/image typos for names and dates. Backward compatible. Commits: `2c38c60`, `ac5209c`, `b319b82`, `3692d84`, `cc62e39`.
