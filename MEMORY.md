@@ -28,7 +28,7 @@
 - **Album art (WorshipStream)**: Dual source — iTunes worship search + Apple Music top albums RSS; merge worship-first then top charts (max 40). Refresh every 6h and on window focus; if nothing new, keep showing current (repeat). Use `Promise.allSettled` so one failing source (e.g. CORS on RSS) doesn’t hide the other.
 
 ### Commits
-- `eab2d04` — feat(landing): FlowScrollLine + WorshipStream dual source and refresh
+- `d581deb` — feat(landing): FlowScrollLine + WorshipStream dual source and refresh
 
 ### Key lesson
 - **Dual external APIs**: When merging two feeds (worship + top charts), fetch with Promise.allSettled and merge fulfilled results only so CORS or one failure doesn’t blank the section.
