@@ -36,7 +36,7 @@ export function SocialProof() {
           transition={{ duration: 0.6 }}
           className="text-4xl lg:text-5xl font-bold text-white text-center mb-12"
         >
-          Trusted by teams who value flow.
+          Trusted by teams who value flow
         </motion.h2>
 
         <div className="grid md:grid-cols-2 gap-6">

@@ -7,12 +7,13 @@ import { FeatureMarquee } from '@/components/landing/FeatureMarquee'
 import { TestimonialWall } from '@/components/landing/TestimonialWall'
 import { Pricing } from '@/components/landing/Pricing'
 import { LyricWall } from '@/components/landing/LyricWall'
+import { WorshipStream } from '@/components/landing/WorshipStream'
 import { ScriptureSection } from '@/components/landing/ScriptureSection'
 import { Footer } from '@/components/layout/Footer'
 
 export default function Home() {
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen relative">
       <HeroSection />
       <ProblemFraming />
       <FeatureGrid />
@@ -20,10 +21,12 @@ export default function Home() {
       <LiveConsoleShowcase />
       <FeatureMarquee />
       <LyricWall />
+      <WorshipStream />
       <ScriptureSection />
       <TestimonialWall />
       <Pricing />
       <Footer />
+      <div className="bottom-glow" aria-hidden="true" />
     </main>
   )
 }

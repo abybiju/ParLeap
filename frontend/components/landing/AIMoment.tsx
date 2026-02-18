@@ -21,7 +21,6 @@ export function AIMoment() {
               <span className="bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
                 &lt; 100ms
               </span>
-              .
             </h2>
             <p className="text-xl text-gray-300 leading-relaxed">
               ParLeap listens to the microphone stream, matches it against your active setlist, and fires the correct slide trigger. No manual intervention required.
