@@ -176,6 +176,10 @@ app.post('/api/templates', async (req, res) => {
     },
     userId
   );
+  if (result.limitReached) {
+    res.status(200).json({ success: false, error: result.error, limitReached: true });
+    return;
+  }
   if (result.error) {
     res.status(400).json({ error: result.error });
     return;

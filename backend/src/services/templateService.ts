@@ -111,6 +111,8 @@ function normalizeSlides(rawSlides: unknown, lineCount: number): Array<{ start_l
   return [];
 }
 
+const MAX_TEMPLATES_PER_CCLI = 3;
+
 function computeStructureHash(structure: TemplateStructure): string {
   const payload = {
     ccli: structure.ccliNumber,
@@ -124,7 +126,22 @@ function computeStructureHash(structure: TemplateStructure): string {
   return createHash('sha256').update(json).digest('hex');
 }
 
-export async function submitTemplate(structure: TemplateStructure, createdBy?: string): Promise<{ id: string | null; error?: string }> {
+export async function countTemplatesByCcli(ccliNumber: string): Promise<number> {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return 0;
+  const { count, error } = await (supabase
+    .from('community_templates') as ReturnType<typeof supabase.from>)
+    .select('*', { count: 'exact', head: true })
+    .eq('ccli_number', ccliNumber)
+    .eq('status', 'active');
+  if (error) return 0;
+  return count ?? 0;
+}
+
+export async function submitTemplate(
+  structure: TemplateStructure,
+  createdBy?: string
+): Promise<{ id: string | null; error?: string; limitReached?: boolean }> {
   const supabase = getSupabaseClient();
   if (!isSupabaseConfigured() || !supabase) {
     return { id: null, error: 'Supabase not configured' };
@@ -140,6 +157,26 @@ export async function submitTemplate(structure: TemplateStructure, createdBy?: s
   }
 
   const structure_hash = computeStructureHash(structure);
+
+  // Check if this exact format already exists (upsert = update, does not add a 4th)
+  const { data: existing } = await (supabase
+    .from('community_templates') as ReturnType<typeof supabase.from>)
+    .select('id')
+    .eq('ccli_number', structure.ccliNumber)
+    .eq('structure_hash', structure_hash)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!existing) {
+    const count = await countTemplatesByCcli(structure.ccliNumber);
+    if (count >= MAX_TEMPLATES_PER_CCLI) {
+      return {
+        id: null,
+        error: 'This song already has 3 community formats. Your format was saved to your song only.',
+        limitReached: true,
+      };
+    }
+  }
 
   const { data, error } = await (supabase
     .from('community_templates') as ReturnType<typeof supabase.from>)
@@ -161,7 +198,6 @@ export async function submitTemplate(structure: TemplateStructure, createdBy?: s
 
   const id = (data as { id: string } | null)?.id ?? null;
   if (id) {
-    // increment usage on every submit (works for insert or conflict)
     await incrementTemplateUsage(id);
   }
 

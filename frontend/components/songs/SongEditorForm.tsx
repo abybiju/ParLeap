@@ -8,6 +8,14 @@ import { Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { getBackendHttpUrl } from '@/lib/utils/backendUrl'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -69,6 +77,8 @@ export function SongEditorForm({
   const [swapOpen, setSwapOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [autoFormatLoading, setAutoFormatLoading] = useState(false)
+  const [showSaveToCommunityDialog, setShowSaveToCommunityDialog] = useState(false)
+  const [pendingCreateFormData, setPendingCreateFormData] = useState<FormData | null>(null)
   const formValues = watch()
 
   // Initialize form with song data or draft
@@ -174,6 +184,30 @@ export function SongEditorForm({
     }
   }
 
+  const runCreateOrUpdate = async (formData: FormData, saveToCommunity: boolean) => {
+    const result = await createSong(formData, { saveToCommunity })
+    if (result.success) {
+      clearDraft()
+      setShowSaveToCommunityDialog(false)
+      setPendingCreateFormData(null)
+      if (result.savedToCommunity) {
+        toast.success('Created and saved to Template Community.')
+      } else if (result.communityLimitReached) {
+        toast.success('Created. This song already has 3 community formats; your format is saved to your song only.')
+      } else {
+        toast.success('Song created!')
+      }
+      if (mode === 'page') {
+        router.push('/songs')
+        router.refresh()
+      } else {
+        onSuccess?.()
+      }
+    } else {
+      toast.error(result.error || 'Something went wrong')
+    }
+  }
+
   const onSubmit = handleSubmit((data) => {
     startTransition(async () => {
       const formData = new FormData()
@@ -182,16 +216,36 @@ export function SongEditorForm({
       formData.set('ccli_number', data.ccli_number || '')
       formData.set('lyrics', data.lyrics)
 
-      const result = isEditing && song
-        ? await updateSong(song.id, formData)
-        : await createSong(formData)
+      if (isEditing && song) {
+        const result = await updateSong(song.id, formData)
+        if (result.success) {
+          clearDraft()
+          toast.success('Song updated!')
+          if (mode === 'page') {
+            router.push('/songs')
+            router.refresh()
+          } else {
+            onSuccess?.()
+          }
+        } else {
+          toast.error(result.error || 'Something went wrong')
+        }
+        return
+      }
 
+      const hasCcli = (data.ccli_number ?? '').trim().length > 0
+      const hasLyrics = (data.lyrics ?? '').trim().length > 0
+      if (hasCcli && hasLyrics) {
+        setPendingCreateFormData(formData)
+        setShowSaveToCommunityDialog(true)
+        return
+      }
+
+      const result = await createSong(formData)
       if (result.success) {
         clearDraft()
-        toast.success(isEditing ? 'Song updated!' : 'Song created!')
-        
+        toast.success('Song created!')
         if (mode === 'page') {
-          // Navigate back to songs list after save
           router.push('/songs')
           router.refresh()
         } else {
@@ -202,6 +256,20 @@ export function SongEditorForm({
       }
     })
   })
+
+  const handleSaveToCommunityNo = () => {
+    if (!pendingCreateFormData) return
+    startTransition(async () => {
+      await runCreateOrUpdate(pendingCreateFormData, false)
+    })
+  }
+
+  const handleSaveToCommunityYes = () => {
+    if (!pendingCreateFormData) return
+    startTransition(async () => {
+      await runCreateOrUpdate(pendingCreateFormData, true)
+    })
+  }
 
   const handleCancel = () => {
     onCancel?.()
@@ -426,6 +494,45 @@ The hour I first believed"
           </div>
         </div>
       </form>
+
+      <Dialog
+        open={showSaveToCommunityDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowSaveToCommunityDialog(false)
+            setPendingCreateFormData(null)
+          }
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#0A0A0A]/95 text-white">
+          <DialogHeader>
+            <DialogTitle>Save format to Template Community?</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Others can use this format when they search by CCLI number.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSaveToCommunityNo}
+              disabled={isPending}
+              className="border-white/20 bg-transparent text-white hover:bg-white/10"
+            >
+              No, just create
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveToCommunityYes}
+              disabled={isPending}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Yes, save to community
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
