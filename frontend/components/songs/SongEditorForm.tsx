@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useTransition, useState } from 'react'
+import { useEffect, useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { fetchTemplates } from '@/lib/api/templates'
+import type { CommunityTemplate } from '@/lib/api/templates'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -25,6 +27,7 @@ import { songSchema, type SongFormData } from '@/lib/schemas/song'
 import { createSong, updateSong } from '@/app/songs/actions'
 import type { Database } from '@/lib/supabase/types'
 import { parseSongSelectFile } from '@/lib/parsers/songselect'
+import { findSongMetadata } from '@/lib/utils/metadataSearch'
 type Song = Database['public']['Tables']['songs']['Row']
 
 interface SongEditorFormProps {
@@ -79,7 +82,13 @@ export function SongEditorForm({
   const [autoFormatLoading, setAutoFormatLoading] = useState(false)
   const [showSaveToCommunityDialog, setShowSaveToCommunityDialog] = useState(false)
   const [pendingCreateFormData, setPendingCreateFormData] = useState<FormData | null>(null)
+  const [templatesByCcli, setTemplatesByCcli] = useState<CommunityTemplate[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [metadataLookupLoading, setMetadataLookupLoading] = useState(false)
+  const ccliDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const formValues = watch()
+  const titleValue = watch('title')
 
   // Initialize form with song data or draft
   useEffect(() => {
@@ -106,6 +115,34 @@ export function SongEditorForm({
       saveDraftDebounced(formValues)
     }
   }, [isDirty, formValues, saveDraftDebounced])
+
+  // CCLI-only fetch: when user enters CCLI, fetch all community templates (no lyrics)
+  useEffect(() => {
+    const trimmed = ccliValue.trim()
+    setSelectedTemplateId(null)
+    if (!trimmed) {
+      setTemplatesByCcli([])
+      if (ccliDebounceRef.current) {
+        clearTimeout(ccliDebounceRef.current)
+        ccliDebounceRef.current = null
+      }
+      return
+    }
+    if (ccliDebounceRef.current) clearTimeout(ccliDebounceRef.current)
+    ccliDebounceRef.current = setTimeout(() => {
+      ccliDebounceRef.current = null
+      setTemplatesLoading(true)
+      fetchTemplates(trimmed)
+        .then((list) => setTemplatesByCcli(list))
+        .finally(() => setTemplatesLoading(false))
+    }, 350)
+    return () => {
+      if (ccliDebounceRef.current) {
+        clearTimeout(ccliDebounceRef.current)
+        ccliDebounceRef.current = null
+      }
+    }
+  }, [ccliValue])
 
   const handleRestoreDraft = () => {
     const draft = loadDraft()
@@ -181,6 +218,28 @@ export function SongEditorForm({
       toast.error('Auto-format failed')
     } finally {
       setAutoFormatLoading(false)
+    }
+  }
+
+  const handleMetadataLookup = async () => {
+    const title = (titleValue ?? '').trim()
+    if (!title) {
+      toast.info('Enter a title first')
+      return
+    }
+    setMetadataLookupLoading(true)
+    try {
+      const data = await findSongMetadata(title)
+      if (data) {
+        setValue('artist', data.artist, { shouldDirty: true })
+        toast.success(`Artist set to ${data.artist}`)
+      } else {
+        toast.error('No match found')
+      }
+    } catch {
+      toast.error('Lookup failed')
+    } finally {
+      setMetadataLookupLoading(false)
     }
   }
 
@@ -310,12 +369,29 @@ export function SongEditorForm({
               <label htmlFor="title" className="text-sm font-medium text-white">
                 Title <span className="text-orange-500">*</span>
               </label>
-              <Input
-                id="title"
-                placeholder="Amazing Grace"
-                {...register('title')}
-                className={`bg-white/5 border-white/10 text-white placeholder:text-gray-500 ${errors.title ? 'border-orange-500' : ''}`}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="title"
+                  placeholder="Amazing Grace"
+                  {...register('title')}
+                  className={`flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 ${errors.title ? 'border-orange-500' : ''}`}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="shrink-0 bg-white/10 border-white/10 text-slate-200 hover:bg-white/20"
+                  onClick={handleMetadataLookup}
+                  disabled={metadataLookupLoading}
+                  title="Look up artist from title (iTunes)"
+                >
+                  {metadataLookupLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               {errors.title && (
                 <p className="text-xs text-orange-500">{errors.title.message}</p>
               )}
@@ -343,6 +419,49 @@ export function SongEditorForm({
               />
             </div>
           </div>
+
+          {/* Community formats (CCLI-only): show choices with upvotes before pasting lyrics */}
+          {ccliValue.trim() && (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-2">
+              <span className="text-sm font-medium text-white">Community formats for this CCLI</span>
+              {templatesLoading && (
+                <p className="text-sm text-slate-400">Loading…</p>
+              )}
+              {!templatesLoading && templatesByCcli.length === 0 && (
+                <p className="text-sm text-slate-400">
+                  No community formats yet. Paste your lyrics and create the song; you can save your format to the community after creating.
+                </p>
+              )}
+              {!templatesLoading && templatesByCcli.length > 0 && (
+                <ul className="space-y-2">
+                  {templatesByCcli.map((tpl) => (
+                    <li key={tpl.id} className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm">
+                      <span className="text-slate-200">
+                        {tpl.line_count} lines · {(tpl.upvotes ?? 0)} upvotes{tpl.usage_count ? ` · ${tpl.usage_count} uses` : ''}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="bg-indigo-500/20 border-indigo-500/40 text-indigo-200"
+                        onClick={() => {
+                          setSelectedTemplateId(tpl.id)
+                          toast.info(`Use this format: paste lyrics with ${tpl.line_count} lines.`)
+                        }}
+                      >
+                        Use this format
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {selectedTemplateId && (
+                <p className="text-xs text-slate-400">
+                  Paste lyrics with the same line count as your chosen format to apply it.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Split view: Lyrics input | Preview */}
@@ -464,6 +583,8 @@ The hour I first believed"
                 swapOpen={swapOpen}
                 onSwapClose={() => setSwapOpen(false)}
                 offerSubmit
+                templatesFromCcliOnly={ccliValue.trim() ? templatesByCcli : undefined}
+                selectedTemplateId={selectedTemplateId}
                 className={mode === 'page' ? 'min-h-[400px]' : 'h-full'}
               />
             </div>

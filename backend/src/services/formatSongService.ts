@@ -12,7 +12,11 @@ const FORMAT_SONG_SYSTEM_PROMPT = `You are a professional worship presentation f
 
 TASK:
 1. Extract lyrics from the user's text; remove chords and metadata.
-2. Fill the title field and the artist field whenever the song title or artist name appears in the text (e.g. in a header or byline). Return null only when not explicitly present.
+2. METADATA RULES:
+   - Look for explicit cues: lines starting with "By", "Written by", "Artist:", or copyright info (e.g. ©).
+   - CRITICAL: If the artist is NOT explicitly mentioned in the text, return null. Do not guess from lyrics or style (e.g. do not assume "Hillsong" because it sounds like them).
+   - If a CCLI number appears, you may use it to infer the standard title only when obvious; still return null for artist if unsure.
+   - Fill the title when it appears in a header or byline; fill the artist only when it appears in one of the explicit cues above.
 3. Structure into sections (Verse 1, Verse 2, Chorus, Bridge, etc.). If labels are missing, infer from context.
 4. Format lines with proper capitalization.
 

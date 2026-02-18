@@ -16,6 +16,9 @@ interface SongPreviewCardsProps {
   swapOpen?: boolean;
   onSwapClose?: () => void;
   offerSubmit?: boolean;
+  /** When provided (e.g. from parent CCLI-only fetch), do not fetch by line count; use this list and selectedTemplateId */
+  templatesFromCcliOnly?: CommunityTemplate[];
+  selectedTemplateId?: string | null;
 }
 
 function parseLyricLines(lyrics: string): string[] {
@@ -69,21 +72,56 @@ export function SongPreviewCards({
   swapOpen = false,
   onSwapClose,
   offerSubmit = false,
+  templatesFromCcliOnly,
+  selectedTemplateId,
 }: SongPreviewCardsProps) {
   const [appliedTemplate, setAppliedTemplate] = useState<CommunityTemplate | null>(null);
   const [templates, setTemplates] = useState<CommunityTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const lines = parseLyricLines(lyrics);
+  const lineCount = lines.length;
+  const hasParentTemplates = Array.isArray(templatesFromCcliOnly) && templatesFromCcliOnly.length >= 0;
+
+  // When parent passes CCLI-only templates: no fetch; filter by line count and apply selected or best
   useEffect(() => {
+    if (!hasParentTemplates || !templatesFromCcliOnly || !ccliNumber || !lyrics.trim() || lineCount === 0) {
+      if (hasParentTemplates && (!lyrics.trim() || lineCount === 0)) {
+        setAppliedTemplate(null);
+        onTemplateApplied?.(null);
+      }
+      return;
+    }
+    const matching = templatesFromCcliOnly.filter((t) => isUsableTemplate(t) && t.line_count === lineCount);
+    const preferred = selectedTemplateId && matching.find((t) => t.id === selectedTemplateId);
+    const best = preferred ?? matching.find((t) => (t.score ?? 0) >= 0) ?? matching.find((t) => (t.score ?? 0) >= -5) ?? matching[0];
+    if (!best) {
+      setAppliedTemplate(null);
+      onTemplateApplied?.(null);
+      return;
+    }
+    const applied = applyTemplate(lines, best);
+    if (applied) {
+      setAppliedTemplate(best);
+      onTemplateApplied?.(best.id);
+      recordTemplateUsage(best.id).catch(() => {});
+    } else {
+      setAppliedTemplate(null);
+      onTemplateApplied?.(null);
+    }
+  }, [hasParentTemplates, templatesFromCcliOnly, ccliNumber, lyrics, lineCount, selectedTemplateId, onTemplateApplied]);
+
+  // When parent does NOT pass templates: fetch by CCLI + line count (legacy behavior)
+  useEffect(() => {
+    if (hasParentTemplates) return;
     let cancelled = false;
     const run = async () => {
       setAppliedTemplate(null);
       onTemplateApplied?.(null);
       if (!ccliNumber || !lyrics.trim()) return;
-      const lines = parseLyricLines(lyrics);
-      if (lines.length === 0) return;
-      const fetched = (await fetchTemplates(ccliNumber, lines.length)).filter(isUsableTemplate);
+      if (lineCount === 0) return;
+      const fetched = (await fetchTemplates(ccliNumber, lineCount)).filter(isUsableTemplate);
       if (cancelled) return;
       setTemplates(fetched);
       const best = fetched.find((t) => (t.score ?? 0) >= 0) ?? fetched.find((t) => (t.score ?? 0) >= -5) ?? fetched[0];
@@ -102,21 +140,25 @@ export function SongPreviewCards({
     return () => {
       cancelled = true;
     };
-  }, [ccliNumber, lyrics, onTemplateApplied]);
+  }, [hasParentTemplates, ccliNumber, lyrics, lineCount, onTemplateApplied]);
 
+  // Swap dialog: when parent provides templates, use filtered list; otherwise fetch on open
   useEffect(() => {
     if (!swapOpen) return;
     if (!ccliNumber || !lyrics.trim()) {
       onSwapClose?.();
       return;
     }
-    if (templates.length === 0 && !loadingTemplates) {
+    if (hasParentTemplates && templatesFromCcliOnly) {
+      const matching = templatesFromCcliOnly.filter((t) => isUsableTemplate(t) && t.line_count === lineCount);
+      setTemplates(matching);
+    } else if (templates.length === 0 && !loadingTemplates) {
       setLoadingTemplates(true);
-      fetchTemplates(ccliNumber, parseLyricLines(lyrics).length)
+      fetchTemplates(ccliNumber, lineCount)
         .then((tpls) => setTemplates(tpls.filter(isUsableTemplate)))
         .finally(() => setLoadingTemplates(false));
     }
-  }, [swapOpen, ccliNumber, lyrics, templates.length, loadingTemplates, onSwapClose]);
+  }, [swapOpen, ccliNumber, lyrics, lineCount, hasParentTemplates, templatesFromCcliOnly, templates.length, loadingTemplates, onSwapClose]);
 
   const stanzas = useMemo(() => {
     if (appliedTemplate) {
@@ -126,6 +168,15 @@ export function SongPreviewCards({
     }
     return parseStanzas(lyrics);
   }, [appliedTemplate, lyrics]);
+
+  const selectedTemplate = selectedTemplateId && templatesFromCcliOnly?.find((t) => t.id === selectedTemplateId);
+  const lineCountMismatch =
+    hasParentTemplates &&
+    selectedTemplate &&
+    lyrics.trim().length > 0 &&
+    lineCount > 0 &&
+    lineCount !== selectedTemplate.line_count &&
+    !appliedTemplate;
 
   if (stanzas.length === 0) {
     return (
@@ -140,6 +191,11 @@ export function SongPreviewCards({
 
   return (
     <>
+      {lineCountMismatch && (
+        <p className="text-xs text-amber-400/90 mb-2">
+          Your lyrics have {lineCount} lines; your chosen format is for {selectedTemplate?.line_count} lines. Use another format or keep as-is.
+        </p>
+      )}
       <div className={`space-y-4 overflow-y-auto pr-2 ${className}`}>
         {stanzas.map((stanza, index) => (
           <div
@@ -201,7 +257,7 @@ export function SongPreviewCards({
                   <div className="space-y-1 text-sm">
                     <div className="font-semibold">Template {templateLabel}</div>
                     <div className="text-slate-400">
-                      Score {tpl.score ?? 0} • Uses {tpl.usage_count ?? 0} • Slides {tpl.slides.length}
+                      {(tpl.upvotes ?? 0)} upvotes • {tpl.usage_count ?? 0} uses • {tpl.slides.length} slides
                     </div>
                     {!valid && <div className="text-amber-400 text-xs">Line count mismatch; cannot apply.</div>}
                     {(tpl.score ?? 0) < 0 && <div className="text-amber-400 text-xs">Low score; not auto-applied.</div>}
