@@ -15,7 +15,7 @@ export function FeatureGrid() {
           transition={{ duration: 0.6 }}
           className="text-4xl lg:text-5xl font-bold text-white text-center mb-16"
         >
-          Built for the chaos of live events.
+          Built for the chaos of live events
         </motion.h2>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

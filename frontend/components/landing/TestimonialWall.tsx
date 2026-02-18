@@ -81,7 +81,7 @@ export function TestimonialWall() {
           transition={{ duration: 0.6 }}
           className="text-4xl lg:text-5xl font-bold text-white text-center mb-16"
         >
-          Trusted by teams who value flow.
+          Trusted by teams who value flow
         </motion.h2>
 
         <div

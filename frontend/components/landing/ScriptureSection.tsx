@@ -32,7 +32,7 @@ export function ScriptureSection() {
           transition={{ duration: 0.6 }}
           className="text-4xl lg:text-5xl font-bold text-white text-center mb-16"
         >
-          And scripture too.
+          And scripture too
         </motion.h2>
 
         <div className="grid md:grid-cols-3 gap-6">

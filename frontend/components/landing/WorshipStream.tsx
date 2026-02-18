@@ -1,0 +1,152 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
+
+const ITUNES_URL =
+  'https://itunes.apple.com/search?term=modern+worship&entity=album&limit=20'
+
+interface Album {
+  collectionId: number
+  collectionName: string
+  artistName: string
+  artworkUrl100: string
+}
+
+function highResArtwork(url: string): string {
+  return url.replace(/100x100bb/, '600x600bb').replace(/100x100/, '600x600')
+}
+
+export function WorshipStream() {
+  const [albums, setAlbums] = useState<Album[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(ITUNES_URL)
+      .then((res) => res.json())
+      .then((data: { results?: Album[] }) => {
+        const list = data.results ?? []
+        setAlbums(list)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <section className="py-16 px-4 overflow-hidden">
+        <div className="container mx-auto">
+          <h2 className="text-3xl lg:text-4xl font-bold text-white text-center mb-12">
+            Every song, One flow
+          </h2>
+          <div className="flex justify-center">
+            <div className="h-40 w-40 rounded-xl bg-white/5 animate-pulse" />
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (albums.length === 0) {
+    return null
+  }
+
+  const albumWidth = 160
+  const gap = 24
+  const rowWidth = albums.length * (albumWidth + gap) - gap
+  const duplicated = [...albums, ...albums]
+
+  return (
+    <section className="py-16 px-4 overflow-hidden relative">
+      <div className="container mx-auto relative z-10">
+        <motion.h2
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-3xl lg:text-4xl font-bold text-white text-center mb-12"
+        >
+          Every song, One flow
+        </motion.h2>
+      </div>
+
+      {/* Fade masks - left and right */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-24 lg:w-32 z-20 pointer-events-none"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0.9) 0%, transparent 100%)',
+        }}
+        aria-hidden
+      />
+      <div
+        className="absolute right-0 top-0 bottom-0 w-24 lg:w-32 z-20 pointer-events-none"
+        style={{
+          background: 'linear-gradient(to left, rgba(0,0,0,0.9) 0%, transparent 100%)',
+        }}
+        aria-hidden
+      />
+
+      {/* Row 1: Right -> Left */}
+      <div className="relative z-10 mb-6">
+        <motion.div
+          className="flex gap-6"
+          style={{ width: rowWidth * 2 + gap }}
+          animate={{ x: [0, -rowWidth - gap] }}
+          transition={{
+            x: {
+              repeat: Infinity,
+              repeatType: 'loop',
+              duration: 55,
+              ease: 'linear',
+            },
+          }}
+        >
+          {duplicated.map((album) => (
+            <AlbumCard key={`r1-${album.collectionId}-${album.collectionName}`} album={album} />
+          ))}
+        </motion.div>
+      </div>
+
+      {/* Row 2: Left -> Right */}
+      <div className="relative z-10">
+        <motion.div
+          className="flex gap-6"
+          style={{ width: rowWidth * 2 + gap }}
+          animate={{ x: [-rowWidth - gap, 0] }}
+          transition={{
+            x: {
+              repeat: Infinity,
+              repeatType: 'loop',
+              duration: 65,
+              ease: 'linear',
+            },
+          }}
+        >
+          {duplicated.map((album) => (
+            <AlbumCard key={`r2-${album.collectionId}-${album.collectionName}`} album={album} />
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  )
+}
+
+function AlbumCard({ album }: { album: Album }) {
+  const src = highResArtwork(album.artworkUrl100)
+  return (
+    <a
+      href={`https://music.apple.com/album/${album.collectionId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex-shrink-0 h-40 w-40 rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:scale-110 hover:grayscale-0 hover:opacity-100 grayscale opacity-50 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+      aria-label={`${album.collectionName} by ${album.artistName}`}
+    >
+      <img
+        src={src}
+        alt=""
+        className="h-full w-full object-cover"
+        loading="lazy"
+      />
+    </a>
+  )
+}

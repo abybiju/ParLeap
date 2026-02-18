@@ -59,7 +59,7 @@ export function Pricing() {
           transition={{ duration: 0.6 }}
           className="text-4xl lg:text-5xl font-bold text-white text-center mb-16"
         >
-          Plans for every team.
+          Plans for every team
         </motion.h2>
 
         <div className="grid md:grid-cols-3 gap-8 md:gap-10 max-w-6xl mx-auto">

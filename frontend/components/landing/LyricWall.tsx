@@ -142,7 +142,7 @@ export function LyricWall() {
           transition={{ duration: 0.6 }}
           className="text-4xl lg:text-5xl font-bold text-white text-center mb-16"
         >
-          Ready for any song.
+          Ready for any song
         </motion.h2>
 
         <div
