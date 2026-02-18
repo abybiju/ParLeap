@@ -21,6 +21,20 @@
 
 ---
 
+## Session: February 18, 2026 — Landing: Ready for any song + album art
+
+### What we did
+- **Ready for any song (FlowScrollLine)**: Replaced LyricWall with scroll-driven section. 12 song titles (added What A Beautiful Name, King Of Kings; "Firm Foundation (He Won't)" → "Firm Foundation"). Tightened spacing (mb-4, mt-5, py-12/16, no min-height) so no big gap between heading and titles.
+- **Album art (WorshipStream)**: Dual source — iTunes worship search + Apple Music top albums RSS; merge worship-first then top charts (max 40). Refresh every 6h and on window focus; if nothing new, keep showing current (repeat). Use `Promise.allSettled` so one failing source (e.g. CORS on RSS) doesn’t hide the other.
+
+### Commits
+- `eab2d04` — feat(landing): FlowScrollLine + WorshipStream dual source and refresh
+
+### Key lesson
+- **Dual external APIs**: When merging two feeds (worship + top charts), fetch with Promise.allSettled and merge fulfilled results only so CORS or one failure doesn’t blank the section.
+
+---
+
 ## Session: February 17, 2026 — Live session fixes (matcher crash, Event Not Found, RATE_LIMITED)
 
 ### What we did

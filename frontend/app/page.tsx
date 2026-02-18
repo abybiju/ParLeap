@@ -6,7 +6,7 @@ import { LiveConsoleShowcase } from '@/components/landing/LiveConsoleShowcase'
 import { FeatureMarquee } from '@/components/landing/FeatureMarquee'
 import { TestimonialWall } from '@/components/landing/TestimonialWall'
 import { Pricing } from '@/components/landing/Pricing'
-import { LyricWall } from '@/components/landing/LyricWall'
+import { FlowScrollLine } from '@/components/landing/FlowScrollLine'
 import { WorshipStream } from '@/components/landing/WorshipStream'
 import { ScriptureSection } from '@/components/landing/ScriptureSection'
 import { Footer } from '@/components/layout/Footer'
@@ -20,7 +20,7 @@ export default function Home() {
       <AIMoment />
       <LiveConsoleShowcase />
       <FeatureMarquee />
-      <LyricWall />
+      <FlowScrollLine />
       <WorshipStream />
       <ScriptureSection />
       <TestimonialWall />
