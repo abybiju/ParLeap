@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Zap, ZapOff, Mic } from 'lucide-react';
 import { toast } from 'sonner';
@@ -235,6 +235,18 @@ export function OperatorHUD({
       cancelled = true;
     };
   }, [bibleVersionId]);
+
+  const persistEventSettings = useCallback(async (updates: Record<string, unknown>) => {
+    try {
+      const supabase = createClient();
+      await (supabase
+        .from('events') as ReturnType<typeof supabase.from>)
+        .update(updates)
+        .eq('id', eventId);
+    } catch (error) {
+      console.warn('[OperatorHUD] Failed to persist event settings:', error);
+    }
+  }, [eventId]);
 
   useEffect(() => {
     if (!bibleMode || bibleVersionId || bibleVersions.length === 0) {
@@ -472,18 +484,6 @@ export function OperatorHUD({
     stopSession();
     router.push('/dashboard');
   };
-
-  const persistEventSettings = useCallback(async (updates: Record<string, unknown>) => {
-    try {
-      const supabase = createClient();
-      await (supabase
-        .from('events') as ReturnType<typeof supabase.from>)
-        .update(updates)
-        .eq('id', eventId);
-    } catch (error) {
-      console.warn('[OperatorHUD] Failed to persist event settings:', error);
-    }
-  }, [eventId]);
 
   const handleProjectorFontChange = async (fontId: string) => {
     setProjectorFontId(fontId);
