@@ -311,12 +311,12 @@ export function SetlistLibrary({
     );
   };
 
-  const canGrabTextForSlide = (slide: AnnouncementSlideState): boolean => {
+  const canGrabTextForSlide = useCallback((slide: AnnouncementSlideState): boolean => {
     if (slide.type !== 'image') return false;
     if (slide.file && slide.file.type.startsWith('image/')) return true;
     if (slide.url?.trim()) return true;
     return false;
-  };
+  }, []);
 
   const openCanvasEditor = useCallback((index: number) => {
     const slide = announcementSlides[index];
@@ -394,7 +394,7 @@ export function SetlistLibrary({
     } finally {
       setGrabTextSlideIndex(null);
     }
-  }, [announcementSlides]);
+  }, [announcementSlides, canGrabTextForSlide]);
 
   const handleDeviceDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

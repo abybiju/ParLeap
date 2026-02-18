@@ -110,7 +110,7 @@ export function SongPreviewCards({
       setAppliedTemplate(null);
       onTemplateApplied?.(null);
     }
-  }, [hasParentTemplates, templatesFromCcliOnly, ccliNumber, lyrics, lineCount, selectedTemplateId, onTemplateApplied]);
+  }, [hasParentTemplates, templatesFromCcliOnly, ccliNumber, lyrics, lineCount, lines, selectedTemplateId, onTemplateApplied]);
 
   // When parent does NOT pass templates: fetch by CCLI + line count (legacy behavior)
   useEffect(() => {
@@ -140,7 +140,7 @@ export function SongPreviewCards({
     return () => {
       cancelled = true;
     };
-  }, [hasParentTemplates, ccliNumber, lyrics, lineCount, onTemplateApplied]);
+  }, [hasParentTemplates, ccliNumber, lyrics, lineCount, lines, onTemplateApplied]);
 
   // Swap dialog: when parent provides templates, use filtered list; otherwise fetch on open
   useEffect(() => {

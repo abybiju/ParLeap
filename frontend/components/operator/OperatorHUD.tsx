@@ -234,7 +234,7 @@ export function OperatorHUD({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [bibleVersionId]);
 
   useEffect(() => {
     if (!bibleMode || bibleVersionId || bibleVersions.length === 0) {
@@ -249,7 +249,7 @@ export function OperatorHUD({
     setBibleVersionId(defaultVersion.id);
     updateEventSettings({ bibleVersionId: defaultVersion.id });
     void persistEventSettings({ bible_version_id: defaultVersion.id });
-  }, [bibleMode, bibleVersionId, bibleVersions, updateEventSettings]);
+  }, [bibleMode, bibleVersionId, bibleVersions, updateEventSettings, persistEventSettings]);
 
   // Pre-initialize audio: Request microphone permission before session starts
   useEffect(() => {
@@ -473,7 +473,7 @@ export function OperatorHUD({
     router.push('/dashboard');
   };
 
-  const persistEventSettings = async (updates: Record<string, unknown>) => {
+  const persistEventSettings = useCallback(async (updates: Record<string, unknown>) => {
     try {
       const supabase = createClient();
       await (supabase
@@ -483,7 +483,7 @@ export function OperatorHUD({
     } catch (error) {
       console.warn('[OperatorHUD] Failed to persist event settings:', error);
     }
-  };
+  }, [eventId]);
 
   const handleProjectorFontChange = async (fontId: string) => {
     setProjectorFontId(fontId);
