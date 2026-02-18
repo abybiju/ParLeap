@@ -44,6 +44,13 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Recent Features
 
+**Songs UX: metadata, CCLI templates, community save** (February 2026)
+- **Strict metadata + iTunes Auto-Fill**: Format-song prompt (formatSongService) has METADATA RULES — artist only from explicit cues (By, Written by, Artist:, ©); no guessing. `metadataSearch.ts`: `findSongMetadata(query)` via iTunes Search API (no key). Song editor: Wand2 "Auto-Fill" next to Title fills Artist; toast on success / no match.
+- **CCLI-only template fetch**: On CCLI entry, fetch community templates by CCLI only (no lyrics). "Community formats for this CCLI" shows line count, upvotes, "Use this format". SongPreviewCards: `templatesFromCcliOnly` + `selectedTemplateId`; applies template when pasted lyrics line count matches; section labels (Verse, Chorus, Bridge) not counted in content line count.
+- **Community template after Create Song**: Dialog "Save this format to Template Community?" [No / Yes]. Backend max 3 formats per CCLI; when limit reached returns `limitReached`, song still created; toasts for saved / limit / just create.
+- **Similar-line matcher**: matcherService blocks next-line advance when current vs target line similarity ≥ SIMILAR_LINE_THRESHOLD (0.65); advance only via end-of-line. Prevents jumping on repeated/similar lines.
+- **STT/latency**: Instrumentation and docs (STT_LATENCY_MEASUREMENT.md); quick wins (projector setTimeout removed, 1024 buffer). Stick with ElevenLabs for now.
+
 **Live session fixes** (February 17, 2026)
 - **Matcher crash when jumping songs**: Clamp `currentLineIndex` to valid range in handler (GO_TO_ITEM, SESSION_STARTED) and in matcher (`effectiveLineIndex`); guard `getAdaptiveEndTrigger` for undefined/empty text. Prevents "slide stuck" and `Cannot read properties of undefined (reading 'trim')`.
 - **Event Not Found**: Clearer backend log and error message (Supabase URL/service role key). Frontend toast suggests checking backend env on production. NextSlidePreview: "Start session to see next slide" when no setlist instead of "End of setlist".
