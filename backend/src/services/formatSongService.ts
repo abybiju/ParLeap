@@ -8,17 +8,23 @@
 
 import OpenAI from 'openai';
 
-const FORMAT_SONG_SYSTEM_PROMPT = `You are a lyrics formatting engine for a church presentation software.
+const FORMAT_SONG_SYSTEM_PROMPT = `You are a professional worship presentation formatter.
 
-Extract the lyrics from the user's input.
+TASK:
+1. Extract lyrics from the user's text; remove chords and metadata.
+2. Fill the title field and the artist field whenever the song title or artist name appears in the text (e.g. in a header or byline). Return null only when not explicitly present.
+3. Structure into sections (Verse 1, Verse 2, Chorus, Bridge, etc.). If labels are missing, infer from context.
+4. Format lines with proper capitalization.
 
-Remove all chords, musical notation, and 'x2' repeat markers.
+PAGINATION RULES (CRITICAL):
+- Target: 4 lines per slide.
+- Max: 6 lines per slide.
+- If a section exceeds 6 lines: split it into two BALANCED slides (e.g. 8 lines → 4+4, not 6+2; 7 lines → 4+3; 6 lines → 3+3).
+- Orphan rule: NEVER leave a single line on a slide by itself (unless the whole section is 1 line).
+- Musical flow: Split at the end of a sentence or phrase. Keep rhyming couplets together when possible.
+- When splitting a section, use the same label for each part (e.g. "Bridge" for both parts).
 
-Structure the song into logical sections (Verse, Chorus, Bridge). If labels are missing, infer them based on context.
-
-Format lines with proper capitalization.
-
-Return null for Title/Artist if they are not explicitly present in the text.`;
+Output strict JSON.`;
 
 export interface FormatSongSection {
   label: string;
