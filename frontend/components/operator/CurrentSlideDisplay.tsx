@@ -59,6 +59,7 @@ export function CurrentSlideDisplay({ fontClassName }: CurrentSlideDisplayProps)
   if (slideImageUrl && hasStructuredText) {
     return (
       <div className="flex flex-col h-full relative rounded-lg overflow-hidden bg-black/40">
+        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic announcement/storage URL */}
         <img
           src={slideImageUrl}
           alt=""
@@ -112,6 +113,7 @@ export function CurrentSlideDisplay({ fontClassName }: CurrentSlideDisplayProps)
           <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">{songTitle}</h2>
         </div>
         <div className="flex-1 flex items-center justify-center min-h-0 rounded-lg overflow-hidden bg-black/30">
+          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic announcement/storage URL */}
           <img
             src={slideImageUrl}
             alt={songTitle ?? 'Announcement'}

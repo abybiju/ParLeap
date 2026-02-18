@@ -265,7 +265,7 @@ export function AvatarSelector({
               {previewUrl && (
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-32 h-32 rounded-full overflow-hidden bg-white/5 border-2 border-white/10">
-                    {/* Use <img> for blob: previews (next/image doesn't support blob URLs reliably) */}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- blob URL preview */}
                     <img
                       src={previewUrl}
                       alt="Preview"
@@ -293,7 +293,7 @@ export function AvatarSelector({
               {selectedAvatar && selectedAvatar.startsWith('http') && !previewUrl && (
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-32 h-32 rounded-full overflow-hidden bg-white/5 border-2 border-orange-500">
-                    {/* Use <img> for external URLs unless next/image remotePatterns are configured */}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- dynamic avatar URL */}
                     <img
                       src={selectedAvatar}
                       alt="Current avatar"

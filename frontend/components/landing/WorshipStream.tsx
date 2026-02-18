@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 
 const ITUNES_WORSHIP_URL =
@@ -207,11 +208,12 @@ function AlbumCard({ album }: { album: Album }) {
       className="flex-shrink-0 h-40 w-40 rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:scale-110 hover:grayscale-0 hover:opacity-100 grayscale opacity-50 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
       aria-label={`${album.collectionName} by ${album.artistName}`}
     >
-      <img
+      <Image
         src={src}
         alt=""
+        width={160}
+        height={160}
         className="h-full w-full object-cover"
-        loading="lazy"
       />
     </a>
   )

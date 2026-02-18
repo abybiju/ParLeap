@@ -193,6 +193,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   if (slideImageUrl && hasStructuredText) {
     return (
       <div className="h-screen w-screen relative flex items-center justify-center bg-black overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic announcement/storage URL */}
         <img
           src={slideImageUrl}
           alt=""
@@ -259,6 +260,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   if (slideImageUrl) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-black overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic announcement/storage URL */}
         <img
           src={slideImageUrl}
           alt={songTitle ?? 'Announcement'}

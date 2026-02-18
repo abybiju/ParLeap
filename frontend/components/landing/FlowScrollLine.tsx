@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import type { MotionValue } from 'framer-motion'
 import { motion, useScroll, useTransform } from 'framer-motion'
 
 // From CCLI Top 100 US — top/latest worship songs (3 lines max, 4 per row)
@@ -19,6 +20,25 @@ const items = [
   'King Of Kings',
 ]
 
+function ScrollLabel({
+  title,
+  index,
+  scrollYProgress,
+}: {
+  title: string
+  index: number
+  scrollYProgress: MotionValue<number>
+}) {
+  const start = 0.15 + (index / items.length) * 0.48
+  const end = start + 0.12
+  const opacity = useTransform(scrollYProgress, [start, end], [0, 1])
+  return (
+    <motion.div className="text-center" style={{ opacity }}>
+      <span className="text-sm lg:text-base font-medium text-white/90">{title}</span>
+    </motion.div>
+  )
+}
+
 export function FlowScrollLine() {
   const sectionRef = useRef<HTMLElement>(null)
 
@@ -29,11 +49,6 @@ export function FlowScrollLine() {
 
   const pathProgress = useTransform(scrollYProgress, [0, 0.5], [0, 1])
   const pathOffset = useTransform(pathProgress, (v) => 1 - v)
-  const labelOpacities = items.map((_, i) => {
-    const start = 0.15 + (i / items.length) * 0.48
-    const end = start + 0.12
-    return useTransform(scrollYProgress, [start, end], [0, 1])
-  })
 
   return (
     <section ref={sectionRef} className="py-12 lg:py-16 px-4 relative">
@@ -84,17 +99,12 @@ export function FlowScrollLine() {
           {/* Labels — 3 lines max (4 per row) */}
           <div className="relative w-full mt-5 grid grid-cols-4 gap-3 px-2 max-w-3xl mx-auto">
             {items.map((title, i) => (
-              <motion.div
+              <ScrollLabel
                 key={title}
-                className="text-center"
-                style={{
-                  opacity: labelOpacities[i],
-                }}
-              >
-                <span className="text-sm lg:text-base font-medium text-white/90">
-                  {title}
-                </span>
-              </motion.div>
+                title={title}
+                index={i}
+                scrollYProgress={scrollYProgress}
+              />
             ))}
           </div>
         </div>

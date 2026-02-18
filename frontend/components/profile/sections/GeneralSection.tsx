@@ -107,6 +107,7 @@ export function GeneralSection() {
                 className="w-full h-full object-cover"
               />
             ) : avatarDisplay.type === 'url' ? (
+              // eslint-disable-next-line @next/next/no-img-element -- dynamic avatar URL
               <img
                 src={avatarDisplay.value}
                 alt="Avatar"

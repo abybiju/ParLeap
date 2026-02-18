@@ -136,8 +136,11 @@ export function DashboardHeader() {
     }
 
     if (avatarValue.startsWith('http://') || avatarValue.startsWith('https://')) {
-      // Use <img> for external URLs unless next/image remotePatterns are configured
-      return <img src={avatarValue} alt="Avatar" className="w-full h-full object-cover" />
+      // Dynamic avatar URL (user upload); next/image would require remotePatterns per origin
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatarValue} alt="Avatar" className="w-full h-full object-cover" />
+      )
     }
 
     return <span>{avatarInitials}</span>
