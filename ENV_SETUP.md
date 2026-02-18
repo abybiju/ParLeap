@@ -59,6 +59,11 @@ CORS_ORIGIN=http://localhost:3000
 # OPENAI_API_KEY=your_openai_api_key_here
 # BIBLE_EMBEDDING_API_KEY=alternative_key_override
 # BIBLE_EMBEDDING_MODEL=text-embedding-3-small
+
+# Smart Paste / Auto-Format (Song editor — paste messy lyrics, click Auto-Format)
+# Uses gpt-4o-mini to extract title, artist, and structured sections. Same key as above.
+# If OPENAI_API_KEY is set (e.g. for Bible Follow), Auto-Format works; if unset, the button returns a friendly error.
+# OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 ## How to Get Your Keys
