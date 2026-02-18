@@ -26,6 +26,12 @@ type VersionCache = {
   byId: Map<string, { id: string; abbrev: string }>;
 };
 
+const BIBLE_API_BASE = 'https://bible-api.com';
+const BIBLE_API_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min to respect 15 req/30s rate limit
+
+type BibleApiCacheEntry = { text: string; expires: number };
+const bibleApiCache = new Map<string, BibleApiCacheEntry>();
+
 let bookCache: BookCache | null = null;
 let versionCache: VersionCache | null = null;
 let defaultVersionId: string | null = null;
@@ -301,6 +307,19 @@ export async function fetchBibleVerse(
     };
   }
 
+  if (versionAbbrev === 'WEB' || versionAbbrev === 'ASV') {
+    const translationId = versionAbbrev.toLowerCase();
+    const apiText = await fetchBibleApiPassage(reference, translationId);
+    if (!apiText) return null;
+    return {
+      book: bookEntry.name,
+      chapter: reference.chapter,
+      verse: reference.verse,
+      text: apiText,
+      versionAbbrev,
+    };
+  }
+
   const { data, error } = await supabase
     .from('bible_verses')
     .select('text')
@@ -377,6 +396,40 @@ function extractEsvText(payload: unknown): string | null {
     }
   }
   return null;
+}
+
+/** Bible-API.com: no API key, 15 req/30s per IP. Cache to avoid rate limit. */
+async function fetchBibleApiPassage(
+  reference: BibleReference,
+  translationId: string
+): Promise<string | null> {
+  const cacheKey = `${translationId}:${reference.book}:${reference.chapter}:${reference.verse}`;
+  const now = Date.now();
+  const cached = bibleApiCache.get(cacheKey);
+  if (cached && cached.expires > now) {
+    return cached.text;
+  }
+
+  const query = `${reference.book} ${reference.chapter}:${reference.verse}`;
+  const url = `${BIBLE_API_BASE}/${encodeURIComponent(query)}?translation=${encodeURIComponent(translationId)}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn('[BibleService] Bible-API.com error:', response.status, response.statusText);
+      return null;
+    }
+    const data = (await response.json()) as { text?: string; verses?: Array<{ text?: string }> };
+    const text =
+      (typeof data.text === 'string' && data.text.trim()) ||
+      (Array.isArray(data.verses) && data.verses[0]?.text && data.verses[0].text.trim());
+    if (!text) return null;
+    bibleApiCache.set(cacheKey, { text, expires: now + BIBLE_API_CACHE_TTL_MS });
+    return text.trim();
+  } catch (err) {
+    console.warn('[BibleService] Bible-API.com fetch failed:', err);
+    return null;
+  }
 }
 
 async function fetchEsvPassage(reference: BibleReference): Promise<string | null> {
