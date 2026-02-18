@@ -1,10 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 
-const ITUNES_URL =
+const ITUNES_WORSHIP_URL =
   'https://itunes.apple.com/search?term=modern+worship&entity=album&limit=20'
+const APPLE_TOP_ALBUMS_URL =
+  'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json'
+
+const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 hours – album art stays fresh
 
 interface Album {
   collectionId: number
@@ -13,24 +17,86 @@ interface Album {
   artworkUrl100: string
 }
 
+interface AppleRssAlbum {
+  id: string
+  name: string
+  artistName: string
+  artworkUrl100: string
+}
+
 function highResArtwork(url: string): string {
   return url.replace(/100x100bb/, '600x600bb').replace(/100x100/, '600x600')
+}
+
+function normalizeRssAlbum(a: AppleRssAlbum): Album {
+  return {
+    collectionId: Number(a.id),
+    collectionName: a.name,
+    artistName: a.artistName,
+    artworkUrl100: a.artworkUrl100,
+  }
+}
+
+async function fetchWorshipAlbums(): Promise<Album[]> {
+  const res = await fetch(ITUNES_WORSHIP_URL)
+  const data: { results?: Album[] } = await res.json()
+  return data.results ?? []
+}
+
+async function fetchTopAlbums(): Promise<Album[]> {
+  const res = await fetch(APPLE_TOP_ALBUMS_URL)
+  const data: { feed?: { results?: AppleRssAlbum[] } } = await res.json()
+  const results = data.feed?.results ?? []
+  return results.map(normalizeRssAlbum)
+}
+
+const MAX_ALBUMS = 40 // enough for two scrolling rows, worship-first then top charts
+
+async function fetchAllAlbums(): Promise<Album[]> {
+  // Fetch both independently so one failure (e.g. CORS on RSS) doesn't hide the other
+  const [worshipResult, topResult] = await Promise.allSettled([
+    fetchWorshipAlbums(),
+    fetchTopAlbums(),
+  ])
+  const worship =
+    worshipResult.status === 'fulfilled' ? worshipResult.value : []
+  const top = topResult.status === 'fulfilled' ? topResult.value : []
+  const byId = new Map<number, Album>()
+  worship.forEach((a) => byId.set(a.collectionId, a))
+  top.forEach((a) => {
+    if (!byId.has(a.collectionId)) byId.set(a.collectionId, a)
+  })
+  const merged = [...byId.values()]
+  return merged.slice(0, MAX_ALBUMS)
 }
 
 export function WorshipStream() {
   const [albums, setAlbums] = useState<Album[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetch(ITUNES_URL)
-      .then((res) => res.json())
-      .then((data: { results?: Album[] }) => {
-        const list = data.results ?? []
-        setAlbums(list)
+  const refresh = useCallback(() => {
+    fetchAllAlbums()
+      .then((list) => {
+        if (list.length > 0) setAlbums(list)
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    const id = setInterval(refresh, REFRESH_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [refresh])
+
+  useEffect(() => {
+    const onFocus = () => refresh()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refresh])
 
   if (loading) {
     return (
