@@ -18,6 +18,11 @@ import {
   incrementTemplateUsage,
   getStructureHash,
 } from './services/templateService';
+import {
+  formatSong,
+  isFormatSongEnabled,
+  serializeSectionsToLyrics,
+} from './services/formatSongService';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -213,6 +218,38 @@ app.post('/api/templates/:id/usage', async (req, res) => {
   }
   await incrementTemplateUsage(id);
   res.json({ success: true });
+});
+
+// Smart Paste / Auto-Format: extract and structure lyrics from raw text (OpenAI gpt-4o-mini)
+app.post('/api/format-song', async (req, res) => {
+  try {
+    if (!isFormatSongEnabled()) {
+      res.status(503).json({ error: 'Auto-format is not configured. Set OPENAI_API_KEY on the backend.' });
+      return;
+    }
+    const { rawText } = req.body ?? {};
+    if (typeof rawText !== 'string' || !rawText.trim()) {
+      res.status(400).json({ error: 'rawText is required and must be a non-empty string' });
+      return;
+    }
+    const result = await formatSong(rawText);
+    if (!result) {
+      res.status(500).json({ error: 'Failed to format song' });
+      return;
+    }
+    const lyrics = serializeSectionsToLyrics(result.sections);
+    res.json({
+      title: result.title,
+      artist: result.artist,
+      sections: result.sections,
+      lyrics,
+    });
+  } catch (err) {
+    console.error('[FormatSong] Route error:', err);
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Auto-format failed',
+    });
+  }
 });
 
 // Hum-to-Search endpoint

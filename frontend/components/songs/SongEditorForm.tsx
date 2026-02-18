@@ -4,10 +4,11 @@ import { useEffect, useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { getBackendHttpUrl } from '@/lib/utils/backendUrl'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { SongPreviewCards } from './SongPreviewCards'
@@ -67,6 +68,7 @@ export function SongEditorForm({
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
   const [swapOpen, setSwapOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [autoFormatLoading, setAutoFormatLoading] = useState(false)
   const formValues = watch()
 
   // Initialize form with song data or draft
@@ -140,6 +142,36 @@ export function SongEditorForm({
     const file = e.target.files?.[0]
     if (!file) return
     await handleFileImport(file)
+  }
+
+  const handleAutoFormat = async () => {
+    const raw = lyricsValue?.trim() ?? ''
+    if (!raw) {
+      toast.error('Paste lyrics first')
+      return
+    }
+    setAutoFormatLoading(true)
+    setImportError(null)
+    try {
+      const res = await fetch(`${getBackendHttpUrl()}/api/format-song`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText: raw }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error ?? 'Auto-format failed')
+        return
+      }
+      if (data.title != null) setValue('title', data.title, { shouldDirty: true })
+      if (data.artist != null) setValue('artist', data.artist, { shouldDirty: true })
+      if (data.lyrics) setValue('lyrics', data.lyrics, { shouldDirty: true })
+      toast.success('Lyrics formatted')
+    } catch {
+      toast.error('Auto-format failed')
+    } finally {
+      setAutoFormatLoading(false)
+    }
   }
 
   const onSubmit = handleSubmit((data) => {
@@ -266,18 +298,35 @@ export function SongEditorForm({
               </label>
             )}
             <div className={mode === 'page' ? '' : 'flex-1 p-4 overflow-hidden'}>
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+              <div className="flex items-center justify-between gap-2 text-xs text-slate-400 mb-2 flex-wrap">
                 <span>Drag a SongSelect .usr or .txt file here to auto-import.</span>
-                <label className="cursor-pointer text-indigo-300 hover:text-white">
-                  <input
-                    type="file"
-                    name="songselect_file"
-                    accept=".usr,.txt"
-                    className="hidden"
-                    onChange={onSelectFile}
-                  />
-                  Browse file
-                </label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 h-7 text-xs"
+                    onClick={handleAutoFormat}
+                    disabled={autoFormatLoading}
+                  >
+                    {autoFormatLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Auto-Format
+                  </Button>
+                  <label className="cursor-pointer text-indigo-300 hover:text-white">
+                    <input
+                      type="file"
+                      name="songselect_file"
+                      accept=".usr,.txt"
+                      className="hidden"
+                      onChange={onSelectFile}
+                    />
+                    Browse file
+                  </label>
+                </div>
               </div>
               <Textarea
                 id="lyrics"
