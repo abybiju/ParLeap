@@ -93,8 +93,9 @@ export function OperatorHUD({
   const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
   const lastSentSmartListenRef = useRef<boolean | null>(null);
 
-  // Smart Listen gate: active when master on and Bible Mode on (no setlist item dependency).
-  const effectiveSmartListen = smartListenMasterEnabled && bibleMode;
+  // Smart Listen gate: when true, STT is in standby until wake word or "Listen now".
+  // When Bible Mode is ON we do NOT gate so the AI keeps listening for verse references (e.g. "John 3 16").
+  const effectiveSmartListen = smartListenMasterEnabled && !bibleMode;
 
   const audioCapture = useAudioCapture({
     usePcm: sttProvider === 'elevenlabs' || sttProvider === 'google',
@@ -627,7 +628,7 @@ export function OperatorHUD({
               </button>
             </div>
           )}
-          {/* Smart Listen: default-on master toggle; Bible mode enforces strict gating */}
+          {/* Smart Listen: when On, STT is standby until wake word (only when Bible Mode is off; Bible Mode on = always listening for verses) */}
           <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
             <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Smart Listen</span>
             <button
@@ -636,8 +637,8 @@ export function OperatorHUD({
                 setSmartListenMasterEnabled(next);
                 const msg = next
                   ? bibleMode
-                    ? 'Smart Listen on (Bible Mode gated)'
-                    : 'Smart Listen on when Bible Mode is on'
+                    ? 'Smart Listen on; Bible Mode on so STT stays continuous'
+                    : 'Smart Listen on (standby until wake word)'
                   : 'Smart Listen off: STT continuous';
                 toast.info(msg);
               }}
@@ -653,15 +654,17 @@ export function OperatorHUD({
                 !smartListenMasterEnabled
                   ? 'Smart Listen disabled (continuous STT)'
                   : effectiveSmartListen
-                  ? 'Smart Listen active (Bible Mode on)'
-                  : 'Bible Mode off: STT continuous'
+                  ? 'Smart Listen active (standby until wake word)'
+                  : bibleMode
+                  ? 'Bible Mode on: STT continuous (listening for verses)'
+                  : 'STT continuous'
               }
             >
               {!smartListenMasterEnabled ? 'Off' : effectiveSmartListen ? 'On' : 'Bypass'}
             </button>
             {smartListenMasterEnabled && !effectiveSmartListen && (
-              <span className="text-[10px] text-sky-300" title="Bible Mode off: STT continuous">
-                Bible off
+              <span className="text-[10px] text-sky-300" title={bibleMode ? 'Bible Mode on: listening for verses' : 'STT continuous'}>
+                {bibleMode ? 'Bible on' : 'Bypass'}
               </span>
             )}
             {effectiveSmartListen && sessionStatus === 'active' && audioCapture.requestSttWindow && (
