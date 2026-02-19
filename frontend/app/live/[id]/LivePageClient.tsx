@@ -17,6 +17,7 @@ interface LivePageClientProps {
   projectorFont?: string | null;
   bibleMode?: boolean;
   bibleVersionId?: string | null;
+  initialBackgroundImageUrl?: string | null;
   initialSetlist: InitialSetlistItem[];
   hasSupabaseMismatch: boolean;
   frontendProjectRef: string | null;
@@ -35,6 +36,7 @@ export function LivePageClient({
   projectorFont = null,
   bibleMode = false,
   bibleVersionId = null,
+  initialBackgroundImageUrl = null,
   initialSetlist,
   hasSupabaseMismatch,
   frontendProjectRef,
@@ -151,6 +153,7 @@ export function LivePageClient({
       initialProjectorFont={projectorFont}
       initialBibleMode={bibleMode}
       initialBibleVersionId={bibleVersionId}
+      initialBackgroundImageUrl={initialBackgroundImageUrl}
       initialSetlist={initialSetlist}
     />
   );

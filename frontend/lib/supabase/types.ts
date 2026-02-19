@@ -85,6 +85,7 @@ export interface Database {
           projector_font: string | null
           bible_mode: boolean
           bible_version_id: string | null
+          background_image_url: string | null
           created_at: string
           updated_at: string
         }
@@ -97,6 +98,7 @@ export interface Database {
           projector_font?: string | null
           bible_mode?: boolean
           bible_version_id?: string | null
+          background_image_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -109,6 +111,7 @@ export interface Database {
           projector_font?: string | null
           bible_mode?: boolean
           bible_version_id?: string | null
+          background_image_url?: string | null
           updated_at?: string
         }
         Relationships: [

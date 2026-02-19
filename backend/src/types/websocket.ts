@@ -33,6 +33,7 @@ export interface UpdateEventSettingsMessage {
     bibleVersionId?: string | null;
     bibleFollow?: boolean;
     smartListenEnabled?: boolean;
+    backgroundImageUrl?: string | null;
   };
 }
 
@@ -136,6 +137,7 @@ export interface SessionStartedMessage {
     bibleMode?: boolean;
     bibleVersionId?: string | null;
     bibleFollow?: boolean;
+    backgroundImageUrl?: string | null;
     totalSongs: number;
     currentSongIndex: number;
     currentItemIndex?: number; // Index in polymorphic setlist
@@ -180,6 +182,7 @@ export interface EventSettingsUpdatedMessage {
     bibleMode?: boolean;
     bibleVersionId?: string | null;
     bibleFollow?: boolean;
+    backgroundImageUrl?: string | null;
   };
   timing?: TimingMetadata;
 }
