@@ -14,6 +14,8 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 - **Backend**: https://parleapbackend-production.up.railway.app (Railway)
 - **Database**: Supabase (PostgreSQL)
 
+**Backend build (Railway/Nixpacks):** Build uses `node ../node_modules/typescript/bin/tsc` (not `tsc` or `npx tsc`). TypeScript and `@types/express`, `@types/cors`, `@types/string-similarity` are in **dependencies** (not devDependencies) so Railway installs them at build time. See `RAILWAY_FIX.md` § Railway Backend Build Fix.
+
 ### Completed Phases
 - ✅ Phase 1: Foundation (Monorepo, Next.js 14, Express/TypeScript)
 - ✅ Phase 2: Real-Time Engine (WebSocket, Audio Capture, ElevenLabs STT)
@@ -119,6 +121,7 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Session Summaries Location
 Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files and `memory/` daily logs.
+- **Railway backend build fix (Feb 19)**: `memory/2026-02-19.md`, `RAILWAY_FIX.md`
 - **Live session fixes (Feb 17)**: `memory/2026-02-17.md`
 - **Hum-to-search (Feb 16)**: `memory/2026-02-16.md`
 - **Password reset**: `SESSION_SUMMARY_PASSWORD_RESET.md`
@@ -133,6 +136,7 @@ Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files and `memory/` 
 
 ### Important Files
 - `PROJECT_PLAN.md` - Master roadmap and to-do list
+- `RAILWAY_FIX.md` - Railway deployment fixes (frontend + backend build: tsc, TypeScript/@types in deps)
 - `HUM_SEARCH_STATUS.md` - Hum-to-Search status (dual-path, live hum, deployment, testing)
 - `hum-embedding-service/` - Python FastAPI embedding microservice (Wav2Vec2, 768D)
 - `CANVA_GRAB_TEXT_RESEARCH.md` - Grab Text research (Canva behavior, build-your-own OCR + eraser)
