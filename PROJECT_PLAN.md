@@ -10,6 +10,9 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Landing album art: proxy API, Christian/worship only (February 2026) ✅
+- **WorshipStream** ("Every song, One flow"): Album art from iTunes **"modern worship" only** (no secular top charts). Fetched via **GET /api/landing/album-art** (Next.js route) — server proxies iTunes to avoid CORS/blockers in the browser. When empty: section shows message + Retry; images `unoptimized`. Files: `frontend/app/api/landing/album-art/route.ts`, `frontend/components/landing/WorshipStream.tsx`. Commits: `dea85e7`, `b480322`, `844cf9f`.
+
 ### Songs UX: strict metadata, iTunes Auto-Fill, CCLI templates, community save (February 2026) ✅
 - **Strict metadata + iTunes Auto-Fill**: formatSongService METADATA RULES — fill artist only from explicit cues (By, Written by, Artist:, ©); no guessing. `frontend/lib/utils/metadataSearch.ts`: `findSongMetadata(query)` via iTunes Search API (no key). Song editor: Wand2 "Auto-Fill" next to Title; fills Artist from title lookup; toast on success / no match / error.
 - **CCLI-only template fetch**: When CCLI is entered (debounced), fetch templates by CCLI only (no line count). "Community formats for this CCLI" block: line count, upvotes, "Use this format". SongPreviewCards: `templatesFromCcliOnly`, `selectedTemplateId`; no duplicate fetch when lyrics pasted; section labels (Verse, Chorus, Bridge, etc.) not counted in content line count / slide preview.

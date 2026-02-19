@@ -53,9 +53,9 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 - **Similar-line matcher**: matcherService blocks next-line advance when current vs target line similarity ≥ SIMILAR_LINE_THRESHOLD (0.65); advance only via end-of-line. Prevents jumping on repeated/similar lines.
 - **STT/latency**: Instrumentation and docs (STT_LATENCY_MEASUREMENT.md); quick wins (projector setTimeout removed, 1024 buffer). Stick with ElevenLabs for now.
 
-**Landing: Ready for any song + album art** (February 18, 2026)
+**Landing: Ready for any song + album art** (February 18, 2026; updated)
 - **FlowScrollLine**: Replaced LyricWall with scroll-driven "Ready for any song" section; 12 titles (Firm Foundation, What A Beautiful Name, King Of Kings, etc.); tightened spacing (no big gap).
-- **WorshipStream**: Dual source — iTunes worship search + Apple Music top albums RSS; merge worship-first, max 40; refresh every 6h and on focus; `Promise.allSettled` so one failing source (e.g. CORS) doesn’t hide the other.
+- **WorshipStream**: Album art from **iTunes "modern worship" only** (Christian/worship). Fetched via **GET /api/landing/album-art** (Next.js API route) so server proxies iTunes — avoids CORS/blockers. Refresh every 6h and on focus; when empty, section shows message + Retry; images use `unoptimized`.
 
 **Live session fixes** (February 17, 2026)
 - **Matcher crash when jumping songs**: Clamp `currentLineIndex` to valid range in handler (GO_TO_ITEM, SESSION_STARTED) and in matcher (`effectiveLineIndex`); guard `getAdaptiveEndTrigger` for undefined/empty text. Prevents "slide stuck" and `Cannot read properties of undefined (reading 'trim')`.
