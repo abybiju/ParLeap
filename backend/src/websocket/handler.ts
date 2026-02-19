@@ -745,109 +745,8 @@ async function handleStartSession(
     console.warn('[WS] ⚠️  ElevenLabs selected but ELEVENLABS_API_KEY not set in backend/.env');
   }
 
-  // Build initial display update so we can embed it in SESSION_STARTED and broadcast to all clients.
-  // Using broadcastToEvent ensures the projector receives it even if it connected after the operator.
-  let displayUpdate: DisplayUpdateMessage | null = null;
-  if (currentSetlistItem?.type === 'BIBLE' && currentSetlistItem.bibleRef) {
-    const placeholderId = `bible:${currentSetlistItem.bibleRef.replace(/\s+/g, ':')}`;
-    displayUpdate = {
-      type: 'DISPLAY_UPDATE',
-      payload: {
-        lineText: currentSetlistItem.bibleRef,
-        slideText: currentSetlistItem.bibleRef,
-        slideLines: [currentSetlistItem.bibleRef],
-        slideIndex: 0,
-        lineIndex: 0,
-        songId: placeholderId,
-        songTitle: currentSetlistItem.bibleRef,
-        isAutoAdvance: false,
-        currentItemIndex: session.currentItemIndex,
-      },
-      timing: createTiming(receivedAt, processingStart),
-    };
-  } else if (currentSetlistItem?.type === 'MEDIA') {
-    const placeholderId = `media:${currentSetlistItem.mediaUrl ?? 'placeholder'}`;
-    displayUpdate = {
-      type: 'DISPLAY_UPDATE',
-      payload: {
-        lineText: 'Media',
-        slideText: 'Media',
-        slideLines: ['Media'],
-        slideIndex: 0,
-        lineIndex: 0,
-        songId: placeholderId,
-        songTitle: currentSetlistItem.mediaTitle ?? 'Media',
-        isAutoAdvance: false,
-        currentItemIndex: session.currentItemIndex,
-      },
-      timing: createTiming(receivedAt, processingStart),
-    };
-  } else if (currentSetlistItem?.type === 'ANNOUNCEMENT' && currentSetlistItem.announcementSlides && currentSetlistItem.announcementSlides.length > 0) {
-    const slideIndex = Math.min(currentSlideIndex, currentSetlistItem.announcementSlides.length - 1);
-    const slide = currentSetlistItem.announcementSlides[slideIndex] as AnnouncementSlide;
-    const placeholderId = `announcement:${currentSetlistItem.id}`;
-    displayUpdate = {
-      type: 'DISPLAY_UPDATE',
-      payload: buildAnnouncementPayload(slide, placeholderId, slideIndex, session.currentItemIndex ?? 0, false),
-      timing: createTiming(receivedAt, processingStart),
-    };
-  } else if (currentSong && currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
-    const currentSlide = currentSong.slides[currentSlideIndex];
-    console.log(`[WS] Sending slide ${currentSlideIndex}: ${currentSlide.lines.length} lines - "${currentSlide.slideText.substring(0, 50)}..."`);
-    displayUpdate = {
-      type: 'DISPLAY_UPDATE',
-      payload: {
-        lineText: currentSlide.lines[0] || '', // Backward compatibility
-        slideText: currentSlide.slideText,
-        slideLines: currentSlide.lines,
-        slideIndex: currentSlideIndex,
-        lineIndex: currentLineIndex,
-        songId: currentSong.id,
-        songTitle: currentSong.title,
-        isAutoAdvance: false,
-        currentItemIndex: session.currentItemIndex,
-      },
-      timing: createTiming(receivedAt, processingStart),
-    };
-  } else if (currentSong && currentSong.lines.length > 0 && currentLineIndex < currentSong.lines.length) {
-    // Fallback for songs without slides (backward compatibility)
-    displayUpdate = {
-      type: 'DISPLAY_UPDATE',
-      payload: {
-        lineText: currentSong.lines[currentLineIndex],
-        slideText: currentSong.lines[currentLineIndex],
-        slideLines: [currentSong.lines[currentLineIndex]],
-        slideIndex: currentSlideIndex,
-        lineIndex: currentLineIndex,
-        songId: currentSong.id,
-        songTitle: currentSong.title,
-        isAutoAdvance: false,
-        currentItemIndex: session.currentItemIndex,
-      },
-      timing: createTiming(receivedAt, processingStart),
-    };
-  } else {
-    // Fallback so projector always gets a display update and leaves "waiting" state
-    const firstSong = eventData.songs[0];
-    const title = firstSong?.title ?? 'Ready';
-    const placeholderId = firstSong?.id ?? `placeholder:${sessionId}`;
-    displayUpdate = {
-      type: 'DISPLAY_UPDATE',
-      payload: {
-        lineText: title,
-        slideText: title,
-        slideLines: [title],
-        slideIndex: 0,
-        lineIndex: 0,
-        songId: placeholderId,
-        songTitle: title,
-        isAutoAdvance: false,
-        currentItemIndex: session.currentItemIndex ?? 0,
-      },
-      timing: createTiming(receivedAt, processingStart),
-    };
-    console.log(`[WS] Sending fallback DISPLAY_UPDATE (no slide matched): "${title}"`);
-  }
+  // No initial display: main screen stays "waiting" until first DISPLAY_UPDATE from matching (song or Bible).
+  const displayUpdate: DisplayUpdateMessage | null = null;
 
   const response: SessionStartedMessage = {
     type: 'SESSION_STARTED',
@@ -867,7 +766,7 @@ async function handleStartSession(
       currentSlideIndex,
       setlist: setlistPayload,
       setlistItems: session.setlistItems,
-      initialDisplay: displayUpdate?.payload ?? undefined,
+      initialDisplay: undefined,
     },
     timing: createTiming(receivedAt, processingStart),
   };
@@ -1502,6 +1401,14 @@ async function handleTranscriptionResult(
       }
       return; // On Bible item: only Bible path; skip song matching
     }
+    // Bible mode on but current item is song: if transcript contains a verse reference, run Bible path so verse shows
+    const bibleRefInTranscript = findBibleReference(trimmedText) ?? findBibleReference(cleanedBuffer);
+    if (itemType !== 'BIBLE' && session.bibleMode && bibleRefInTranscript) {
+      void runBiblePathAsync(session, transcriptionResult, receivedAt, processingStart, cleanedBuffer, logTiming).catch((err) => {
+        console.error('[WS] Bible path error:', err);
+      });
+      return;
+    }
 
     if (!session.songContext) {
       console.log(`[WS] ⚠️  Skipping match: no songContext for session`);
@@ -1810,7 +1717,7 @@ async function handleTranscriptionResult(
             },
             timing: createTiming(receivedAt, processingStart),
           };
-          broadcastToEvent(session.eventId, displayMsg);
+          if (!session.bibleMode) broadcastToEvent(session.eventId, displayMsg);
           logTiming('song path (recovery switch)');
           return;
         }
@@ -1936,7 +1843,7 @@ async function handleTranscriptionResult(
             timing: createTiming(receivedAt, processingStart),
           };
 
-          broadcastToEvent(session.eventId, displayMessage);
+          if (!session.bibleMode) broadcastToEvent(session.eventId, displayMessage);
 
           // Update session state
           session.currentSlideIndex = newSlideIndex;
@@ -2370,7 +2277,7 @@ async function handleManualOverride(
           },
           timing: createTiming(receivedAt, Date.now()),
         };
-        broadcastToEvent(session.eventId, displayUpdate);
+        if (!session.bibleMode) broadcastToEvent(session.eventId, displayUpdate);
         console.log(`[WS] Manual override: GO_TO_ITEM -> Song "${targetSong.title}" (item ${itemIndex})`);
         return;
       }
@@ -2759,7 +2666,7 @@ async function handleManualOverride(
     },
     timing,
   };
-  broadcastToEvent(session.eventId, displayUpdate);
+  if (!session.bibleMode) broadcastToEvent(session.eventId, displayUpdate);
 
   console.log(`[WS] Manual override: ${action} -> Song ${newSongIndex}, Slide ${newSlideIndex}${songChanged ? ' (song changed)' : ''}`);
 }
