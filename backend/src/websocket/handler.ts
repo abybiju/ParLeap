@@ -748,10 +748,12 @@ async function handleStartSession(
     console.warn('[WS] ⚠️  ElevenLabs selected but ELEVENLABS_API_KEY not set in backend/.env');
   }
 
-  // Send current display update (synced to existing session if available)
+  // Build and broadcast initial display update so all clients (operator + projector) get the first slide.
+  // Using broadcastToEvent ensures the projector receives it even if it connected after the operator.
+  let displayUpdate: DisplayUpdateMessage | null = null;
   if (currentSetlistItem?.type === 'BIBLE' && currentSetlistItem.bibleRef) {
     const placeholderId = `bible:${currentSetlistItem.bibleRef.replace(/\s+/g, ':')}`;
-    const displayUpdate: DisplayUpdateMessage = {
+    displayUpdate = {
       type: 'DISPLAY_UPDATE',
       payload: {
         lineText: currentSetlistItem.bibleRef,
@@ -766,10 +768,9 @@ async function handleStartSession(
       },
       timing: createTiming(receivedAt, processingStart),
     };
-    send(ws, displayUpdate);
   } else if (currentSetlistItem?.type === 'MEDIA') {
     const placeholderId = `media:${currentSetlistItem.mediaUrl ?? 'placeholder'}`;
-    const displayUpdate: DisplayUpdateMessage = {
+    displayUpdate = {
       type: 'DISPLAY_UPDATE',
       payload: {
         lineText: 'Media',
@@ -784,21 +785,19 @@ async function handleStartSession(
       },
       timing: createTiming(receivedAt, processingStart),
     };
-    send(ws, displayUpdate);
   } else if (currentSetlistItem?.type === 'ANNOUNCEMENT' && currentSetlistItem.announcementSlides && currentSetlistItem.announcementSlides.length > 0) {
     const slideIndex = Math.min(currentSlideIndex, currentSetlistItem.announcementSlides.length - 1);
     const slide = currentSetlistItem.announcementSlides[slideIndex] as AnnouncementSlide;
     const placeholderId = `announcement:${currentSetlistItem.id}`;
-    const displayUpdate: DisplayUpdateMessage = {
+    displayUpdate = {
       type: 'DISPLAY_UPDATE',
       payload: buildAnnouncementPayload(slide, placeholderId, slideIndex, session.currentItemIndex ?? 0, false),
       timing: createTiming(receivedAt, processingStart),
     };
-    send(ws, displayUpdate);
   } else if (currentSong && currentSong.slides && currentSong.slides.length > 0 && currentSlideIndex < currentSong.slides.length) {
     const currentSlide = currentSong.slides[currentSlideIndex];
     console.log(`[WS] Sending slide ${currentSlideIndex}: ${currentSlide.lines.length} lines - "${currentSlide.slideText.substring(0, 50)}..."`);
-    const displayUpdate: DisplayUpdateMessage = {
+    displayUpdate = {
       type: 'DISPLAY_UPDATE',
       payload: {
         lineText: currentSlide.lines[0] || '', // Backward compatibility
@@ -813,10 +812,9 @@ async function handleStartSession(
       },
       timing: createTiming(receivedAt, processingStart),
     };
-    send(ws, displayUpdate);
   } else if (currentSong && currentSong.lines.length > 0 && currentLineIndex < currentSong.lines.length) {
     // Fallback for songs without slides (backward compatibility)
-    const displayUpdate: DisplayUpdateMessage = {
+    displayUpdate = {
       type: 'DISPLAY_UPDATE',
       payload: {
         lineText: currentSong.lines[currentLineIndex],
@@ -831,7 +829,30 @@ async function handleStartSession(
       },
       timing: createTiming(receivedAt, processingStart),
     };
-    send(ws, displayUpdate);
+  } else {
+    // Fallback so projector always gets a display update and leaves "waiting" state
+    const firstSong = eventData.songs[0];
+    const title = firstSong?.title ?? 'Ready';
+    const placeholderId = firstSong?.id ?? `placeholder:${sessionId}`;
+    displayUpdate = {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: title,
+        slideText: title,
+        slideLines: [title],
+        slideIndex: 0,
+        lineIndex: 0,
+        songId: placeholderId,
+        songTitle: title,
+        isAutoAdvance: false,
+        currentItemIndex: session.currentItemIndex ?? 0,
+      },
+      timing: createTiming(receivedAt, processingStart),
+    };
+    console.log(`[WS] Sending fallback DISPLAY_UPDATE (no slide matched): "${title}"`);
+  }
+  if (displayUpdate) {
+    broadcastToEvent(session.eventId, displayUpdate);
   }
 
   console.log(`[WS] Session started: ${sessionId} with ${session.songs.length} songs (synced to song ${currentSongIndex}, slide ${currentSlideIndex})`);
