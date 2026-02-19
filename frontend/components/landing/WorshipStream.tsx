@@ -4,11 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 
-const ITUNES_WORSHIP_URL =
-  'https://itunes.apple.com/search?term=modern+worship&entity=album&limit=20'
-const APPLE_TOP_ALBUMS_URL =
-  'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json'
-
+const ALBUM_ART_API = '/api/landing/album-art'
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 hours – album art stays fresh
 
 interface Album {
@@ -18,57 +14,15 @@ interface Album {
   artworkUrl100: string
 }
 
-interface AppleRssAlbum {
-  id: string
-  name: string
-  artistName: string
-  artworkUrl100: string
-}
-
 function highResArtwork(url: string): string {
   return url.replace(/100x100bb/, '600x600bb').replace(/100x100/, '600x600')
 }
 
-function normalizeRssAlbum(a: AppleRssAlbum): Album {
-  return {
-    collectionId: Number(a.id),
-    collectionName: a.name,
-    artistName: a.artistName,
-    artworkUrl100: a.artworkUrl100,
-  }
-}
-
-async function fetchWorshipAlbums(): Promise<Album[]> {
-  const res = await fetch(ITUNES_WORSHIP_URL)
-  const data: { results?: Album[] } = await res.json()
-  return data.results ?? []
-}
-
-async function fetchTopAlbums(): Promise<Album[]> {
-  const res = await fetch(APPLE_TOP_ALBUMS_URL)
-  const data: { feed?: { results?: AppleRssAlbum[] } } = await res.json()
-  const results = data.feed?.results ?? []
-  return results.map(normalizeRssAlbum)
-}
-
-const MAX_ALBUMS = 40 // enough for two scrolling rows, worship-first then top charts
-
 async function fetchAllAlbums(): Promise<Album[]> {
-  // Fetch both independently so one failure (e.g. CORS on RSS) doesn't hide the other
-  const [worshipResult, topResult] = await Promise.allSettled([
-    fetchWorshipAlbums(),
-    fetchTopAlbums(),
-  ])
-  const worship =
-    worshipResult.status === 'fulfilled' ? worshipResult.value : []
-  const top = topResult.status === 'fulfilled' ? topResult.value : []
-  const byId = new Map<number, Album>()
-  worship.forEach((a) => byId.set(a.collectionId, a))
-  top.forEach((a) => {
-    if (!byId.has(a.collectionId)) byId.set(a.collectionId, a)
-  })
-  const merged = [...byId.values()]
-  return merged.slice(0, MAX_ALBUMS)
+  const res = await fetch(ALBUM_ART_API)
+  if (!res.ok) return []
+  const data: { albums?: Album[] } = await res.json()
+  return data.albums ?? []
 }
 
 export function WorshipStream() {
