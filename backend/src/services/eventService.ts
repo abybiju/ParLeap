@@ -59,6 +59,7 @@ export interface EventData {
   bibleMode?: boolean;
   bibleVersionId?: string | null;
   backgroundImageUrl?: string | null;
+  backgroundMediaType?: string | null;
 }
 
 
@@ -92,6 +93,7 @@ function getMockEventData(eventId: string): EventData {
     bibleMode: false,
     bibleVersionId: null,
     backgroundImageUrl: null,
+    backgroundMediaType: null,
     songs: [
       {
         id: 'song_1',
@@ -136,7 +138,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
     // 1. Fetch event details
     const { data: eventData, error: eventError } = await supabase
       .from('events')
-      .select('id, name, projector_font, bible_mode, bible_version_id, background_image_url')
+      .select('id, name, projector_font, bible_mode, bible_version_id, background_image_url, background_media_type')
       .eq('id', eventId)
       .single();
 
@@ -219,6 +221,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
         bibleMode: eventData.bible_mode ?? false,
         bibleVersionId: eventData.bible_version_id ?? null,
         backgroundImageUrl: eventData.background_image_url ?? null,
+        backgroundMediaType: eventData.background_media_type ?? null,
         songs: [],
         setlistItems: [],
       };
@@ -343,6 +346,7 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
       bibleMode: eventData.bible_mode ?? false,
       bibleVersionId: eventData.bible_version_id ?? null,
       backgroundImageUrl: eventData.background_image_url ?? null,
+      backgroundMediaType: eventData.background_media_type ?? null,
       songs,
       setlistItems: setlistItems || undefined, // Include polymorphic setlist items
     };

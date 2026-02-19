@@ -37,6 +37,7 @@ interface OperatorHUDProps {
   initialBibleMode?: boolean;
   initialBibleVersionId?: string | null;
   initialBackgroundImageUrl?: string | null;
+  initialBackgroundMediaType?: string | null;
 }
 
 /**
@@ -87,6 +88,7 @@ export function OperatorHUD({
   initialBibleMode = false,
   initialBibleVersionId = null,
   initialBackgroundImageUrl = null,
+  initialBackgroundMediaType = null,
 }: OperatorHUDProps) {
   const router = useRouter();
   const {
@@ -111,6 +113,7 @@ export function OperatorHUD({
   const [bibleMode, setBibleMode] = useState<boolean>(initialBibleMode);
   const [bibleVersionId, setBibleVersionId] = useState<string | null>(initialBibleVersionId);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(initialBackgroundImageUrl);
+  const [backgroundMediaType, setBackgroundMediaType] = useState<string | null>(initialBackgroundMediaType);
   const [bibleFollow, setBibleFollow] = useState<boolean>(false);
   const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
   const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
@@ -336,6 +339,9 @@ export function OperatorHUD({
       if (lastMessage.payload.backgroundImageUrl !== undefined) {
         setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl);
       }
+      if (lastMessage.payload.backgroundMediaType !== undefined) {
+        setBackgroundMediaType(lastMessage.payload.backgroundMediaType);
+      }
       return;
     }
     if (isEventSettingsUpdatedMessage(lastMessage)) {
@@ -353,6 +359,9 @@ export function OperatorHUD({
       }
       if (lastMessage.payload.backgroundImageUrl !== undefined) {
         setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl);
+      }
+      if (lastMessage.payload.backgroundMediaType !== undefined) {
+        setBackgroundMediaType(lastMessage.payload.backgroundMediaType);
       }
     }
   }, [lastMessage]);
@@ -503,8 +512,9 @@ export function OperatorHUD({
 
   const handleClearBackground = async () => {
     setBackgroundImageUrl(null);
-    updateEventSettings({ backgroundImageUrl: null });
-    await persistEventSettings({ background_image_url: null });
+    setBackgroundMediaType(null);
+    updateEventSettings({ backgroundImageUrl: null, backgroundMediaType: null });
+    await persistEventSettings({ background_image_url: null, background_media_type: null });
     toast.info('Background cleared');
   };
 
@@ -560,12 +570,24 @@ export function OperatorHUD({
       {/* Projector background layer (WYSIWYG: operator sees same as projector when background is set) */}
       {backgroundImageUrl && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */}
-          <img
-            src={backgroundImageUrl}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-25 z-0"
-          />
+          {backgroundMediaType === 'video' ? (
+            <video
+              src={backgroundImageUrl}
+              muted
+              loop
+              autoPlay
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover opacity-25 z-0"
+              aria-hidden
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */
+            <img
+              src={backgroundImageUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover opacity-25 z-0"
+            />
+          )}
           <div className="absolute inset-0 bg-black/60 z-0" aria-hidden />
         </>
       )}

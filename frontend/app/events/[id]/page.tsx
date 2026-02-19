@@ -23,7 +23,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
   type EventRow = Database['public']['Tables']['events']['Row'];
   const { data: event, error: eventError } = await supabase
     .from('events')
-    .select('id, name, event_date, status, background_image_url')
+    .select('id, name, event_date, status, background_image_url, background_media_type')
     .eq('id', params.id)
     .eq('user_id', user.id)
     .single()

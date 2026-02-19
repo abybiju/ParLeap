@@ -25,6 +25,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [projectorFontId, setProjectorFontId] = useState<string>('inter');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [backgroundMediaType, setBackgroundMediaType] = useState<string | null>(null);
 
   // Auto-connect on mount (but don't auto-start session)
   useEffect(() => {
@@ -70,6 +71,9 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       if (lastMessage.payload.backgroundImageUrl !== undefined) {
         setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl ?? null);
       }
+      if (lastMessage.payload.backgroundMediaType !== undefined) {
+        setBackgroundMediaType(lastMessage.payload.backgroundMediaType ?? null);
+      }
       // Show first slide immediately from SESSION_STARTED.initialDisplay so we never stay on "waiting for display update"
       const initial = lastMessage.payload.initialDisplay;
       if (initial) {
@@ -100,6 +104,9 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
       if (lastMessage.payload.backgroundImageUrl !== undefined) {
         setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl ?? null);
+      }
+      if (lastMessage.payload.backgroundMediaType !== undefined) {
+        setBackgroundMediaType(lastMessage.payload.backgroundMediaType ?? null);
       }
       return;
     }
@@ -200,12 +207,24 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       <div className="h-screen w-screen relative flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
         {backgroundImageUrl && (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */}
-            <img
-              src={backgroundImageUrl}
-              alt=""
-              className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
-            />
+            {backgroundMediaType === 'video' ? (
+              <video
+                src={backgroundImageUrl}
+                muted
+                loop
+                autoPlay
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
+                aria-hidden
+              />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */
+              <img
+                src={backgroundImageUrl}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
+              />
+            )}
             <div className="absolute inset-0 bg-black/40 z-[1]" aria-hidden />
           </>
         )}
@@ -343,12 +362,24 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     <div className="h-screen w-screen relative flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden p-8">
       {backgroundImageUrl && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */}
-          <img
-            src={backgroundImageUrl}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
-          />
+          {backgroundMediaType === 'video' ? (
+            <video
+              src={backgroundImageUrl}
+              muted
+              loop
+              autoPlay
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
+              aria-hidden
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */
+            <img
+              src={backgroundImageUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
+            />
+          )}
           <div className="absolute inset-0 bg-black/40 z-[1]" aria-hidden />
         </>
       )}
