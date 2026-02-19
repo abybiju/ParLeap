@@ -1403,7 +1403,7 @@ async function handleTranscriptionResult(
     }
     // Bible mode on but current item is song: if transcript contains a verse reference, run Bible path so verse shows
     const bibleRefInTranscript = findBibleReference(trimmedText) ?? findBibleReference(cleanedBuffer);
-    if (itemType !== 'BIBLE' && session.bibleMode && bibleRefInTranscript) {
+    if (session.bibleMode && bibleRefInTranscript) {
       void runBiblePathAsync(session, transcriptionResult, receivedAt, processingStart, cleanedBuffer, logTiming).catch((err) => {
         console.error('[WS] Bible path error:', err);
       });
