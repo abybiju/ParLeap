@@ -20,6 +20,11 @@ NEXT_PUBLIC_WS_URL=ws://localhost:3001
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 # Optional: Google Cloud project number (improves Picker behavior)
 # NEXT_PUBLIC_GOOGLE_APP_ID=123456789012
+
+# Unsplash (event projector background – search and set background image)
+# Get your Access Key at https://unsplash.com/oauth/applications
+# Used only in API route /api/unsplash/search (key is server-side, not exposed to client).
+UNSPLASH_ACCESS_KEY=your_unsplash_access_key_here
 ```
 
 ## Backend Environment Variables

@@ -36,6 +36,7 @@ interface OperatorHUDProps {
   initialProjectorFont?: string | null;
   initialBibleMode?: boolean;
   initialBibleVersionId?: string | null;
+  initialBackgroundImageUrl?: string | null;
 }
 
 /**
@@ -85,6 +86,7 @@ export function OperatorHUD({
   initialProjectorFont = null,
   initialBibleMode = false,
   initialBibleVersionId = null,
+  initialBackgroundImageUrl = null,
 }: OperatorHUDProps) {
   const router = useRouter();
   const {
@@ -108,6 +110,7 @@ export function OperatorHUD({
   );
   const [bibleMode, setBibleMode] = useState<boolean>(initialBibleMode);
   const [bibleVersionId, setBibleVersionId] = useState<string | null>(initialBibleVersionId);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(initialBackgroundImageUrl);
   const [bibleFollow, setBibleFollow] = useState<boolean>(false);
   const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
   const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
@@ -318,7 +321,7 @@ export function OperatorHUD({
     }
   }, [lastMessage, audioCapture, sessionStatus]);
 
-  // Sync projector font from session start or settings updates
+  // Sync projector font and background from session start or settings updates
   useEffect(() => {
     if (!lastMessage) return;
     if (isSessionStartedMessage(lastMessage)) {
@@ -329,6 +332,9 @@ export function OperatorHUD({
       }
       if (lastMessage.payload.bibleFollow !== undefined) {
         setBibleFollow(lastMessage.payload.bibleFollow);
+      }
+      if (lastMessage.payload.backgroundImageUrl !== undefined) {
+        setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl);
       }
       return;
     }
@@ -344,6 +350,9 @@ export function OperatorHUD({
       }
       if (lastMessage.payload.bibleFollow !== undefined) {
         setBibleFollow(lastMessage.payload.bibleFollow);
+      }
+      if (lastMessage.payload.backgroundImageUrl !== undefined) {
+        setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl);
       }
     }
   }, [lastMessage]);
@@ -492,6 +501,13 @@ export function OperatorHUD({
     await persistEventSettings({ projector_font: fontId });
   };
 
+  const handleClearBackground = async () => {
+    setBackgroundImageUrl(null);
+    updateEventSettings({ backgroundImageUrl: null });
+    await persistEventSettings({ background_image_url: null });
+    toast.info('Background cleared');
+  };
+
   const handleBibleModeToggle = async () => {
     const nextMode = !bibleMode;
     let nextVersionId = bibleVersionId;
@@ -580,6 +596,16 @@ export function OperatorHUD({
               ))}
             </select>
           </div>
+          {backgroundImageUrl && sessionStatus === 'active' && (
+            <button
+              type="button"
+              onClick={handleClearBackground}
+              className="hidden md:flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
+              title="Clear projector background image"
+            >
+              Clear bg
+            </button>
+          )}
           <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
             <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
               Bible

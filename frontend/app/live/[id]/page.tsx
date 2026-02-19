@@ -64,7 +64,7 @@ export default async function LivePage({ params }: LivePageProps) {
   // Fetch event details
   const { data: event, error } = await supabase
     .from('events')
-    .select('id, name, event_date, status, projector_font, bible_mode, bible_version_id')
+    .select('id, name, event_date, status, projector_font, bible_mode, bible_version_id, background_image_url')
     .eq('id', params.id)
     .eq('user_id', user.id)
     .single()
@@ -171,6 +171,7 @@ export default async function LivePage({ params }: LivePageProps) {
       projectorFont={(event as any).projector_font ?? null}
       bibleMode={(event as any).bible_mode ?? false}
       bibleVersionId={(event as any).bible_version_id ?? null}
+      initialBackgroundImageUrl={(event as any).background_image_url ?? null}
       initialSetlist={initialSetlist}
       hasSupabaseMismatch={hasMismatch}
       frontendProjectRef={frontendProjectRef}

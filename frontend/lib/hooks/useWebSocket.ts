@@ -15,7 +15,7 @@ export interface UseWebSocketReturn {
   isConnected: boolean;
   sendMessage: (message: ClientMessage) => void;
   startSession: (eventId: string, options?: { smartListenEnabled?: boolean }) => void;
-  updateEventSettings: (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean }) => void;
+  updateEventSettings: (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null }) => void;
   stopSession: () => void;
   nextSlide: () => void;
   prevSlide: () => void;
@@ -146,7 +146,7 @@ export function useWebSocket(autoConnect = true): UseWebSocketReturn {
   );
 
   const updateEventSettings = useCallback(
-    (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean }) => {
+    (settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null }) => {
       client.updateEventSettings(settings);
     },
     [client]

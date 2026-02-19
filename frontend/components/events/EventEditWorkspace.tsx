@@ -36,6 +36,7 @@ interface EventEditWorkspaceProps {
     name: string;
     event_date: string | null;
     status: 'draft' | 'live' | 'ended';
+    background_image_url?: string | null;
   };
   initialSetlist: SetlistItem[];
   songs: SongOption[];

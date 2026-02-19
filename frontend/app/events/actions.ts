@@ -133,6 +133,37 @@ export async function updateEvent(id: string, formData: FormData): Promise<Actio
   return { success: true, id };
 }
 
+export async function updateEventBackground(
+  eventId: string,
+  backgroundImageUrl: string | null
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) {
+    return { success: false, error };
+  }
+
+  const ownership = await ensureEventOwnership(supabase, user.id, eventId);
+  if (ownership.error) {
+    return { success: false, error: ownership.error };
+  }
+
+  const { error: updateError } = await (supabase
+    .from('events') as ReturnType<typeof supabase.from>)
+    .update({ background_image_url: backgroundImageUrl } as Record<string, unknown>)
+    .eq('id', eventId)
+    .eq('user_id', user.id);
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  revalidatePath(EVENT_PATH);
+  revalidatePath(DASHBOARD_PATH);
+  revalidatePath(`/events/${eventId}`);
+
+  return { success: true, id: eventId };
+}
+
 export async function deleteEvent(id: string): Promise<ActionResult> {
   const { supabase, user, error } = await requireUser();
   if (!user) {

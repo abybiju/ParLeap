@@ -24,6 +24,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [projectorFontId, setProjectorFontId] = useState<string>('inter');
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
 
   // Auto-connect on mount (but don't auto-start session)
   useEffect(() => {
@@ -69,11 +70,17 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
       // The backend will send an initial DISPLAY_UPDATE after SESSION_STARTED
       console.log('[ProjectorDisplay] Session started, waiting for initial display update');
       setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+      if (lastMessage.payload.backgroundImageUrl !== undefined) {
+        setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl ?? null);
+      }
       return;
     }
 
     if (isEventSettingsUpdatedMessage(lastMessage)) {
       setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
+      if (lastMessage.payload.backgroundImageUrl !== undefined) {
+        setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl ?? null);
+      }
       return;
     }
 
@@ -302,7 +309,19 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   const projectorFontClass = getProjectorFontClass(projectorFontId);
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden p-8">
+    <div className="h-screen w-screen relative flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden p-8">
+      {backgroundImageUrl && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */}
+          <img
+            src={backgroundImageUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
+          />
+          <div className="absolute inset-0 bg-black/40 z-[1]" aria-hidden />
+        </>
+      )}
+      <div className="relative z-10 flex flex-col items-center justify-center w-full flex-1 min-h-0">
       {/* Song Title (Top) - with fade animation */}
       {songTitle && (
         <div 
@@ -357,6 +376,7 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
           Space/→ Next • Backspace/← Prev • F11 Fullscreen
         </div>
       )}
+      </div>
     </div>
   );
 }
