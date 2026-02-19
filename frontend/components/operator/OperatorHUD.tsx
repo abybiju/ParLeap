@@ -556,9 +556,21 @@ export function OperatorHUD({
       : 'Idle';
 
   return (
-    <div className="min-h-screen pt-16 flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="min-h-screen pt-16 flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white relative">
+      {/* Projector background layer (WYSIWYG: operator sees same as projector when background is set) */}
+      {backgroundImageUrl && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */}
+          <img
+            src={backgroundImageUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-25 z-0"
+          />
+          <div className="absolute inset-0 bg-black/60 z-0" aria-hidden />
+        </>
+      )}
       {/* Command Bar */}
-      <header className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-white/10 bg-white/5 backdrop-blur z-40">
+      <header className="relative z-40 flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-white/10 bg-white/5 backdrop-blur">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <span
@@ -596,15 +608,22 @@ export function OperatorHUD({
               ))}
             </select>
           </div>
-          {backgroundImageUrl && sessionStatus === 'active' && (
-            <button
-              type="button"
-              onClick={handleClearBackground}
-              className="hidden md:flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
-              title="Clear projector background image"
-            >
-              Clear bg
-            </button>
+          {backgroundImageUrl && (
+            <>
+              <span className="hidden md:inline text-[10px] uppercase tracking-[0.2em] text-slate-400">
+                Projector bg
+              </span>
+              {sessionStatus === 'active' && (
+                <button
+                  type="button"
+                  onClick={handleClearBackground}
+                  className="hidden md:flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-colors"
+                  title="Clear projector background image"
+                >
+                  Clear bg
+                </button>
+              )}
+            </>
           )}
           <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
             <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
@@ -761,7 +780,7 @@ export function OperatorHUD({
       </header>
 
       {/* Three-Panel Layout */}
-      <div className="flex-1 grid grid-cols-[320px_1fr_320px] gap-4 p-4 overflow-hidden min-h-0">
+      <div className="relative z-10 flex-1 grid grid-cols-[320px_1fr_320px] gap-4 p-4 overflow-hidden min-h-0">
         {/* Left Panel: Signal Stack */}
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur">
           <div className="px-4 pt-4">

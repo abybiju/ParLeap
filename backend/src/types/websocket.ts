@@ -168,6 +168,21 @@ export interface SessionStartedMessage {
         structuredText?: { title?: string; subtitle?: string; date?: string; lines?: string[] };
       }>;
     }>; // Polymorphic setlist items
+    /** Initial display state so projector can show first slide from SESSION_STARTED alone */
+    initialDisplay?: {
+      lineText: string;
+      slideText?: string;
+      slideLines?: string[];
+      slideIndex: number;
+      lineIndex?: number;
+      songId: string;
+      songTitle: string;
+      isAutoAdvance: boolean;
+      currentItemIndex?: number;
+      slideImageUrl?: string;
+      slideVideoUrl?: string;
+      displayType?: 'lyrics' | 'image' | 'video';
+    };
   };
   timing?: TimingMetadata;
 }

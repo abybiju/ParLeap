@@ -719,36 +719,13 @@ async function handleStartSession(
     console.log('[WS] setlistItems is undefined or empty');
   }
 
-  const response: SessionStartedMessage = {
-    type: 'SESSION_STARTED',
-    payload: {
-      sessionId,
-      eventId,
-      eventName: session.eventName,
-      projectorFont: session.projectorFont ?? null,
-      bibleMode: session.bibleMode ?? false,
-      bibleVersionId: session.bibleVersionId ?? null,
-      backgroundImageUrl: session.backgroundImageUrl ?? null,
-      bibleFollow: session.bibleFollow ?? false,
-      totalSongs: session.songs.length,
-      currentSongIndex,
-      currentItemIndex: session.currentItemIndex,
-      currentSlideIndex,
-      setlist: setlistPayload,
-      setlistItems: session.setlistItems, // Include polymorphic setlist items
-    },
-    timing: createTiming(receivedAt, processingStart),
-  };
-
-  send(ws, response);
-
   // Log STT configuration for debugging
   console.log(`[WS] STT Provider: ${sttProvider}, Configured: ${sttProvider === 'elevenlabs' ? isElevenLabsConfigured : 'N/A'}`);
   if (sttProvider === 'elevenlabs' && !isElevenLabsConfigured) {
     console.warn('[WS] ⚠️  ElevenLabs selected but ELEVENLABS_API_KEY not set in backend/.env');
   }
 
-  // Build and broadcast initial display update so all clients (operator + projector) get the first slide.
+  // Build initial display update so we can embed it in SESSION_STARTED and broadcast to all clients.
   // Using broadcastToEvent ensures the projector receives it even if it connected after the operator.
   let displayUpdate: DisplayUpdateMessage | null = null;
   if (currentSetlistItem?.type === 'BIBLE' && currentSetlistItem.bibleRef) {
@@ -851,6 +828,31 @@ async function handleStartSession(
     };
     console.log(`[WS] Sending fallback DISPLAY_UPDATE (no slide matched): "${title}"`);
   }
+
+  const response: SessionStartedMessage = {
+    type: 'SESSION_STARTED',
+    payload: {
+      sessionId,
+      eventId,
+      eventName: session.eventName,
+      projectorFont: session.projectorFont ?? null,
+      bibleMode: session.bibleMode ?? false,
+      bibleVersionId: session.bibleVersionId ?? null,
+      backgroundImageUrl: session.backgroundImageUrl ?? null,
+      bibleFollow: session.bibleFollow ?? false,
+      totalSongs: session.songs.length,
+      currentSongIndex,
+      currentItemIndex: session.currentItemIndex,
+      currentSlideIndex,
+      setlist: setlistPayload,
+      setlistItems: session.setlistItems,
+      initialDisplay: displayUpdate?.payload ?? undefined,
+    },
+    timing: createTiming(receivedAt, processingStart),
+  };
+
+  send(ws, response);
+
   if (displayUpdate) {
     broadcastToEvent(session.eventId, displayUpdate);
   }
