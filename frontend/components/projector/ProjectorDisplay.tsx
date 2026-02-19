@@ -40,14 +40,14 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     let timer: NodeJS.Timeout | null = null;
     
     if (isConnected && !sessionStarted) {
-      // Wait a bit for connection to stabilize
+      // Brief delay for connection to stabilize, then join event (projector gets initialDisplay in SESSION_STARTED)
       timer = setTimeout(() => {
         if (isConnected) {
           console.log('[ProjectorDisplay] Connection stable, starting session for event:', eventId);
           startSession(eventId);
           setSessionStarted(true);
         }
-      }, 1000);
+      }, 300);
     }
     
     // Reset session started flag when disconnected
@@ -66,12 +66,32 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
     if (!lastMessage) return;
 
     if (isSessionStartedMessage(lastMessage)) {
-      // Session started - wait for initial display update
-      // The backend will send an initial DISPLAY_UPDATE after SESSION_STARTED
-      console.log('[ProjectorDisplay] Session started, waiting for initial display update');
       setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
       if (lastMessage.payload.backgroundImageUrl !== undefined) {
         setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl ?? null);
+      }
+      // Show first slide immediately from SESSION_STARTED.initialDisplay so we never stay on "waiting for display update"
+      const initial = lastMessage.payload.initialDisplay;
+      if (initial) {
+        const displayMsg: DisplayUpdateMessage = {
+          type: 'DISPLAY_UPDATE',
+          payload: {
+            lineText: initial.lineText,
+            slideText: initial.slideText,
+            slideLines: initial.slideLines,
+            slideIndex: initial.slideIndex,
+            lineIndex: initial.lineIndex,
+            songId: initial.songId,
+            songTitle: initial.songTitle,
+            isAutoAdvance: initial.isAutoAdvance,
+            currentItemIndex: initial.currentItemIndex,
+            slideImageUrl: initial.slideImageUrl,
+            slideVideoUrl: initial.slideVideoUrl,
+            displayType: initial.displayType,
+          },
+        };
+        setCurrentSlide(displayMsg);
+        setIsTransitioning(false);
       }
       return;
     }
