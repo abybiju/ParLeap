@@ -1,5 +1,21 @@
 # ParLeap AI - Memory Log
 
+## Session: February 19, 2026 — Decouple Live from setlist + Bible Mode STT
+
+### What we did
+- **Decouple Live from setlist order**: Setlist is operator overview only; order does not control matching. Transcript routing uses `session.bibleMode` only (Bible path when bibleMode on + ref or bibleFollow). Bible triggers only when Bible Mode ON. Smart Listen gate (backend) uses bibleMode + smartListenEnabled, no setlist item type. Match stability: 3 sustained matches, 0.58 min confidence; currentLineIndex synced on auto-switch; SESSION_STARTED uses session indices. Tests: bibleMode true/false, disordered setlist.
+- **Lint/type-check**: Removed unused `currentItemType` (handler), and in OperatorHUD: `isSongLikeItem`, `resolveActiveItemType`, currentItemIndex/activeItemType state, sync effect, unused imports (isDisplayUpdateMessage, useSlideCache/slideCache).
+- **Bible Mode on = STT continuous**: When Bible Mode was ON, Smart Listen gate was on → "Standby (Smart Listen)", AI not listening. Changed to `effectiveSmartListen = smartListenMasterEnabled && !bibleMode` so when Bible Mode ON we do not gate; STT continuous, AI listens for verse references (e.g. "John 3 16"). Smart Listen standby only when Bible Mode OFF. Updated Smart Listen labels/tooltips.
+
+### Key lesson
+- **Bible Mode ON** should mean "listen for verses"; so do not put STT in standby then. Gate (Smart Listen) only when Bible Mode is OFF if you want standby-until-wake-word behavior.
+
+### Docs
+- `memory/2026-02-19.md` — daily log with both sessions (Railway build + Decouple/Bible STT)
+- `.cursor/rules/project-context.mdc` — Recent Features § Decouple Live + Bible Mode STT; Smart Bible Listen updated
+
+---
+
 ## Session: Landing album art — proxy API, worship-only, fallback
 
 ### What we did

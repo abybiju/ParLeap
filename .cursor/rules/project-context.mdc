@@ -46,6 +46,13 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Recent Features
 
+**Decouple Live from setlist + Bible Mode STT** (February 19, 2026)
+- **Setlist = operator overview only**: Order does not control live matching; matching works with disordered setlist as long as event content exists.
+- **Bible path**: Runs only when Bible Mode is ON (operator toggle); routing by `session.bibleMode` only, not current setlist item type. No random Bible verse when Bible Mode off.
+- **Smart Listen**: Backend gate uses `bibleMode` + `smartListenEnabled` (no item type). Frontend: when **Bible Mode is ON**, STT is **continuous** (no standby) so AI listens for verse references (e.g. "John 3 16"); Smart Listen standby only when Bible Mode is OFF.
+- **Match stability**: 3 sustained matches + 0.58 min confidence for song switch; `currentLineIndex` synced on auto-switch; backward block uses effective current line.
+- **Tests**: bibleMode true/false, disordered setlist `currentSongIndex` in websocket.test.ts.
+
 **Songs UX: metadata, CCLI templates, community save** (February 2026)
 - **Strict metadata + iTunes Auto-Fill**: Format-song prompt (formatSongService) has METADATA RULES — artist only from explicit cues (By, Written by, Artist:, ©); no guessing. `metadataSearch.ts`: `findSongMetadata(query)` via iTunes Search API (no key). Song editor: Wand2 "Auto-Fill" next to Title fills Artist; toast on success / no match.
 - **CCLI-only template fetch**: On CCLI entry, fetch community templates by CCLI only (no lyrics). "Community formats for this CCLI" shows line count, upvotes, "Use this format". SongPreviewCards: `templatesFromCcliOnly` + `selectedTemplateId`; applies template when pasted lyrics line count matches; section labels (Verse, Chorus, Bridge) not counted in content line count.
@@ -96,13 +103,11 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 - **STT homophones**: "daniel won" → Daniel 1 via `normalizeReferenceText` (won/one→1, two/too→2, for/four→4, ate/eight→8; "to" not changed for range "1 to 3").
 - **Known issues (todo)**: Bible verse **advance** not working reliably; **cross-chapter/cross-book jump** not reliable. See `BIBLE_SEMANTIC_BACKLOG.md` for full backlog.
 
-**Smart Bible Listen** (February 11, 2026) — IN PROGRESS
-- Smart Listen toggle in operator HUD gates STT for Bible items
-- Frontend: audio buffered until wake word or "Listen now" triggers STT window
-- Backend: `shouldUseSmartListenGate()` checks `session.smartListenEnabled && currentItemIsBible`
-- Kill switch: `BIBLE_SMART_LISTEN_ENABLED=false` to force-disable server-side
-- **Known issue**: Bible items still not appearing in live setlist after session starts (fix deployed, needs verification)
-- Debug endpoint available: `/api/debug/event-items/:eventId`
+**Smart Bible Listen** (February 11, 2026; updated Feb 19)
+- Smart Listen: when **Bible Mode OFF** and master On, STT is standby until wake word or "Listen now". When **Bible Mode ON**, STT is always continuous so AI listens for verse references.
+- Backend: `shouldUseSmartListenGate(session)` uses `session.smartListenEnabled && session.bibleMode` (no setlist item type).
+- Kill switch: `BIBLE_SMART_LISTEN_ENABLED=false` to force-disable server-side.
+- Debug endpoint: `/api/debug/event-items/:eventId`.
 
 **Polymorphic setlist** — Bible items in live setlist
 - Backend eventService uses split queries (no songs() embed) to avoid PostgREST INNER JOIN issue
@@ -121,6 +126,7 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Session Summaries Location
 Recent work is documented in `.cursor/SESSION_SUMMARY_*.md` files and `memory/` daily logs.
+- **Decouple Live + Bible Mode STT (Feb 19)**: `memory/2026-02-19.md`, project-context.mdc § Recent Features
 - **Railway backend build fix (Feb 19)**: `memory/2026-02-19.md`, `RAILWAY_FIX.md`
 - **Live session fixes (Feb 17)**: `memory/2026-02-17.md`
 - **Hum-to-search (Feb 16)**: `memory/2026-02-16.md`
