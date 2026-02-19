@@ -37,6 +37,10 @@ class WebSocketClient {
   private shouldReconnect = true;
   private latencyTracker = getLatencyTracker();
   private messageIdCounter = 0;
+
+  /** Throttle manual-override sends so rapid clicks don't hit backend rate limit. */
+  private static readonly MANUAL_OVERRIDE_THROTTLE_MS = 300;
+  private lastManualOverrideAt = 0;
   
   // RTT Monitoring
   private pingInterval: NodeJS.Timeout | null = null;
@@ -229,6 +233,7 @@ class WebSocketClient {
    * - NEXT_SLIDE / PREV_SLIDE: no extra params
    * - GO_TO_SLIDE: slideIndex, songId (for songs)
    * - GO_TO_ITEM: itemIndex (required), itemId (optional, so backend can resolve when setlist lengths differ)
+   * Throttled so rapid clicks don't hit backend rate limit (one send per MANUAL_OVERRIDE_THROTTLE_MS).
    */
   manualOverride(
     action: 'NEXT_SLIDE' | 'PREV_SLIDE' | 'GO_TO_SLIDE' | 'GO_TO_ITEM',
@@ -237,6 +242,11 @@ class WebSocketClient {
     itemIndex?: number,
     itemId?: string
   ): void {
+    const now = Date.now();
+    if (this.lastManualOverrideAt > 0 && now - this.lastManualOverrideAt < WebSocketClient.MANUAL_OVERRIDE_THROTTLE_MS) {
+      return;
+    }
+    this.lastManualOverrideAt = now;
     const payload: { action: typeof action; slideIndex?: number; songId?: string; itemIndex?: number; itemId?: string } = {
       action,
       slideIndex,
