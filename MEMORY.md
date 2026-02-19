@@ -1,5 +1,23 @@
 # ParLeap AI - Memory Log
 
+## Session: Landing album art — proxy API, worship-only, fallback
+
+### What we did
+- **Album art not showing (Retry state)**: Browser was calling iTunes and Apple RSS directly; CORS or ad blockers often blocked responses, so `albums.length === 0` and the section showed "Retry."
+- **Proxy API**: Added `GET /api/landing/album-art` (Next.js route). Server fetches from iTunes/Apple so the browser only hits same-origin; no CORS. WorshipStream now fetches `/api/landing/album-art` instead of external URLs.
+- **Christian/worship only**: Removed Apple Music top-50 (secular) from the API. Album art source is now **iTunes "modern worship" search only** (limit 30).
+- **Fallback when empty**: Section no longer returns `null` when no albums load — shows "Every song, One flow" plus message and a Retry button. Album images use `unoptimized` to avoid Next Image config issues.
+
+### Commits
+- `dea85e7` — fix(landing): proxy album art via API to avoid CORS/blockers
+- `b480322` — fix(landing): WorshipStream always visible, unoptimized images, retry when empty
+- `844cf9f` — fix(landing): album art API — Christian/worship only, no secular top charts
+
+### Key lesson
+- **External APIs from the browser**: If CORS or blockers cause failures, proxy the request through your own backend (or Next API route) so the client only talks to your origin.
+
+---
+
 ## Session: February 19, 2026 — Railway backend build fix
 
 ### What we did
