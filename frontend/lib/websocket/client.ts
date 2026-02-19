@@ -41,6 +41,12 @@ class WebSocketClient {
   /** Throttle manual-override sends so rapid clicks don't hit backend rate limit. */
   private static readonly MANUAL_OVERRIDE_THROTTLE_MS = 300;
   private lastManualOverrideAt = 0;
+
+  /** Throttle UPDATE_EVENT_SETTINGS so reactive effects (e.g. Smart Listen sync on slide change) don't flood control messages. */
+  private static readonly UPDATE_SETTINGS_THROTTLE_MS = 500;
+  private lastUpdateEventSettingsAt = 0;
+  private pendingEventSettings: Record<string, unknown> | null = null;
+  private pendingEventSettingsTimer: ReturnType<typeof setTimeout> | null = null;
   
   // RTT Monitoring
   private pingInterval: NodeJS.Timeout | null = null;
@@ -141,6 +147,11 @@ class WebSocketClient {
         this.setState('disconnected');
         this.ws = null;
         this.stopPingInterval();
+        if (this.pendingEventSettingsTimer) {
+          clearTimeout(this.pendingEventSettingsTimer);
+          this.pendingEventSettingsTimer = null;
+        }
+        this.pendingEventSettings = null;
 
         if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
           this.scheduleReconnect();
@@ -161,6 +172,11 @@ class WebSocketClient {
   disconnect(): void {
     this.shouldReconnect = false;
     this.stopPingInterval();
+    if (this.pendingEventSettingsTimer) {
+      clearTimeout(this.pendingEventSettingsTimer);
+      this.pendingEventSettingsTimer = null;
+    }
+    this.pendingEventSettings = null;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -222,10 +238,36 @@ class WebSocketClient {
   }
 
   /**
-   * Send UPDATE_EVENT_SETTINGS message
+   * Send UPDATE_EVENT_SETTINGS message.
+   * Throttled and coalesced so reactive effects (e.g. Smart Listen sync on every slide change) don't flood control messages.
    */
   updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null; backgroundMediaType?: string | null }): void {
-    this.send({ type: 'UPDATE_EVENT_SETTINGS', payload: settings });
+    const now = Date.now();
+    const elapsed = this.lastUpdateEventSettingsAt > 0 ? now - this.lastUpdateEventSettingsAt : WebSocketClient.UPDATE_SETTINGS_THROTTLE_MS;
+    this.pendingEventSettings = { ...this.pendingEventSettings, ...settings } as Record<string, unknown>;
+
+    const flush = () => {
+      if (this.pendingEventSettingsTimer) {
+        clearTimeout(this.pendingEventSettingsTimer);
+        this.pendingEventSettingsTimer = null;
+      }
+      if (this.pendingEventSettings && Object.keys(this.pendingEventSettings).length > 0) {
+        this.send({ type: 'UPDATE_EVENT_SETTINGS', payload: this.pendingEventSettings });
+        this.lastUpdateEventSettingsAt = Date.now();
+        this.pendingEventSettings = null;
+      }
+    };
+
+    if (elapsed >= WebSocketClient.UPDATE_SETTINGS_THROTTLE_MS) {
+      flush();
+      return;
+    }
+    if (!this.pendingEventSettingsTimer) {
+      this.pendingEventSettingsTimer = setTimeout(
+        flush,
+        WebSocketClient.UPDATE_SETTINGS_THROTTLE_MS - elapsed
+      );
+    }
   }
 
   /**
