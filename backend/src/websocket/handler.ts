@@ -469,8 +469,22 @@ async function getBibleVerseCached(
 // STT Stream Helpers
 // ============================================
 
+/** Clear sttStream for every session that shares this stream (same eventId). Prevents stuck state when stream ends/errors. */
+function clearSttStreamForAllWithStream(
+  eventId: string,
+  stream: ReturnType<typeof createStreamingRecognition> | undefined
+): void {
+  if (!stream) return;
+  for (const [, s] of sessions.entries()) {
+    if (s.eventId === eventId && s.sttStream === stream) {
+      s.sttStream = undefined;
+    }
+  }
+}
+
 function initElevenLabsStream(session: SessionState, ws: WebSocket): void {
   const stream = createStreamingRecognition();
+  const eventId = session.eventId;
   stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
     const processingStart = Date.now();
     const receivedAtNow = Date.now();
@@ -480,26 +494,28 @@ function initElevenLabsStream(session: SessionState, ws: WebSocket): void {
   });
   stream.on('error', (error: Error) => {
     console.error('[STT] ❌ ElevenLabs stream error:', error);
+    clearSttStreamForAllWithStream(eventId, stream);
     sendError(ws, 'STT_ERROR', 'ElevenLabs stream error', { message: error.message });
   });
   stream.on('end', () => {
     console.log('[STT] ElevenLabs stream ended');
-    // Clear stream reference so it can be recreated if needed
-    session.sttStream = undefined;
+    clearSttStreamForAllWithStream(eventId, stream);
   });
   session.sttStream = stream;
   console.log('[STT] ✅ ElevenLabs stream initialized');
 }
 
 function restartElevenLabsStream(session: SessionState, ws: WebSocket, reason: string): void {
-  if (session.sttStream) {
+  const stream = session.sttStream;
+  const eventId = session.eventId;
+  clearSttStreamForAllWithStream(eventId, stream);
+  if (stream) {
     try {
-      session.sttStream.end();
+      stream.end();
     } catch (error) {
       console.warn('[STT] ⚠️ Failed to end ElevenLabs stream cleanly:', error);
     }
   }
-  session.sttStream = undefined;
   session.lastSttRestartAt = Date.now();
   console.warn(`[STT] 🔄 Restarting ElevenLabs stream (${reason})`);
   initElevenLabsStream(session, ws);
@@ -507,6 +523,7 @@ function restartElevenLabsStream(session: SessionState, ws: WebSocket, reason: s
 
 function initGoogleStream(session: SessionState, ws: WebSocket): void {
   const stream = createStreamingRecognition();
+  const eventId = session.eventId;
   stream.on('data', (result: { text: string; isFinal: boolean; confidence: number }) => {
     const processingStart = Date.now();
     const receivedAtNow = Date.now();
@@ -516,11 +533,12 @@ function initGoogleStream(session: SessionState, ws: WebSocket): void {
   });
   stream.on('error', (error: Error) => {
     console.error('[STT] ❌ Google stream error:', error);
+    clearSttStreamForAllWithStream(eventId, stream);
     sendError(ws, 'STT_ERROR', 'Google Cloud stream error', { message: error.message });
   });
   stream.on('end', () => {
     console.log('[STT] Google stream ended');
-    session.sttStream = undefined;
+    clearSttStreamForAllWithStream(eventId, stream);
   });
   session.sttStream = stream;
   console.log('[STT] ✅ Google Cloud streaming initialized');
@@ -1465,10 +1483,15 @@ async function handleTranscriptionResult(
       );
     }
 
-    if (session.bibleMode) {
-      void runBiblePathAsync(session, transcriptionResult, receivedAt, processingStart, cleanedBuffer, logTiming).catch((err) => {
-        console.error('[WS] Bible path error:', err);
-      });
+    // Strict Bible vs Song: only one path per transcript
+    const itemType = currentItemType(session);
+    if (itemType === 'BIBLE') {
+      if (session.bibleMode) {
+        void runBiblePathAsync(session, transcriptionResult, receivedAt, processingStart, cleanedBuffer, logTiming).catch((err) => {
+          console.error('[WS] Bible path error:', err);
+        });
+      }
+      return; // On Bible item: only Bible path; skip song matching
     }
 
     if (!session.songContext) {
@@ -1476,7 +1499,7 @@ async function handleTranscriptionResult(
       return;
     }
 
-    // Fast path: song matching (never blocked by Bible)
+    // Song/Media/Announcement: only song matching (no Bible path)
     // Always log matcher attempt for debugging production issues
       console.log(`[WS] 🔍 Attempting match with buffer: "${cleanedBuffer.slice(0, 50)}..."`);
       console.log(`[WS] 🔍 Current song: "${session.songContext?.title || 'N/A'}"`);
