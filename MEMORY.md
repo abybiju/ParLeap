@@ -1,5 +1,24 @@
 # ParLeap AI - Memory Log
 
+## Session: February 19, 2026 — Railway backend build fix
+
+### What we did
+- **Backend build on Railway** was failing: `tsc` not found (Nixpacks non-login shell, PATH doesn’t include `node_modules/.bin`); `npx tsc` / `npx -p typescript tsc` either ran the wrong package or a separate TypeScript without project `node_modules`, causing TS7016/TS7006.
+- **Fix 1:** Use project TypeScript explicitly in `backend/package.json`: `"build": "node ../node_modules/typescript/bin/tsc"` and `"type-check": "node ../node_modules/typescript/bin/tsc --noEmit"` (no PATH/npx).
+- **Fix 2:** Railway runs `npm ci` without devDependencies. Moved **typescript**, **@types/express**, **@types/cors**, **@types/string-similarity** from devDependencies to **dependencies** so they are installed at build time and `tsc` finds declarations.
+- **Fix 3:** In `backend/src/index.ts`, imported Express types and typed all route/middleware handlers (`Request`, `Response`, `NextFunction`) so strict mode passes.
+
+### Outcome
+- Railway backend build succeeds. Local and CI build/type-check pass.
+
+### Key lesson
+- On Railway (and similar CI that skips devDependencies), anything needed at **build** time (TypeScript, @types used by tsc) must be in **dependencies**, not devDependencies. Use the project’s `node_modules/typescript/bin/tsc` so the same tsconfig and node_modules are used; avoid `npx tsc` (wrong package) and bare `tsc` (not on PATH in Nixpacks).
+
+### Docs
+- `RAILWAY_FIX.md` — new section “Railway Backend Build Fix (February 19, 2026)” with problem, solution, and “don’t revert to” notes.
+
+---
+
 ## Session: February 2026 — Songs UX, community templates, matcher, latency
 
 ### What we did
@@ -978,8 +997,8 @@ frontend/tailwind.config.ts               (new animations)
 
 ---
 
-**Last Updated:** February 18, 2026  
-**Status:** Songs UX: strict metadata + iTunes Auto-Fill, CCLI-only template fetch, community save dialog (max 3/CCLI), section labels in preview. Matcher: similar-line block (no premature advance). Live fixes: matcher crash on jump, Event Not Found, RATE_LIMITED. Latency instrumentation and docs. Hum-to-Search dual-path (YouTube-style + BasicPitch); templates structure-only.
+**Last Updated:** February 19, 2026  
+**Status:** Railway backend build fixed (tsc via project binary, TypeScript + @types in dependencies, Express handlers typed). Songs UX: strict metadata + iTunes Auto-Fill, CCLI-only template fetch, community save dialog (max 3/CCLI), section labels in preview. Matcher: similar-line block. Live fixes: matcher crash on jump, Event Not Found, RATE_LIMITED. Hum-to-Search dual-path (YouTube-style + BasicPitch); templates structure-only.
 
 ---
 
