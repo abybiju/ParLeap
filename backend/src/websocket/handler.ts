@@ -404,13 +404,6 @@ function sendError(ws: WebSocket, code: string, message: string, details?: unkno
   send(ws, errorMessage);
 }
 
-function currentItemType(session: SessionState): 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT' | null {
-  const items = session.setlistItems;
-  const idx = session.currentItemIndex ?? 0;
-  if (!items || idx < 0 || idx >= items.length) return null;
-  return items[idx].type;
-}
-
 /**
  * Smart Listen gate.
  *
