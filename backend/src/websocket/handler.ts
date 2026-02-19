@@ -444,6 +444,125 @@ function broadcastToEvent(eventId: string, message: ServerMessage): void {
   }
 }
 
+/**
+ * Build the initial DISPLAY_UPDATE for the session's current item/slide.
+ * Used so operator and projector show the first slide immediately when session starts.
+ */
+function buildInitialDisplayUpdate(
+  session: SessionState,
+  receivedAt: number,
+  processingStart: number
+): DisplayUpdateMessage | null {
+  const timing = createTiming(receivedAt, processingStart);
+  const itemIndex = session.currentItemIndex ?? 0;
+  const setlistItems = session.setlistItems ?? [];
+  const currentItem = setlistItems.length > 0 && itemIndex >= 0 && itemIndex < setlistItems.length
+    ? setlistItems[itemIndex]
+    : null;
+
+  if (currentItem?.type === 'BIBLE' && currentItem.bibleRef) {
+    const placeholderId = `bible:${currentItem.bibleRef.replace(/\s+/g, ':')}`;
+    return {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: currentItem.bibleRef,
+        slideText: currentItem.bibleRef,
+        slideLines: [currentItem.bibleRef],
+        slideIndex: 0,
+        lineIndex: 0,
+        songId: placeholderId,
+        songTitle: currentItem.bibleRef,
+        isAutoAdvance: false,
+        currentItemIndex: itemIndex,
+      },
+      timing,
+    };
+  }
+
+  if (currentItem?.type === 'SONG' && currentItem.songId) {
+    const songIndex = session.songs.findIndex((s) => s.id === currentItem.songId);
+    const targetSong = songIndex >= 0 ? session.songs[songIndex] : session.songs[0];
+    if (!targetSong) return null;
+    const slideIndex = Math.min(session.currentSlideIndex, (targetSong.slides?.length ?? 1) - 1);
+    const slide = targetSong.slides?.[slideIndex];
+    const slideText = slide?.slideText ?? targetSong.lines?.[slideIndex] ?? targetSong.lines?.[0] ?? '';
+    const slideLines = slide?.lines ?? (slideText ? [slideText] : [targetSong.lines?.[0] ?? '']);
+    return {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: slideLines[0] ?? '',
+        slideText,
+        slideLines,
+        slideIndex,
+        lineIndex: slide?.startLineIndex ?? slideIndex,
+        songId: targetSong.id,
+        songTitle: targetSong.title,
+        isAutoAdvance: false,
+        currentItemIndex: itemIndex,
+      },
+      timing,
+    };
+  }
+
+  if (currentItem?.type === 'MEDIA') {
+    const placeholderId = `media:${(currentItem as { mediaUrl?: string }).mediaUrl ?? 'placeholder'}`;
+    const mediaUrl = (currentItem as { mediaUrl?: string }).mediaUrl ?? '';
+    const urlLower = mediaUrl.toLowerCase();
+    const isVideo = /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(urlLower);
+    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(urlLower);
+    return {
+      type: 'DISPLAY_UPDATE',
+      payload: {
+        lineText: (currentItem as { mediaTitle?: string }).mediaTitle ?? 'Media',
+        slideText: (currentItem as { mediaTitle?: string }).mediaTitle ?? 'Media',
+        slideLines: [(currentItem as { mediaTitle?: string }).mediaTitle ?? 'Media'],
+        slideIndex: 0,
+        lineIndex: 0,
+        songId: placeholderId,
+        songTitle: (currentItem as { mediaTitle?: string }).mediaTitle ?? 'Media',
+        isAutoAdvance: false,
+        currentItemIndex: itemIndex,
+        slideImageUrl: isImage ? mediaUrl : undefined,
+        slideVideoUrl: isVideo ? mediaUrl : undefined,
+        displayType: isVideo ? 'video' : isImage ? 'image' : 'lyrics',
+      },
+      timing,
+    };
+  }
+
+  if (currentItem?.type === 'ANNOUNCEMENT' && (currentItem as { announcementSlides?: unknown[] }).announcementSlides?.length) {
+    const slides = (currentItem as { announcementSlides: AnnouncementSlide[] }).announcementSlides;
+    const slide = slides[0];
+    const placeholderId = `announcement:${(currentItem as { id?: string }).id}`;
+    return {
+      type: 'DISPLAY_UPDATE',
+      payload: buildAnnouncementPayload(slide, placeholderId, 0, itemIndex, false),
+      timing,
+    };
+  }
+
+  // Fallback: no setlistItems or unknown type — use first song, first slide
+  const firstSong = session.songs[0];
+  if (!firstSong) return null;
+  const slideText = firstSong.slides?.[0]?.slideText ?? firstSong.lines?.[0] ?? '';
+  const slideLines = firstSong.slides?.[0]?.lines ?? [slideText];
+  return {
+    type: 'DISPLAY_UPDATE',
+    payload: {
+      lineText: slideLines[0] ?? '',
+      slideText,
+      slideLines,
+      slideIndex: 0,
+      lineIndex: 0,
+      songId: firstSong.id,
+      songTitle: firstSong.title,
+      isAutoAdvance: false,
+      currentItemIndex: 0,
+    },
+    timing,
+  };
+}
+
 async function getBibleVerseCached(
   session: SessionState,
   reference: BibleReference,
@@ -745,9 +864,6 @@ async function handleStartSession(
     console.warn('[WS] ⚠️  ElevenLabs selected but ELEVENLABS_API_KEY not set in backend/.env');
   }
 
-  // No initial display: main screen stays "waiting" until first DISPLAY_UPDATE from matching (song or Bible).
-  const displayUpdate: DisplayUpdateMessage | null = null;
-
   const response: SessionStartedMessage = {
     type: 'SESSION_STARTED',
     payload: {
@@ -773,8 +889,10 @@ async function handleStartSession(
 
   send(ws, response);
 
-  if (displayUpdate) {
-    broadcastToEvent(session.eventId, displayUpdate);
+  // Send initial DISPLAY_UPDATE so operator and projector show first slide immediately (no "Waiting for session to start").
+  const initialDisplay = buildInitialDisplayUpdate(session, receivedAt, processingStart);
+  if (initialDisplay) {
+    broadcastToEvent(session.eventId, initialDisplay);
   }
 
   console.log(`[WS] Session started: ${sessionId} with ${session.songs.length} songs (synced to song ${currentSongIndex}, slide ${currentSlideIndex})`);
