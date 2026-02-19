@@ -372,4 +372,112 @@ describe('WebSocket Handler', () => {
       ).resolves.not.toThrow();
     });
   });
+
+  describe('Decouple Live From Setlist Order (Bible Mode & setlist)', () => {
+    it('SESSION_STARTED reflects bibleMode false from event data', async () => {
+      const eventIdA = '123e4567-e89b-12d3-a456-426614174001';
+      const { fetchEventData } = await import('../../services/eventService');
+      (fetchEventData as jest.Mock).mockResolvedValue({
+        id: 'test-event',
+        name: 'Test Event',
+        bibleMode: false,
+        songs: [
+          { id: 'song-1', title: 'Song 1', lines: ['Line 1', 'Line 2'] },
+        ],
+        setlistItems: [{ id: 'item-1', type: 'SONG' as const, songId: 'song-1' }],
+      });
+
+      const socket = {
+        readyState: 1,
+        OPEN: 1,
+        send: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn(),
+      };
+
+      await handleMessage(socket as WebSocket, JSON.stringify({
+        type: 'START_SESSION',
+        payload: { eventId: eventIdA },
+      }));
+
+      const sessionStarted = socket.send.mock.calls.find(
+        (call: unknown[]) => JSON.parse(call[0] as string).type === 'SESSION_STARTED'
+      );
+      expect(sessionStarted).toBeDefined();
+      const payload = JSON.parse(sessionStarted![0] as string).payload;
+      expect(payload.bibleMode).toBe(false);
+    });
+
+    it('SESSION_STARTED reflects bibleMode true from event data', async () => {
+      const eventIdB = '123e4567-e89b-12d3-a456-426614174002';
+      const { fetchEventData } = await import('../../services/eventService');
+      (fetchEventData as jest.Mock).mockResolvedValue({
+        id: 'test-event',
+        name: 'Test Event',
+        bibleMode: true,
+        songs: [
+          { id: 'song-1', title: 'Song 1', lines: ['Line 1', 'Line 2'] },
+        ],
+        setlistItems: [{ id: 'item-1', type: 'SONG' as const, songId: 'song-1' }],
+      });
+
+      const socket = {
+        readyState: 1,
+        OPEN: 1,
+        send: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn(),
+      };
+
+      await handleMessage(socket as WebSocket, JSON.stringify({
+        type: 'START_SESSION',
+        payload: { eventId: eventIdB },
+      }));
+
+      const sessionStarted = socket.send.mock.calls.find(
+        (call: unknown[]) => JSON.parse(call[0] as string).type === 'SESSION_STARTED'
+      );
+      expect(sessionStarted).toBeDefined();
+      const payload = JSON.parse(sessionStarted![0] as string).payload;
+      expect(payload.bibleMode).toBe(true);
+    });
+
+    it('disordered setlist: currentSongIndex follows first setlist item (not songs array order)', async () => {
+      const eventIdC = '123e4567-e89b-12d3-a456-426614174003';
+      const { fetchEventData } = await import('../../services/eventService');
+      (fetchEventData as jest.Mock).mockResolvedValue({
+        id: 'test-event',
+        name: 'Test Event',
+        songs: [
+          { id: 'song-a', title: 'Song A', lines: ['A1', 'A2'] },
+          { id: 'song-b', title: 'Song B', lines: ['B1', 'B2'] },
+        ],
+        setlistItems: [
+          { id: 'item-1', type: 'SONG' as const, songId: 'song-b' },
+          { id: 'item-2', type: 'SONG' as const, songId: 'song-a' },
+        ],
+      });
+
+      const socket = {
+        readyState: 1,
+        OPEN: 1,
+        send: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn(),
+      };
+
+      await handleMessage(socket as WebSocket, JSON.stringify({
+        type: 'START_SESSION',
+        payload: { eventId: eventIdC },
+      }));
+
+      const sessionStarted = socket.send.mock.calls.find(
+        (call: unknown[]) => JSON.parse(call[0] as string).type === 'SESSION_STARTED'
+      );
+      expect(sessionStarted).toBeDefined();
+      const payload = JSON.parse(sessionStarted![0] as string).payload;
+      expect(payload.currentSongIndex).toBe(1);
+      expect(payload.setlistItems).toHaveLength(2);
+    });
+  });
 });
