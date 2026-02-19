@@ -177,8 +177,19 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
   // Show waiting state if no slide yet
   if (!currentSlide) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-        <div className="text-center">
+      <div className="h-screen w-screen relative flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+        {backgroundImageUrl && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */}
+            <img
+              src={backgroundImageUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
+            />
+            <div className="absolute inset-0 bg-black/40 z-[1]" aria-hidden />
+          </>
+        )}
+        <div className="relative z-10 text-center">
           <p className="text-2xl text-slate-400">Waiting for session to start...</p>
           {sessionStarted && (
             <p className="text-sm text-slate-500 mt-2">Session started, waiting for display update...</p>

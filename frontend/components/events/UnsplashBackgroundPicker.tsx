@@ -5,6 +5,7 @@ import { Search } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -79,6 +80,9 @@ export function UnsplashBackgroundPicker({
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col bg-slate-900 border-white/10 text-white">
         <DialogHeader>
           <DialogTitle className="text-white">Search Unsplash</DialogTitle>
+          <DialogDescription className="sr-only">
+            Search for a background image for the projector. Results from Unsplash.
+          </DialogDescription>
         </DialogHeader>
         <p className="text-sm text-slate-400">
           Choose a background image for the projector. Photo by photographer on Unsplash.

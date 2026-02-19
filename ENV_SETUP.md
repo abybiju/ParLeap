@@ -27,6 +27,10 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 UNSPLASH_ACCESS_KEY=your_unsplash_access_key_here
 ```
 
+**Vercel (production):** Add `UNSPLASH_ACCESS_KEY` in the **project** that deploys the frontend (Project → Settings → Environment Variables), not only in Team settings. Then trigger a **Redeploy** so the new variable is available to the API route.
+
+**Projector showing the background:** The event background image is sent to the projector by the **backend** (WebSocket) in `SESSION_STARTED`. Redeploy the backend (e.g. Railway) so it runs the code that loads `events.background_image_url` and includes it in the session payload; otherwise the projector will not receive the background URL.
+
 ## Backend Environment Variables
 
 Create `/backend/.env` with the following:
