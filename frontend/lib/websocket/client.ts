@@ -220,7 +220,7 @@ class WebSocketClient {
   /**
    * Send UPDATE_EVENT_SETTINGS message
    */
-  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null }): void {
+  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null; backgroundMediaType?: string | null }): void {
     this.send({ type: 'UPDATE_EVENT_SETTINGS', payload: settings });
   }
 

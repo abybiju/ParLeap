@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LayoutList, Library, ImagePlus, X } from 'lucide-react';
+import { ArrowLeft, LayoutList, Library, ImagePlus, X, Upload, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EventFormCompact } from './EventFormCompact';
 import { UnsplashBackgroundPicker } from './UnsplashBackgroundPicker';
 import { updateEventBackground } from '@/app/events/actions';
+import { validateEventBackgroundFile, uploadEventBackgroundAsset } from '@/lib/utils/eventBackgroundUpload';
+import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 type EventEditView = 'setlist' | 'library';
@@ -20,6 +22,7 @@ interface EventEditSidebarProps {
     event_date: string | null;
     status: 'draft' | 'live' | 'ended';
     background_image_url?: string | null;
+    background_media_type?: string | null;
   };
   setlistItemCount: number;
   activeView: EventEditView;
@@ -34,15 +37,51 @@ export function EventEditSidebar({
 }: EventEditSidebarProps) {
   const router = useRouter();
   const [unsplashOpen, setUnsplashOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const backgroundUrl = event.background_image_url ?? null;
+  const backgroundMediaType = event.background_media_type ?? null;
 
   const handleClearBackground = async () => {
-    const result = await updateEventBackground(event.id, null);
+    const result = await updateEventBackground(event.id, null, null);
     if (result.success) {
       toast.success('Background cleared');
       router.refresh();
     } else {
       toast.error(result.error || 'Failed to clear');
+    }
+  };
+
+  const handleDeviceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const validation = validateEventBackgroundFile(file);
+    if (!validation.valid) {
+      toast.error(validation.error ?? 'Invalid file');
+      return;
+    }
+    setUploading(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Not authenticated');
+        return;
+      }
+      const publicUrl = await uploadEventBackgroundAsset(file, user.id, event.id);
+      const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+      const result = await updateEventBackground(event.id, publicUrl, mediaType);
+      if (result.success) {
+        toast.success(mediaType === 'video' ? 'Background video set' : 'Background image set');
+        router.refresh();
+      } else {
+        toast.error(result.error || 'Failed to set background');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -65,14 +104,33 @@ export function EventEditSidebar({
         {backgroundUrl ? (
           <div className="space-y-2">
             <div className="relative aspect-video rounded-lg overflow-hidden border border-white/10 bg-slate-800">
-              {/* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */}
-              <img
-                src={backgroundUrl}
-                alt="Projector background"
-                className="w-full h-full object-cover"
-              />
+              {backgroundMediaType === 'video' ? (
+                <>
+                  <video
+                    src={backgroundUrl}
+                    muted
+                    loop
+                    playsInline
+                    className="w-full h-full object-cover"
+                    aria-label="Projector background video"
+                  />
+                  <div className="absolute bottom-1 right-1 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-slate-300">
+                    <Video className="h-3 w-3" />
+                    Video
+                  </div>
+                </>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element -- dynamic event background URL */
+                <img
+                  src={backgroundUrl}
+                  alt="Projector background"
+                  className="w-full h-full object-cover"
+                />
+              )}
             </div>
-            <p className="text-[10px] text-slate-500">Photo from Unsplash (attribution on projector optional)</p>
+            <p className="text-[10px] text-slate-500">
+              {backgroundMediaType === 'video' ? 'Video from device' : 'Photo from Unsplash or device (attribution optional)'}
+            </p>
             <Button
               type="button"
               variant="outline"
@@ -87,16 +145,37 @@ export function EventEditSidebar({
         ) : (
           <p className="text-xs text-slate-500">Optional image behind lyrics on the projector.</p>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setUnsplashOpen(true)}
-          className="w-full border-white/10 text-slate-300 hover:bg-white/10"
-        >
-          <ImagePlus className="h-3 w-3 mr-1" />
-          {backgroundUrl ? 'Change image' : 'Search Unsplash'}
-        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={handleDeviceFile}
+          aria-label="Add background from device"
+        />
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setUnsplashOpen(true)}
+            className="flex-1 border-white/10 text-slate-300 hover:bg-white/10"
+          >
+            <ImagePlus className="h-3 w-3 mr-1" />
+            {backgroundUrl ? 'Change' : 'Unsplash'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 border-white/10 text-slate-300 hover:bg-white/10"
+          >
+            <Upload className="h-3 w-3 mr-1" />
+            {uploading ? 'Uploading…' : 'From device'}
+          </Button>
+        </div>
       </div>
 
       <UnsplashBackgroundPicker

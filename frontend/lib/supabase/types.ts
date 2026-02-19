@@ -86,6 +86,7 @@ export interface Database {
           bible_mode: boolean
           bible_version_id: string | null
           background_image_url: string | null
+          background_media_type: string | null
           created_at: string
           updated_at: string
         }
@@ -99,6 +100,7 @@ export interface Database {
           bible_mode?: boolean
           bible_version_id?: string | null
           background_image_url?: string | null
+          background_media_type?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -112,6 +114,7 @@ export interface Database {
           bible_mode?: boolean
           bible_version_id?: string | null
           background_image_url?: string | null
+          background_media_type?: string | null
           updated_at?: string
         }
         Relationships: [

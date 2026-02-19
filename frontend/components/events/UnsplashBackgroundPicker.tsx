@@ -60,7 +60,7 @@ export function UnsplashBackgroundPicker({
     async (url: string) => {
       setSaving(true);
       try {
-        const result = await updateEventBackground(eventId, url);
+        const result = await updateEventBackground(eventId, url, 'image');
         if (!result.success) {
           toast.error(result.error || 'Failed to set background');
           return;

@@ -18,6 +18,7 @@ interface LivePageClientProps {
   bibleMode?: boolean;
   bibleVersionId?: string | null;
   initialBackgroundImageUrl?: string | null;
+  initialBackgroundMediaType?: string | null;
   initialSetlist: InitialSetlistItem[];
   hasSupabaseMismatch: boolean;
   frontendProjectRef: string | null;
@@ -37,6 +38,7 @@ export function LivePageClient({
   bibleMode = false,
   bibleVersionId = null,
   initialBackgroundImageUrl = null,
+  initialBackgroundMediaType = null,
   initialSetlist,
   hasSupabaseMismatch,
   frontendProjectRef,
@@ -154,6 +156,7 @@ export function LivePageClient({
       initialBibleMode={bibleMode}
       initialBibleVersionId={bibleVersionId}
       initialBackgroundImageUrl={initialBackgroundImageUrl}
+      initialBackgroundMediaType={initialBackgroundMediaType}
       initialSetlist={initialSetlist}
     />
   );

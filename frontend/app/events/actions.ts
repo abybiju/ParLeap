@@ -135,7 +135,8 @@ export async function updateEvent(id: string, formData: FormData): Promise<Actio
 
 export async function updateEventBackground(
   eventId: string,
-  backgroundImageUrl: string | null
+  backgroundImageUrl: string | null,
+  backgroundMediaType?: string | null
 ): Promise<ActionResult> {
   const { supabase, user, error } = await requireUser();
   if (!user) {
@@ -147,9 +148,16 @@ export async function updateEventBackground(
     return { success: false, error: ownership.error };
   }
 
+  const updates: Record<string, unknown> = { background_image_url: backgroundImageUrl };
+  if (backgroundMediaType !== undefined) {
+    updates.background_media_type = backgroundMediaType;
+  } else if (backgroundImageUrl === null) {
+    updates.background_media_type = null;
+  }
+
   const { error: updateError } = await (supabase
     .from('events') as ReturnType<typeof supabase.from>)
-    .update({ background_image_url: backgroundImageUrl } as Record<string, unknown>)
+    .update(updates)
     .eq('id', eventId)
     .eq('user_id', user.id);
 

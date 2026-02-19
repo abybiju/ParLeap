@@ -321,6 +321,7 @@ interface SessionState {
   bibleMode?: boolean;
   bibleVersionId?: string | null;
   backgroundImageUrl?: string | null;
+  backgroundMediaType?: string | null;
   bibleFollow?: boolean;
   bibleFollowRef?: BibleReference | null;
   bibleFollowHit?: {
@@ -679,6 +680,7 @@ async function handleStartSession(
     bibleMode: existingSession?.bibleMode ?? eventData.bibleMode ?? false,
     bibleVersionId: existingSession?.bibleVersionId ?? eventData.bibleVersionId ?? null,
     backgroundImageUrl: existingSession?.backgroundImageUrl ?? eventData.backgroundImageUrl ?? null,
+    backgroundMediaType: existingSession?.backgroundMediaType ?? eventData.backgroundMediaType ?? null,
     bibleFollow: existingSession?.bibleFollow ?? false,
     bibleFollowRef: existingSession?.bibleFollowRef ?? null,
     bibleFollowHit: undefined,
@@ -857,6 +859,7 @@ async function handleStartSession(
       bibleMode: session.bibleMode ?? false,
       bibleVersionId: session.bibleVersionId ?? null,
       backgroundImageUrl: session.backgroundImageUrl ?? null,
+      backgroundMediaType: session.backgroundMediaType ?? null,
       bibleFollow: session.bibleFollow ?? false,
       totalSongs: session.songs.length,
       currentSongIndex,
@@ -884,7 +887,7 @@ async function handleStartSession(
  */
 function handleUpdateEventSettings(
   ws: WebSocket,
-  settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null },
+  settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null; backgroundMediaType?: string | null },
   receivedAt: number
 ): void {
   const processingStart = Date.now();
@@ -899,6 +902,9 @@ function handleUpdateEventSettings(
   }
   if (settings.backgroundImageUrl !== undefined) {
     session.backgroundImageUrl = settings.backgroundImageUrl;
+  }
+  if (settings.backgroundMediaType !== undefined) {
+    session.backgroundMediaType = settings.backgroundMediaType;
   }
   if (settings.smartListenEnabled !== undefined) {
     session.smartListenEnabled = settings.smartListenEnabled;
@@ -931,6 +937,7 @@ function handleUpdateEventSettings(
       bibleVersionId: session.bibleVersionId ?? null,
       bibleFollow: session.bibleFollow ?? false,
       backgroundImageUrl: session.backgroundImageUrl ?? null,
+      backgroundMediaType: session.backgroundMediaType ?? null,
     },
     timing: createTiming(receivedAt, processingStart),
   };
@@ -1007,6 +1014,7 @@ async function runBiblePathAsync(
           bibleVersionId: session.bibleVersionId ?? null,
           bibleFollow: session.bibleFollow ?? false,
           backgroundImageUrl: session.backgroundImageUrl ?? null,
+          backgroundMediaType: session.backgroundMediaType ?? null,
         },
         timing: createTiming(receivedAt, processingStart),
       };
@@ -1122,6 +1130,7 @@ async function runBiblePathAsync(
         bibleVersionId: session.bibleVersionId ?? null,
         bibleFollow: session.bibleFollow ?? false,
         backgroundImageUrl: session.backgroundImageUrl ?? null,
+        backgroundMediaType: session.backgroundMediaType ?? null,
       },
       timing: createTiming(receivedAt, processingStart),
     };
