@@ -417,14 +417,12 @@ function currentItemType(session: SessionState): 'SONG' | 'BIBLE' | 'MEDIA' | 'A
  * Gate is active when:
  *   (1) server kill switch is NOT set
  *   (2) client opted in via smartListenEnabled: true
- *   (3) bibleMode is enabled AND current setlist item is non-SONG (Bible/Media)
+ *   (3) bibleMode is enabled (no setlist item type dependency)
  */
 function shouldUseSmartListenGate(session: SessionState): boolean {
   if (BIBLE_SMART_LISTEN_KILL_SWITCH) return false; // Server forcibly disabled
   if (session.smartListenEnabled !== true) return false;
   if (session.bibleMode !== true) return false;
-  const type = currentItemType(session);
-  if (!type || type === 'SONG') return false;
   return true;
 }
 
@@ -877,9 +875,9 @@ async function handleStartSession(
       backgroundMediaType: session.backgroundMediaType ?? null,
       bibleFollow: session.bibleFollow ?? false,
       totalSongs: session.songs.length,
-      currentSongIndex,
+      currentSongIndex: session.currentSongIndex,
       currentItemIndex: session.currentItemIndex,
-      currentSlideIndex,
+      currentSlideIndex: session.currentSlideIndex,
       setlist: setlistPayload,
       setlistItems: session.setlistItems,
       initialDisplay: undefined,
@@ -1509,23 +1507,16 @@ async function handleTranscriptionResult(
       );
     }
 
-    // Strict Bible vs Song: only one path per transcript
-    const itemType = currentItemType(session);
-    if (itemType === 'BIBLE') {
-      if (session.bibleMode) {
+    // Route by Bible Mode only (setlist order does not control live matching).
+    // When Bible Mode is ON: Bible path eligible (ref in transcript or already following). Otherwise: song path only.
+    if (session.bibleMode) {
+      const bibleRefInTranscript = findBibleReference(trimmedText) ?? findBibleReference(cleanedBuffer);
+      if (bibleRefInTranscript || session.bibleFollow) {
         void runBiblePathAsync(session, transcriptionResult, receivedAt, processingStart, cleanedBuffer, logTiming).catch((err) => {
           console.error('[WS] Bible path error:', err);
         });
+        return;
       }
-      return; // On Bible item: only Bible path; skip song matching
-    }
-    // Bible mode on but current item is song: if transcript contains a verse reference, run Bible path so verse shows
-    const bibleRefInTranscript = findBibleReference(trimmedText) ?? findBibleReference(cleanedBuffer);
-    if (session.bibleMode && bibleRefInTranscript) {
-      void runBiblePathAsync(session, transcriptionResult, receivedAt, processingStart, cleanedBuffer, logTiming).catch((err) => {
-        console.error('[WS] Bible path error:', err);
-      });
-      return;
     }
 
     if (!session.songContext) {
@@ -1607,7 +1598,8 @@ async function handleTranscriptionResult(
 
         // PHASE 1: Handle song switch suggestions with debouncing
         const SONG_SWITCH_COOLDOWN_MS = 3000; // 3 seconds cooldown after any song switch
-        const SONG_SWITCH_DEBOUNCE_MATCHES = 2; // Require 2 consecutive matches before switching
+        const SONG_SWITCH_DEBOUNCE_MATCHES = 3; // Require 3 consecutive matches to reduce noise-triggered jumps
+        const SONG_SWITCH_MIN_CONFIDENCE = 0.58; // Min confidence for auto-switch (tuned to reduce false positives)
 
         if (multiSongResult.suggestedSongSwitch && session.isAutoFollowing) {
           const suggestion = multiSongResult.suggestedSongSwitch;
@@ -1624,9 +1616,8 @@ async function handleTranscriptionResult(
             console.log(`[WS] 🔁 Song switch suggestion sustained (${session.suggestedSongSwitch.matchCount}/${SONG_SWITCH_DEBOUNCE_MATCHES}): "${suggestion.songTitle}"`);
 
             // DEBOUNCING: Only switch after N consecutive matches (prevents false positives)
-            // LOWERED THRESHOLD: Auto-switch at 50%+ confidence (user requested immediate switching)
             if (session.suggestedSongSwitch.matchCount >= SONG_SWITCH_DEBOUNCE_MATCHES && 
-                suggestion.confidence >= 0.50) {
+                suggestion.confidence >= SONG_SWITCH_MIN_CONFIDENCE) {
               // AUTO-SWITCH: Reasonable confidence + sustained match
               console.log(`[WS] 🎵 AUTO-SWITCHING to song "${suggestion.songTitle}" (sustained ${session.suggestedSongSwitch.matchCount} matches @ ${(suggestion.confidence * 100).toFixed(1)}%)`);
               
@@ -1642,6 +1633,7 @@ async function handleTranscriptionResult(
                 session.songs[suggestion.songIndex],
                 suggestion.matchedLineIndex
               );
+              session.currentLineIndex = suggestion.matchedLineIndex; // Keep in sync so backward-block uses correct line after switch
               session.rollingBuffer = ''; // Clear buffer on song change
               session.lastSongSwitchAt = now;
               session.lastStrongMatchAt = now;
@@ -1700,8 +1692,8 @@ async function handleTranscriptionResult(
               console.log(`[WS] 📤 Sending DISPLAY_UPDATE for auto-switch: ${slideLines.length} lines - "${slideText.substring(0, 50)}..."`);
               broadcastToEvent(session.eventId, displayMsg);
               return; // Exit early after song switch
-            } else if (suggestion.confidence < 0.50) {
-              // SUGGEST: Low confidence - notify operator but don't auto-switch
+            } else if (suggestion.confidence < SONG_SWITCH_MIN_CONFIDENCE) {
+              // SUGGEST: Below auto-switch threshold - notify operator but don't auto-switch
               const suggestionMsg: import('../types/websocket').SongSuggestionMessage = {
                 type: 'SONG_SUGGESTION',
                 payload: {
@@ -1727,7 +1719,7 @@ async function handleTranscriptionResult(
             console.log(`[WS] 🎵 New song switch suggestion: "${suggestion.songTitle}" @ ${(suggestion.confidence * 100).toFixed(1)}% (1/${SONG_SWITCH_DEBOUNCE_MATCHES})`);
 
             // Send suggestion toast for low confidence (below auto-switch threshold)
-            if (suggestion.confidence < 0.50) {
+            if (suggestion.confidence < SONG_SWITCH_MIN_CONFIDENCE) {
               const suggestionMsg: import('../types/websocket').SongSuggestionMessage = {
                 type: 'SONG_SUGGESTION',
                 payload: {
@@ -1908,10 +1900,10 @@ async function handleTranscriptionResult(
         // Only broadcast DISPLAY_UPDATE when slide actually changes
         const slideChanged = newSlideIndex !== session.currentSlideIndex;
         // Block only when we're going backward in song content (line index), not just slide index.
-        // This allows advancing to the next line even when line-to-slide mapping puts it on a lower
-        // slide. Block when: slide would go down AND we're not strictly advancing in line index.
-        const advancingInContent =
-          typeof session.currentLineIndex === 'number' && matchedLineIndex > session.currentLineIndex;
+        // Use effective current line (session + songContext) to avoid stale index after auto-switch.
+        const effectiveCurrentLine =
+          typeof session.currentLineIndex === 'number' ? session.currentLineIndex : session.songContext?.currentLineIndex ?? 0;
+        const advancingInContent = matchedLineIndex > effectiveCurrentLine;
         const wouldGoToLowerSlide =
           slideChanged && newSlideIndex < session.currentSlideIndex;
         const shouldBlockBackward =
@@ -1919,7 +1911,7 @@ async function handleTranscriptionResult(
 
         if (shouldBlockBackward) {
           console.warn(
-            `[WS] ⚠️  BLOCKED BACKWARD SLIDE: line ${matchedLineIndex} < current line ${session.currentLineIndex} (repeated lyrics detected)`
+            `[WS] ⚠️  BLOCKED BACKWARD SLIDE: line ${matchedLineIndex} < current line ${effectiveCurrentLine} (repeated lyrics detected)`
           );
           console.warn(
             `[WS] Matched line: "${matchResult.matchedText.slice(0, 50)}..." - staying on current slide to prevent confusion`

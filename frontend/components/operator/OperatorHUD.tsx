@@ -124,11 +124,8 @@ export function OperatorHUD({
   const slideCache = useSlideCache();
   const lastSentSmartListenRef = useRef<boolean | null>(null);
 
-  // Smart Listen gate rules:
-  // - Bible mode ON: gate non-SONG items (Bible/Media) to avoid wake on random speech.
-  // - Bible mode OFF: never gate (songs run continuous; Bible items treated like songs for reliability).
-  const effectiveSmartListen =
-    smartListenMasterEnabled && bibleMode && !isSongLikeItem(activeItemType);
+  // Smart Listen gate: active when master on and Bible Mode on (no setlist item dependency).
+  const effectiveSmartListen = smartListenMasterEnabled && bibleMode;
 
   const audioCapture = useAudioCapture({
     usePcm: sttProvider === 'elevenlabs' || sttProvider === 'google',
@@ -144,14 +141,10 @@ export function OperatorHUD({
   });
 
   // Callback from SetlistPanel when operator clicks a setlist item.
-  // Immediately updates active item state so Smart Listen switches between
-  // SONG bypass (continuous) and non-SONG gating without waiting for backend.
   const handleItemActivated = (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT') => {
     setCurrentItemIndex(index);
     setActiveItemType(kind);
-    console.log(
-      `[OperatorHUD] Item activated: index=${index} kind=${kind} → effectiveSmartListen=${smartListenMasterEnabled && bibleMode && !isSongLikeItem(kind)}`
-    );
+    console.log(`[OperatorHUD] Item activated: index=${index} kind=${kind} → effectiveSmartListen=${effectiveSmartListen}`);
   };
 
   // Sync active setlist item from backend messages.
@@ -190,10 +183,8 @@ export function OperatorHUD({
     }
     updateEventSettings({ smartListenEnabled: effectiveSmartListen });
     lastSentSmartListenRef.current = effectiveSmartListen;
-    console.log(
-      `[OperatorHUD] Smart Listen sync: effective=${effectiveSmartListen}, master=${smartListenMasterEnabled}, itemType=${activeItemType}, itemIndex=${currentItemIndex}`
-    );
-  }, [sessionStatus, effectiveSmartListen, smartListenMasterEnabled, activeItemType, currentItemIndex, updateEventSettings]);
+    console.log(`[OperatorHUD] Smart Listen sync: effective=${effectiveSmartListen}, master=${smartListenMasterEnabled}, bibleMode=${bibleMode}`);
+  }, [sessionStatus, effectiveSmartListen, smartListenMasterEnabled, bibleMode, updateEventSettings]);
 
   // Environment variable validation and debug logging
   useEffect(() => {
@@ -703,9 +694,9 @@ export function OperatorHUD({
                 setSmartListenMasterEnabled(next);
                 const msg = next
                   ? bibleMode
-                    ? 'Smart Listen on: Bible items gated; songs stay bypassed'
-                    : 'Smart Listen on: songs stay bypassed'
-                  : 'Smart Listen off: STT stays continuous';
+                    ? 'Smart Listen on (Bible Mode gated)'
+                    : 'Smart Listen on when Bible Mode is on'
+                  : 'Smart Listen off: STT continuous';
                 toast.info(msg);
               }}
               className={cn(
@@ -720,17 +711,15 @@ export function OperatorHUD({
                 !smartListenMasterEnabled
                   ? 'Smart Listen disabled (continuous STT)'
                   : effectiveSmartListen
-                  ? 'Smart Listen active for current non-SONG item'
-                  : bibleMode
-                  ? 'Bible mode gated (non-songs)'
-                  : 'Smart Listen bypassed'
+                  ? 'Smart Listen active (Bible Mode on)'
+                  : 'Bible Mode off: STT continuous'
               }
             >
               {!smartListenMasterEnabled ? 'Off' : effectiveSmartListen ? 'On' : 'Bypass'}
             </button>
             {smartListenMasterEnabled && !effectiveSmartListen && (
-              <span className="text-[10px] text-sky-300" title={`Current item ${activeItemType} runs continuous STT`}>
-                {activeItemType}
+              <span className="text-[10px] text-sky-300" title="Bible Mode off: STT continuous">
+                Bible off
               </span>
             )}
             {effectiveSmartListen && sessionStatus === 'active' && audioCapture.requestSttWindow && (
