@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
@@ -42,7 +42,7 @@ interface RateLimitState {
 
 const httpRateLimits = new Map<string, RateLimitState>();
 
-function getClientKey(req: express.Request): string {
+function getClientKey(req: Request): string {
   const forwardedFor = req.headers['x-forwarded-for'];
   if (typeof forwardedFor === 'string') {
     return forwardedFor.split(',')[0]?.trim() || 'unknown';
@@ -88,7 +88,7 @@ console.log('🌐 CORS allowed origins:', corsLog);
 // Increase body size limit to 10MB for audio uploads
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
   res.on('finish', () => {
     const durationMs = Date.now() - start;
@@ -96,7 +96,7 @@ app.use((req, res, next) => {
   });
   next();
 });
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   const key = getClientKey(req);
   if (isHttpRateLimited(key)) {
     res.status(429).json({ error: 'Rate limit exceeded' });
@@ -106,7 +106,7 @@ app.use((req, res, next) => {
 });
 
 // Root endpoint
-app.get('/', (_req, res) => {
+app.get('/', (_req: Request, res: Response) => {
   res.json({
     service: 'ParLeap Backend API',
     status: 'running',
@@ -131,7 +131,7 @@ app.get('/', (_req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -143,7 +143,7 @@ app.get('/health', (_req, res) => {
 });
 
 // Debug: show raw event_items for an event (temporary diagnostic)
-app.get('/api/debug/event-items/:eventId', async (req, res) => {
+app.get('/api/debug/event-items/:eventId', async (req: Request, res: Response) => {
   const supabase = getSupabaseClient();
   if (!isSupabaseConfigured() || !supabase) {
     res.json({ error: 'Supabase not configured' });
@@ -159,7 +159,7 @@ app.get('/api/debug/event-items/:eventId', async (req, res) => {
 });
 
 // Community template endpoints (structure-only)
-app.post('/api/templates', async (req, res) => {
+app.post('/api/templates', async (req: Request, res: Response) => {
   const { ccliNumber, lineCount, sections = [], slides = [], linesPerSlide, sourceVersion, userId } = req.body || {};
   if (!ccliNumber || !lineCount || !Array.isArray(slides)) {
     res.status(400).json({ error: 'ccliNumber, lineCount, slides are required' });
@@ -187,7 +187,7 @@ app.post('/api/templates', async (req, res) => {
   res.json({ success: true, id: result.id, structureHash: result.id ? getStructureHash({ ccliNumber, lineCount, linesPerSlide, sections, slides, sourceVersion }) : null });
 });
 
-app.get('/api/templates', async (req, res) => {
+app.get('/api/templates', async (req: Request, res: Response) => {
   const ccli = req.query.ccli as string | undefined;
   const lineCount = req.query.lineCount ? Number(req.query.lineCount) : undefined;
   if (!ccli) {
@@ -198,7 +198,7 @@ app.get('/api/templates', async (req, res) => {
   res.json({ templates });
 });
 
-app.post('/api/templates/:id/vote', async (req, res) => {
+app.post('/api/templates/:id/vote', async (req: Request, res: Response) => {
   const { id } = req.params;
   const { userId, vote } = req.body || {};
   if (!id || !vote) {
@@ -214,7 +214,7 @@ app.post('/api/templates/:id/vote', async (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/templates/:id/usage', async (req, res) => {
+app.post('/api/templates/:id/usage', async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) {
     res.status(400).json({ error: 'template id required' });
@@ -225,7 +225,7 @@ app.post('/api/templates/:id/usage', async (req, res) => {
 });
 
 // Smart Paste / Auto-Format: extract and structure lyrics from raw text (OpenAI gpt-4o-mini)
-app.post('/api/format-song', async (req, res) => {
+app.post('/api/format-song', async (req: Request, res: Response) => {
   try {
     if (!isFormatSongEnabled()) {
       res.status(503).json({ error: 'Auto-format is not configured. Set OPENAI_API_KEY on the backend.' });
@@ -258,7 +258,7 @@ app.post('/api/format-song', async (req, res) => {
 
 // Hum-to-Search endpoint
 // Accepts audio as base64 WAV in JSON body
-app.post('/api/hum-search', async (req, res) => {
+app.post('/api/hum-search', async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
     const { audio, limit = 5, threshold = 0.5 } = req.body;
@@ -342,7 +342,7 @@ app.post('/api/hum-search', async (req, res) => {
 });
 
 // Job status endpoint - always return 200 with status in body so client can show real errors
-app.get('/api/hum-search/:jobId', (req, res) => {
+app.get('/api/hum-search/:jobId', (req: Request, res: Response) => {
   try {
     const { jobId } = req.params;
     const job = getJobStatus(jobId);
@@ -384,11 +384,11 @@ app.get('/api/hum-search/:jobId', (req, res) => {
 });
 
 // Live hum-to-search (YouTube-style: stream chunks, match on the go). Requires EMBEDDING_SERVICE_URL.
-app.get('/api/hum-search/live/available', (_req, res) => {
+app.get('/api/hum-search/live/available', (_req: Request, res: Response) => {
   res.json({ available: isLiveHumAvailable() });
 });
 
-app.post('/api/hum-search/live/start', (_req, res) => {
+app.post('/api/hum-search/live/start', (_req: Request, res: Response) => {
   if (!isLiveHumAvailable()) {
     res.status(503).json({
       error: 'Live hum search requires the embedding service. Set EMBEDDING_SERVICE_URL on the backend.',
@@ -399,7 +399,7 @@ app.post('/api/hum-search/live/start', (_req, res) => {
   res.json({ success: true, sessionId });
 });
 
-app.post('/api/hum-search/live/chunk', async (req, res) => {
+app.post('/api/hum-search/live/chunk', async (req: Request, res: Response) => {
   if (!isLiveHumAvailable()) {
     res.status(503).json({
       error: 'Live hum search requires the embedding service.',
@@ -425,13 +425,13 @@ app.post('/api/hum-search/live/chunk', async (req, res) => {
   }
 });
 
-app.post('/api/hum-search/live/stop', (req, res) => {
+app.post('/api/hum-search/live/stop', (req: Request, res: Response) => {
   const { sessionId } = req.body;
   if (sessionId) stopLiveSession(sessionId);
   res.json({ success: true });
 });
 
-app.use((err: Error, _req: express.Request, res: express.Response) => {
+app.use((err: Error, _req: Request, res: Response) => {
   console.error('[API] Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
