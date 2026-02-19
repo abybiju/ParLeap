@@ -115,7 +115,30 @@ export function WorshipStream() {
   }
 
   if (albums.length === 0) {
-    return null
+    return (
+      <section className="py-16 px-4 overflow-hidden">
+        <div className="container mx-auto">
+          <h2 className="text-3xl lg:text-4xl font-bold text-white text-center mb-12">
+            Every song, One flow
+          </h2>
+          <p className="text-center text-white/50 text-sm mb-4">
+            Album art from iTunes will appear here when available.
+          </p>
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true)
+                refresh()
+              }}
+              className="text-sm text-orange-400 hover:text-orange-300 underline"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </section>
+    )
   }
 
   const albumWidth = 160
@@ -214,6 +237,7 @@ function AlbumCard({ album }: { album: Album }) {
         width={160}
         height={160}
         className="h-full w-full object-cover"
+        unoptimized
       />
     </a>
   )
