@@ -7,10 +7,9 @@ import { toast } from 'sonner';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
 import { useBibleWakeWord } from '@/lib/hooks/useBibleWakeWord';
-import { useSlideCache } from '@/lib/stores/slideCache';
 import { createClient } from '@/lib/supabase/client';
 import { getProjectorFontClass, getProjectorFontIdOrDefault, projectorFonts } from '@/lib/projectorFonts';
-import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage, isEventSettingsUpdatedMessage, isDisplayUpdateMessage } from '@/lib/websocket/types';
+import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage, isEventSettingsUpdatedMessage } from '@/lib/websocket/types';
 import { GhostText } from './GhostText';
 import { MatchStatus } from './MatchStatus';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -55,31 +54,6 @@ type BibleVersionOption = {
   is_default: boolean;
 };
 
-type ActiveSetlistItemType = 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT';
-
-function isSongLikeItem(type: ActiveSetlistItemType | undefined): boolean {
-  return !type || type === 'SONG';
-}
-
-function resolveActiveItemType(
-  index: number,
-  backendItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT' }> | null,
-  cachedItems?: Array<{ type: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT' }> | null,
-  initialItems?: InitialSetlistItem[]
-): ActiveSetlistItemType {
-  if (backendItems && index >= 0 && index < backendItems.length) {
-    return backendItems[index].type;
-  }
-  if (cachedItems && index >= 0 && index < cachedItems.length) {
-    return cachedItems[index].type;
-  }
-  if (initialItems && index >= 0 && index < initialItems.length) {
-    return initialItems[index].kind;
-  }
-  // Reliability-first fail-safe: unknown item types are treated like SONG (continuous STT).
-  return 'SONG';
-}
-
 export function OperatorHUD({
   eventId,
   eventName,
@@ -117,11 +91,6 @@ export function OperatorHUD({
   const [bibleFollow, setBibleFollow] = useState<boolean>(false);
   const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
   const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
-  const [currentItemIndex, setCurrentItemIndex] = useState<number>(0);
-  const [activeItemType, setActiveItemType] = useState<ActiveSetlistItemType>(
-    resolveActiveItemType(0, undefined, undefined, initialSetlist)
-  );
-  const slideCache = useSlideCache();
   const lastSentSmartListenRef = useRef<boolean | null>(null);
 
   // Smart Listen gate: active when master on and Bible Mode on (no setlist item dependency).
@@ -142,35 +111,8 @@ export function OperatorHUD({
 
   // Callback from SetlistPanel when operator clicks a setlist item.
   const handleItemActivated = (index: number, kind: 'SONG' | 'BIBLE' | 'MEDIA' | 'ANNOUNCEMENT') => {
-    setCurrentItemIndex(index);
-    setActiveItemType(kind);
     console.log(`[OperatorHUD] Item activated: index=${index} kind=${kind} → effectiveSmartListen=${effectiveSmartListen}`);
   };
-
-  // Sync active setlist item from backend messages.
-  // Falls back to cached and initial setlist when needed.
-  useEffect(() => {
-    if (!lastMessage) return;
-    let idx: number | undefined;
-    if (isSessionStartedMessage(lastMessage)) {
-      idx = lastMessage.payload.currentItemIndex ?? lastMessage.payload.currentSongIndex ?? 0;
-    } else if (isDisplayUpdateMessage(lastMessage)) {
-      idx = (lastMessage.payload as { currentItemIndex?: number }).currentItemIndex;
-    }
-    if (idx === undefined || idx < 0) return;
-
-    const backendItems = isSessionStartedMessage(lastMessage)
-      ? lastMessage.payload.setlistItems
-      : slideCache.setlist?.setlistItems;
-    const resolvedType = resolveActiveItemType(
-      idx,
-      backendItems,
-      slideCache.setlist?.setlistItems,
-      initialSetlist
-    );
-    setCurrentItemIndex(idx);
-    setActiveItemType(resolvedType);
-  }, [lastMessage, slideCache.setlist, initialSetlist]);
 
   // Keep backend smartListenEnabled synced with the effective runtime gate state.
   useEffect(() => {
