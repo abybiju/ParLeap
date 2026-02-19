@@ -5,9 +5,9 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "npx tsc",
+    "build": "npx -p typescript tsc",
     "start": "node dist/index.js",
-    "type-check": "npx tsc --noEmit",
+    "type-check": "npx -p typescript tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "test": "jest",
     "test:watch": "jest --watch",
