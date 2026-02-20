@@ -27,6 +27,7 @@ export interface UpdateEventSettingsMessage {
     smartListenEnabled?: boolean;
     backgroundImageUrl?: string | null;
     backgroundMediaType?: string | null;
+    isAutoFollowing?: boolean;
   };
 }
 
@@ -104,6 +105,7 @@ export interface SessionStartedMessage {
     bibleFollow?: boolean;
     backgroundImageUrl?: string | null;
     backgroundMediaType?: string | null;
+    isAutoFollowing?: boolean;
     totalSongs: number;
     currentSongIndex: number;
     currentItemIndex?: number; // Index in polymorphic setlist
@@ -156,6 +158,7 @@ export interface EventSettingsUpdatedMessage {
     bibleFollow?: boolean;
     backgroundImageUrl?: string | null;
     backgroundMediaType?: string | null;
+    isAutoFollowing?: boolean;
   };
   timing?: TimingMetadata;
 }

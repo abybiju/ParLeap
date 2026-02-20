@@ -265,6 +265,9 @@ export function OperatorHUD({
     if (isSessionStartedMessage(lastMessage)) {
       setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
       setBibleMode(lastMessage.payload.bibleMode ?? false);
+      if (lastMessage.payload.isAutoFollowing !== undefined) {
+        setIsAutoFollowing(lastMessage.payload.isAutoFollowing);
+      }
       if (lastMessage.payload.bibleVersionId !== undefined) {
         setBibleVersionId(lastMessage.payload.bibleVersionId);
       }
@@ -280,6 +283,9 @@ export function OperatorHUD({
       return;
     }
     if (isEventSettingsUpdatedMessage(lastMessage)) {
+      if (lastMessage.payload.isAutoFollowing !== undefined) {
+        setIsAutoFollowing(lastMessage.payload.isAutoFollowing);
+      }
       if (lastMessage.payload.projectorFont !== undefined) {
         setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
       }
@@ -419,15 +425,16 @@ export function OperatorHUD({
     }
   }, [lastMessage, goToSlide]);
 
-  // PHASE 2: Toggle auto-follow mode
+  // PHASE 2: Toggle auto-follow mode (sync to backend so matching/slides advance when ON)
   const toggleAutoFollow = () => {
-    setIsAutoFollowing(!isAutoFollowing);
-    if (!isAutoFollowing) {
+    const next = !isAutoFollowing;
+    setIsAutoFollowing(next);
+    updateEventSettings({ isAutoFollowing: next });
+    if (next) {
       toast.success('AI Auto-Follow enabled');
     } else {
       toast.warning('AI Auto-Follow disabled');
     }
-    // Note: Backend tracks this automatically when manual overrides are sent
   };
 
   const handleStopSession = () => {

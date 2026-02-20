@@ -241,7 +241,7 @@ class WebSocketClient {
    * Send UPDATE_EVENT_SETTINGS message.
    * Throttled and coalesced so reactive effects (e.g. Smart Listen sync on every slide change) don't flood control messages.
    */
-  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null; backgroundMediaType?: string | null }): void {
+  updateEventSettings(settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null; backgroundMediaType?: string | null; isAutoFollowing?: boolean }): void {
     const now = Date.now();
     const elapsed = this.lastUpdateEventSettingsAt > 0 ? now - this.lastUpdateEventSettingsAt : WebSocketClient.UPDATE_SETTINGS_THROTTLE_MS;
     this.pendingEventSettings = { ...this.pendingEventSettings, ...settings } as Record<string, unknown>;
