@@ -225,6 +225,28 @@ export function createStreamingRecognition(): {
     url.searchParams.set('language_code', languageCode);
     url.searchParams.set('commit_strategy', commitStrategy);
 
+    // Optional VAD tuning (omit to use API defaults: 0.4, 1.5, 100, 100)
+    const vadThreshold = process.env.ELEVENLABS_VAD_THRESHOLD;
+    if (vadThreshold !== undefined && vadThreshold !== '') {
+      const n = parseFloat(vadThreshold);
+      if (!Number.isNaN(n)) url.searchParams.set('vad_threshold', String(n));
+    }
+    const vadSilenceSecs = process.env.ELEVENLABS_VAD_SILENCE_THRESHOLD_SECS;
+    if (vadSilenceSecs !== undefined && vadSilenceSecs !== '') {
+      const n = parseFloat(vadSilenceSecs);
+      if (!Number.isNaN(n)) url.searchParams.set('vad_silence_threshold_secs', String(n));
+    }
+    const minSpeechMs = process.env.ELEVENLABS_MIN_SPEECH_DURATION_MS;
+    if (minSpeechMs !== undefined && minSpeechMs !== '') {
+      const n = parseInt(minSpeechMs, 10);
+      if (!Number.isNaN(n)) url.searchParams.set('min_speech_duration_ms', String(n));
+    }
+    const minSilenceMs = process.env.ELEVENLABS_MIN_SILENCE_DURATION_MS;
+    if (minSilenceMs !== undefined && minSilenceMs !== '') {
+      const n = parseInt(minSilenceMs, 10);
+      if (!Number.isNaN(n)) url.searchParams.set('min_silence_duration_ms', String(n));
+    }
+
     const socket = new WebSocket(url.toString(), {
       headers: {
         'xi-api-key': elevenLabsApiKey,
@@ -244,6 +266,7 @@ export function createStreamingRecognition(): {
             message_type: 'input_audio_chunk',
             audio_base_64: base64,
             sample_rate: 16000,
+            commit: false,
           })
         );
       }
@@ -254,15 +277,43 @@ export function createStreamingRecognition(): {
       flushPending();
     });
 
+    const ELEVENLABS_ERROR_TYPES = [
+      'error',
+      'auth_error',
+      'quota_exceeded',
+      'commit_throttled',
+      'unaccepted_terms',
+      'rate_limited',
+      'queue_overflow',
+      'resource_exhausted',
+      'session_time_limit_exceeded',
+      'input_error',
+      'chunk_size_exceeded',
+      'insufficient_audio_activity',
+      'transcriber_error',
+    ] as const;
+
     socket.on('message', (data) => {
       try {
         const payload = JSON.parse(data.toString()) as {
           message_type?: string;
           text?: string;
           confidence?: number;
+          error?: string;
+          session_id?: string;
+          config?: Record<string, unknown>;
         };
 
-        if (payload.message_type === 'partial_transcript' || payload.message_type === 'committed_transcript' || payload.message_type === 'committed_transcript_with_timestamps') {
+        if (payload.message_type === 'session_started') {
+          console.log('[STT] ElevenLabs session_started', payload.session_id ?? '', payload.config ?? {});
+          return;
+        }
+
+        if (
+          payload.message_type === 'partial_transcript' ||
+          payload.message_type === 'committed_transcript' ||
+          payload.message_type === 'committed_transcript_with_timestamps'
+        ) {
           if (lastChunkSentAt > 0) {
             const latencyMs = Date.now() - lastChunkSentAt;
             console.log(`[STT] ⏱️ latency audio_sent_to_transcript_received=${latencyMs}ms`);
@@ -275,8 +326,18 @@ export function createStreamingRecognition(): {
           };
           console.log(`[STT] 📝 ElevenLabs transcript: "${result.text}" (isFinal=${result.isFinal}, confidence=${result.confidence.toFixed(2)})`);
           callbacks.data?.forEach((cb) => cb(result));
-        } else if (payload.message_type) {
-          // Log other message types for debugging
+          return;
+        }
+
+        if (payload.message_type && ELEVENLABS_ERROR_TYPES.includes(payload.message_type as (typeof ELEVENLABS_ERROR_TYPES)[number])) {
+          const errMsg = payload.error ?? payload.message_type;
+          console.error(`[STT] ❌ ElevenLabs ${payload.message_type}:`, errMsg);
+          const err = new Error(`ElevenLabs ${payload.message_type}: ${errMsg}`);
+          callbacks.error?.forEach((cb) => cb(err));
+          return;
+        }
+
+        if (payload.message_type) {
           console.log(`[STT] 📨 ElevenLabs message: ${payload.message_type}`, payload);
         }
       } catch (error) {
@@ -304,6 +365,7 @@ export function createStreamingRecognition(): {
               message_type: 'input_audio_chunk',
               audio_base_64: base64,
               sample_rate: 16000,
+              commit: false,
             })
           );
         } else {
