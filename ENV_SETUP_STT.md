@@ -24,7 +24,26 @@ NEXT_PUBLIC_STT_PROVIDER=elevenlabs
 # In backend/.env or Railway environment variables
 STT_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=your_api_key_here
+# Optional: model and language (defaults: scribe_v2_realtime, en)
+# ELEVENLABS_MODEL_ID=scribe_v2_realtime
+# ELEVENLABS_LANGUAGE_CODE=en
+# ELEVENLABS_COMMIT_STRATEGY=vad   # or "manual"
 ```
+
+**Optional – VAD tuning (background noise vs speech/singing):**  
+When `commit_strategy=vad`, the API uses Voice Activity Detection to decide when to commit transcripts. You can tune it via env (omit to use API defaults):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ELEVENLABS_VAD_THRESHOLD` | 0.4 | Speech detection sensitivity. **Higher** = less sensitive = more rejection of low-level noise. |
+| `ELEVENLABS_VAD_SILENCE_THRESHOLD_SECS` | 1.5 | Seconds of silence before committing. Longer = fewer commits during short pauses. |
+| `ELEVENLABS_MIN_SPEECH_DURATION_MS` | 100 | Min speech duration (ms) before treating as real speech. Helps ignore short noise bursts. |
+| `ELEVENLABS_MIN_SILENCE_DURATION_MS` | 100 | Min silence duration (ms) to count as a boundary. |
+
+**Tuning tips:**
+- **Too many false commits from noise:** Increase `ELEVENLABS_VAD_THRESHOLD` (e.g. 0.5–0.6) and/or `ELEVENLABS_MIN_SPEECH_DURATION_MS` (e.g. 150–200).
+- **Speech/singing cut off too early:** Decrease `ELEVENLABS_VAD_THRESHOLD` slightly or increase `ELEVENLABS_VAD_SILENCE_THRESHOLD_SECS`.
+- **Singing with long held notes:** Use a slightly longer `ELEVENLABS_VAD_SILENCE_THRESHOLD_SECS` so a brief breath doesn’t commit mid-phrase.
 
 **For Google Cloud:**
 ```bash
