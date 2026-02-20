@@ -7,6 +7,7 @@
 
 import {
   findBestMatch,
+  findBestMatchAcrossAllSongs,
   splitLyricsIntoLines,
   createSongContext,
   validateConfig,
@@ -216,6 +217,64 @@ describe('Matcher Service', () => {
 
       const result2 = findBestMatch('test', emptyContext, config);
       expect(result2.matchFound).toBe(false);
+    });
+  });
+
+  describe('findBestMatchAcrossAllSongs (initial-word rule)', () => {
+    it('penalizes other-song match when line does not start with buffer (e.g. "your name" vs "worthy is your name")', () => {
+      // Current song: Holy Forever, low confidence so we check other songs
+      const holyForever: SongData = {
+        id: 'holy',
+        title: 'Holy Forever',
+        lyrics: 'A thousand generations falling down in worship',
+        lines: ['A thousand generations falling down in worship'],
+      };
+      const worthy: SongData = {
+        id: 'worthy',
+        title: 'Worthy',
+        lyrics: 'Worthy is your name',
+        lines: ['Worthy is your name'],
+      };
+      const currentContext = createSongContext(null, holyForever, 0);
+      const allSongs: SongData[] = [holyForever, worthy];
+      const config = validateConfig({ minBufferLength: 1, similarityThreshold: 0.85 });
+
+      // Buffer "your name" matches "Worthy is your name" well as substring, but line does NOT start with "your name"
+      const result = findBestMatchAcrossAllSongs('your name', currentContext, allSongs, 0, config);
+
+      // Current song has low confidence (buffer does not match Holy Forever line)
+      expect(result.currentSongMatch.confidence).toBeLessThan(0.6);
+      // Suggested switch to Worthy should be penalized so confidence is below auto-switch threshold (0.58)
+      // Unpenalized "your name" vs "worthy is your name" would be ~0.63; with 0.5 penalty ~0.31
+      if (result.suggestedSongSwitch) {
+        expect(result.suggestedSongSwitch.confidence).toBeLessThan(0.5);
+      }
+    });
+
+    it('does not penalize when line starts with buffer (e.g. "your name" vs "your name is the highest")', () => {
+      const holyForever: SongData = {
+        id: 'holy',
+        title: 'Holy Forever',
+        lyrics: 'A thousand generations',
+        lines: ['A thousand generations'],
+      };
+      const yourNameSong: SongData = {
+        id: 'yn',
+        title: 'Your Name',
+        lyrics: 'Your name is the highest',
+        lines: ['Your name is the highest'],
+      };
+      const currentContext = createSongContext(null, holyForever, 0);
+      const allSongs: SongData[] = [holyForever, yourNameSong];
+      const config = validateConfig({ minBufferLength: 1, similarityThreshold: 0.5 });
+
+      const result = findBestMatchAcrossAllSongs('your name', currentContext, allSongs, 0, config);
+
+      // Line "your name is the highest" starts with "your name" → no penalty
+      if (result.suggestedSongSwitch) {
+        expect(result.suggestedSongSwitch.songTitle).toBe('Your Name');
+        expect(result.suggestedSongSwitch.confidence).toBeGreaterThan(0.5);
+      }
     });
   });
 

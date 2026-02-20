@@ -278,8 +278,8 @@ interface WsRateState {
 
 const WS_RATE_WINDOW_MS = parseNumberEnv(process.env.WS_RATE_LIMIT_WINDOW_MS, 10000);
 const WS_CONTROL_LIMIT = parseNumberEnv(process.env.WS_RATE_LIMIT_CONTROL, 100);
-// PCM at 1024 samples/16kHz = ~15 chunks/sec; 10s window → ~150 chunks. Use 250 so continuous STT never hits limit.
-const WS_AUDIO_LIMIT = parseNumberEnv(process.env.WS_RATE_LIMIT_AUDIO, 250);
+// PCM at 1024 samples/16kHz = ~15 chunks/sec; 10s window → ~150 chunks. Use 400 so continuous STT + bursts never hit limit.
+const WS_AUDIO_LIMIT = parseNumberEnv(process.env.WS_RATE_LIMIT_AUDIO, 400);
 const wsRateLimits = new Map<WebSocket, WsRateState>();
 
 function isRateLimited(ws: WebSocket, messageType: string): boolean {
