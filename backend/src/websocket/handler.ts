@@ -868,6 +868,7 @@ async function handleStartSession(
       backgroundImageUrl: session.backgroundImageUrl ?? null,
       backgroundMediaType: session.backgroundMediaType ?? null,
       bibleFollow: session.bibleFollow ?? false,
+      isAutoFollowing: session.isAutoFollowing,
       totalSongs: session.songs.length,
       currentSongIndex: session.currentSongIndex,
       currentItemIndex: session.currentItemIndex,
@@ -896,7 +897,7 @@ async function handleStartSession(
  */
 function handleUpdateEventSettings(
   ws: WebSocket,
-  settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null; backgroundMediaType?: string | null },
+  settings: { projectorFont?: string; bibleMode?: boolean; bibleVersionId?: string | null; bibleFollow?: boolean; smartListenEnabled?: boolean; backgroundImageUrl?: string | null; backgroundMediaType?: string | null; isAutoFollowing?: boolean },
   receivedAt: number
 ): void {
   const processingStart = Date.now();
@@ -904,6 +905,10 @@ function handleUpdateEventSettings(
   if (!session || !session.isActive) {
     sendError(ws, 'NO_SESSION', 'No active session. Call START_SESSION first.');
     return;
+  }
+
+  if (settings.isAutoFollowing !== undefined) {
+    session.isAutoFollowing = settings.isAutoFollowing;
   }
 
   if (settings.projectorFont) {
@@ -947,6 +952,7 @@ function handleUpdateEventSettings(
       bibleFollow: session.bibleFollow ?? false,
       backgroundImageUrl: session.backgroundImageUrl ?? null,
       backgroundMediaType: session.backgroundMediaType ?? null,
+      isAutoFollowing: session.isAutoFollowing,
     },
     timing: createTiming(receivedAt, processingStart),
   };
@@ -989,6 +995,25 @@ function handleUpdateEventSettings(
   }
 }
 
+/** Broadcast current session settings (e.g. after setting isAutoFollowing so frontend stays in sync). */
+function broadcastEventSettingsUpdated(session: SessionState): void {
+  const now = Date.now();
+  const msg: EventSettingsUpdatedMessage = {
+    type: 'EVENT_SETTINGS_UPDATED',
+    payload: {
+      projectorFont: session.projectorFont ?? null,
+      bibleMode: session.bibleMode ?? false,
+      bibleVersionId: session.bibleVersionId ?? null,
+      bibleFollow: session.bibleFollow ?? false,
+      backgroundImageUrl: session.backgroundImageUrl ?? null,
+      backgroundMediaType: session.backgroundMediaType ?? null,
+      isAutoFollowing: session.isAutoFollowing,
+    },
+    timing: createTiming(now, now),
+  };
+  broadcastToEvent(session.eventId, msg);
+}
+
 /** Runs Bible path in background so song matching is never blocked. */
 async function runBiblePathAsync(
   session: SessionState,
@@ -1024,6 +1049,7 @@ async function runBiblePathAsync(
           bibleFollow: session.bibleFollow ?? false,
           backgroundImageUrl: session.backgroundImageUrl ?? null,
           backgroundMediaType: session.backgroundMediaType ?? null,
+          isAutoFollowing: session.isAutoFollowing,
         },
         timing: createTiming(receivedAt, processingStart),
       };
@@ -2326,6 +2352,7 @@ async function handleManualOverride(
     session.currentItemIndex = itemIndex; // Use client index so operator highlight is correct when setlists differ
     session.isAutoFollowing = false;
     session.suggestedSongSwitch = undefined;
+    broadcastEventSettingsUpdated(session);
 
     if (targetItem.type === 'BIBLE' && targetItem.bibleRef) {
       const placeholderId = `bible:${targetItem.bibleRef.replace(/\s+/g, ':')}`;
@@ -2677,8 +2704,8 @@ async function handleManualOverride(
   if (songChanged) {
     console.log(`[WS] 🎛️  Manual song change detected - disabling auto-follow mode`);
     session.isAutoFollowing = false;
-    // Clear any pending song switch suggestions
     session.suggestedSongSwitch = undefined;
+    broadcastEventSettingsUpdated(session);
   }
 
   const targetSong = session.songs[newSongIndex];
