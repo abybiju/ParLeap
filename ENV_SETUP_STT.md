@@ -119,6 +119,6 @@ The backend rate-limits WebSocket messages to prevent abuse. **Audio** is limite
 |----------|---------|---------|
 | `WS_RATE_LIMIT_WINDOW_MS` | 10000 | Rate-limit window in ms (10s). |
 | `WS_RATE_LIMIT_CONTROL` | 100 | Max control messages (e.g. PING, MANUAL_OVERRIDE) per window. |
-| `WS_RATE_LIMIT_AUDIO` | 250 | Max AUDIO_DATA messages per window. PCM at ~15 chunks/sec needs ~150 in 10s; 250 allows headroom. |
+| `WS_RATE_LIMIT_AUDIO` | 400 | Max AUDIO_DATA messages per window. PCM at ~15 chunks/sec needs ~150 in 10s; 400 allows headroom and bursts. |
 
-If you see "Rate limited" in the Operator app during normal singing, ensure the backend is using the default 250 for `WS_RATE_LIMIT_AUDIO` (or set it explicitly). Do not set it below ~180 for continuous STT.
+If you see "Rate limited" in the Operator app during normal singing, ensure the backend is using the default 400 for `WS_RATE_LIMIT_AUDIO` (or set it explicitly, e.g. 500). Do not set it below ~180 for continuous STT.

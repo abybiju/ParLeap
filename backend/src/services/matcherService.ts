@@ -588,9 +588,18 @@ export function validateConfig(config: Partial<MatcherConfig>): MatcherConfig {
  * 1. Check current song FIRST (Priority 1) - most common case
  * 2. Only check other songs if current song confidence is LOW (< 60%)
  * 3. Use higher threshold for song switches (0.85+) to prevent false positives
- * 
+ * 4. Initial-word rule: when considering another song, prefer lines whose *start* matches
+ *    the buffer (e.g. "your name" at start of "Your name is the highest") and penalize
+ *    mid-line matches (e.g. "your name" in "Worthy is your name") so similar phrases
+ *    don't trigger wrong song switches.
+ *
  * This prevents expensive multi-song scanning when the singer is on-track.
  */
+/** When another song's line does NOT start with the buffer words, multiply score by this so short phrases like "your name" don't switch to "Worthy" when singing "Your name is the highest". */
+const MULTI_SONG_PREFIX_PENALTY = 0.5;
+/** Minimum similarity between buffer and the first N words of a line to count as "initial words match" (no penalty). */
+const MULTI_SONG_PREFIX_MATCH_THRESHOLD = 0.8;
+
 export function findBestMatchAcrossAllSongs(
   buffer: string,
   currentSongContext: SongContext,
@@ -629,6 +638,9 @@ export function findBestMatchAcrossAllSongs(
   let bestOtherSongLineIndex = -1;
   let bestOtherSongLineText = '';
 
+  const normalizedBuffer = normalizeText(buffer);
+  const bufferWords = normalizedBuffer.split(/\s+/).filter((w) => w.length > 0);
+
   for (let i = 0; i < allSongs.length; i++) {
     // Skip current song (already checked)
     if (i === currentSongIndex) continue;
@@ -642,12 +654,24 @@ export function findBestMatchAcrossAllSongs(
 
     // Check this song (look at first few lines only for efficiency)
     const lookAheadLines = Math.min(5, lines.length); // Only check first 5 lines
-    const normalizedBuffer = normalizeText(buffer);
 
     for (let lineIdx = 0; lineIdx < lookAheadLines; lineIdx++) {
       const line = lines[lineIdx];
       const normalizedLine = normalizeText(line);
-      const similarity = compareTwoStrings(normalizedBuffer, normalizedLine);
+      let similarity = compareTwoStrings(normalizedBuffer, normalizedLine);
+
+      // Initial-word rule: only treat as strong match if the line *starts* with the same idea as the buffer.
+      // E.g. buffer "your name" vs "Worthy is your name" → line does not start with "your name" → penalize.
+      // E.g. buffer "your name" vs "Your name is the highest" → line starts with "your name" → no penalty.
+      const lineWords = normalizedLine.split(/\s+/).filter((w) => w.length > 0);
+      const lineFirstWords = lineWords.slice(0, bufferWords.length).join(' ');
+      const prefixSimilarity = lineFirstWords.length > 0
+        ? compareTwoStrings(normalizedBuffer, lineFirstWords)
+        : 0;
+      const initialWordsMatch = prefixSimilarity >= MULTI_SONG_PREFIX_MATCH_THRESHOLD;
+      if (!initialWordsMatch && similarity > 0) {
+        similarity *= MULTI_SONG_PREFIX_PENALTY;
+      }
 
       if (similarity > bestOtherSongScore) {
         bestOtherSongScore = similarity;
