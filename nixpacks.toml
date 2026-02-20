@@ -1,0 +1,10 @@
+# Used when building from repo root (e.g. Railway backend service).
+# Ensures devDependencies (TypeScript, @types/*) are installed so backend build succeeds.
+[phases.install]
+cmds = ["npm ci --include=dev"]
+
+[phases.build]
+cmds = ["npm run build --workspace=@parleap/backend"]
+
+[start]
+cmd = "cd /app/backend && npm start"

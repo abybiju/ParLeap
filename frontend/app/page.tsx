@@ -9,7 +9,7 @@ import { Pricing } from '@/components/landing/Pricing'
 import { FlowScrollLine } from '@/components/landing/FlowScrollLine'
 import { WorshipStream } from '@/components/landing/WorshipStream'
 import { ScriptureSection } from '@/components/landing/ScriptureSection'
-import { Footer } from '@/components/layout/Footer'
+import { HoverFooter } from '@/components/layout/HoverFooter'
 
 export default function Home() {
   return (
@@ -25,7 +25,7 @@ export default function Home() {
       <ScriptureSection />
       <TestimonialWall />
       <Pricing />
-      <Footer />
+      <HoverFooter />
       <div className="bottom-glow" aria-hidden="true" />
     </main>
   )

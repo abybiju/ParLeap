@@ -10,6 +10,16 @@ ParLeap is a real-time, AI-powered presentation orchestration platform that auto
 
 ## 📅 Recent Updates
 
+### Landing + Auth UI refresh (February 20, 2026) ✅
+- **Landing footer replaced** with new `HoverFooter` experience (ParLeap-themed hover typography, animated badge edge loop, refreshed legal/social/product layout). Files: `frontend/components/ui/hover-footer.tsx`, `frontend/components/layout/HoverFooter.tsx`, `frontend/app/page.tsx`.
+- **Pricing section upgraded** to motion-driven stacked cards with monthly/annual toggle behavior tuned so only **Worship Leader** changes price while Starter and Multi-Campus remain static.
+- **Auth redesign (login/signup)** using new `sign-in-flow-1` shell:
+  - Added shader/canvas auth background + mini-navbar in `frontend/components/ui/sign-in-flow-1.tsx`
+  - Preserved existing Supabase auth logic (email/password, redirects, validation)
+  - Added password show/hide icons
+  - Added clickable legal copy for Product Terms, Policies, Privacy Notice, Cookie Notice
+  - `ConditionalHeader` hides global header on `/auth/login` and `/auth/signup` to avoid duplicate headers.
+
 ### Landing album art: proxy API, Christian/worship only (February 2026) ✅
 - **WorshipStream** ("Every song, One flow"): Album art from iTunes **"modern worship" only** (no secular top charts). Fetched via **GET /api/landing/album-art** (Next.js route) — server proxies iTunes to avoid CORS/blockers in the browser. When empty: section shows message + Retry; images `unoptimized`. Files: `frontend/app/api/landing/album-art/route.ts`, `frontend/components/landing/WorshipStream.tsx`. Commits: `dea85e7`, `b480322`, `844cf9f`.
 
@@ -730,4 +740,3 @@ Today the projector uses eight Google Fonts (Inter, DM Sans, Manrope, etc.) from
    - Performance optimization
 
 **See [NEXT_PHASE_PLAN.md](./NEXT_PHASE_PLAN.md) for detailed implementation plan.**
-

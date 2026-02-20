@@ -1,5 +1,17 @@
 # ParLeap AI - Memory Log
 
+## Session: February 20, 2026 — Landing/Footer/Pricing + Auth redesign
+
+### What we did
+- **Landing footer replaced** with new hover-based ParLeap footer (`hover-footer.tsx`, `HoverFooter.tsx`, mounted in `app/page.tsx`).
+- **Pricing upgraded** with motion + monthly/annual toggle; behavior refined so only **Worship Leader** price changes, Starter and Multi-Campus stay static.
+- **Auth UI redesigned** for `/auth/login` and `/auth/signup` using new visual shell `components/ui/sign-in-flow-1.tsx` (canvas/shader background + mini navbar), while keeping existing Supabase auth logic intact.
+- **Header routing**: `ConditionalHeader` suppresses global header on login/signup to avoid duplication with mini navbar.
+- **UX additions**: password show/hide icons on login/signup and clickable legal text links (terms/policies/privacy/cookies).
+
+### Key lesson
+- For design-heavy auth pages, separating a reusable visual shell (`AuthFlowFrame`) from actual auth logic avoids regressions and speeds iteration.
+
 ## Session: February 19, 2026 — Decouple Live from setlist + Bible Mode STT
 
 ### What we did
