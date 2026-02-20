@@ -93,9 +93,10 @@ export function OperatorHUD({
   const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
   const lastSentSmartListenRef = useRef<boolean | null>(null);
 
-  // Smart Listen gate: when true, STT is in standby until wake word or "Listen now".
-  // When Bible Mode is ON we do NOT gate so the AI keeps listening for verse references (e.g. "John 3 16").
-  const effectiveSmartListen = smartListenMasterEnabled && !bibleMode;
+  // Smart Listen standby: when true, frontend buffers audio until wake word or "Listen now".
+  // We use continuous STT for both songs (Bible OFF) and Bible mode (Bible ON) so lyric/verse matching always works.
+  // Set to false so STT is never in standby; the master toggle is kept for future "pause STT" or optional standby.
+  const effectiveSmartListen = false;
 
   const audioCapture = useAudioCapture({
     usePcm: sttProvider === 'elevenlabs' || sttProvider === 'google',
