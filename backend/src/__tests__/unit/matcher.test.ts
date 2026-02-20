@@ -176,6 +176,27 @@ describe('Matcher Service', () => {
       expect(result.confidence).toBeGreaterThan(0.95);
     });
 
+    it('should match STT soundalikes (e.g. "what" for "worthy")', () => {
+      const worthySong: SongData = {
+        id: 'worthy_song',
+        title: 'Worthy',
+        artist: '',
+        lyrics: 'Worthy is your name',
+        lines: ['Worthy is your name'],
+      };
+      const context = createSongContext(null, worthySong, 0);
+      const config = validateConfig({
+        similarityThreshold: 0.80,
+        minBufferLength: 2,
+      });
+
+      const buffer = 'what is your name'; // STT mishearing
+      const result = findBestMatch(buffer, context, config);
+
+      expect(result.matchFound).toBe(true);
+      expect(result.confidence).toBeGreaterThan(0.8);
+    });
+
     it('should track progress through song', () => {
       const config = validateConfig({
         similarityThreshold: 0.80,

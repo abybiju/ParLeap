@@ -38,6 +38,58 @@ function compareTwoStrings(a: string, b: string): number {
 }
 
 /**
+ * Common STT mishearings in lyrics: [bufferWord, lineWord].
+ * When the buffer contains the first word and the line contains the second,
+ * we try comparing with the buffer word replaced so "what is your name" can match "worthy is your name".
+ */
+const SOUNDALIKE_PAIRS: Array<[string, string]> = [
+  ['what', 'worthy'],
+  ['worthy', 'what'],
+  ['we', 'way'],
+  ['way', 'we'],
+  ['hear', 'here'],
+  ['here', 'hear'],
+  ['higher', 'highest'],
+  ['highest', 'higher'],
+  ['great', 'greatest'],
+  ['greatest', 'great'],
+  ['lord', 'law'],
+  ['law', 'lord'],
+  ['see', 'say'],
+  ['say', 'see'],
+  ['sing', 'king'],
+  ['king', 'sing'],
+  ['throne', 'known'],
+  ['known', 'throne'],
+  ['holy', 'wholly'],
+  ['wholly', 'holy'],
+];
+
+/**
+ * Returns the best similarity between buffer and line, including when the buffer
+ * is corrected using known STT soundalikes (e.g. "what" -> "worthy" so "what is your name"
+ * can match "worthy is your name").
+ */
+function similarityWithSoundalikes(normalizedBuffer: string, normalizedLine: string): number {
+  let best = compareTwoStrings(normalizedBuffer, normalizedLine);
+  const lineWords = new Set(normalizedLine.split(/\s+/).filter((w) => w.length > 0));
+  for (const [bufferWord, lineWord] of SOUNDALIKE_PAIRS) {
+    if (bufferWord === lineWord) continue;
+    if (!lineWords.has(lineWord)) continue;
+    const re = new RegExp(`\\b${escapeRe(bufferWord)}\\b`, 'g');
+    if (!re.test(normalizedBuffer)) continue;
+    const variant = normalizedBuffer.replace(re, lineWord);
+    const score = compareTwoStrings(variant, normalizedLine);
+    if (score > best) best = score;
+  }
+  return best;
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Represents a matched line with confidence
  */
 export interface MatchResult {
@@ -318,12 +370,12 @@ export function findBestMatch(
     const line = songContext.lines[i];
     const normalizedLine = songContext.normalizedLines?.[i] ?? normalizeText(line);
 
-    // Calculate similarity with full buffer
-    const fullSimilarity = compareTwoStrings(normalizedBuffer, normalizedLine);
+    // Calculate similarity with full buffer (include soundalikes so "what is your name" can match "worthy is your name")
+    const fullSimilarity = similarityWithSoundalikes(normalizedBuffer, normalizedLine);
     
     // Also check if end of buffer matches this line (helps detect transitions)
     const endSimilarity = i > effectiveLineIndex 
-      ? compareTwoStrings(normalizedEndBuffer, normalizedLine)
+      ? similarityWithSoundalikes(normalizedEndBuffer, normalizedLine)
       : 0;
     
     // Use the higher of the two similarities, but weight end similarity more for next lines
@@ -384,8 +436,8 @@ export function findBestMatch(
       if (nextLineIndex < songContext.lines.length) {
         const nextLine = songContext.lines[nextLineIndex];
         const normalizedNextLine = songContext.normalizedLines?.[nextLineIndex] ?? normalizeText(nextLine);
-        const nextFullSimilarity = compareTwoStrings(normalizedBuffer, normalizedNextLine);
-        const nextEndSimilarity = compareTwoStrings(normalizedEndBuffer, normalizedNextLine);
+        const nextFullSimilarity = similarityWithSoundalikes(normalizedBuffer, normalizedNextLine);
+        const nextEndSimilarity = similarityWithSoundalikes(normalizedEndBuffer, normalizedNextLine);
         nextLineConfidence = Math.min(1.0, Math.max(nextFullSimilarity, nextEndSimilarity * 1.2));
         result.nextLineConfidence = nextLineConfidence;
       }
@@ -658,7 +710,7 @@ export function findBestMatchAcrossAllSongs(
     for (let lineIdx = 0; lineIdx < lookAheadLines; lineIdx++) {
       const line = lines[lineIdx];
       const normalizedLine = normalizeText(line);
-      let similarity = compareTwoStrings(normalizedBuffer, normalizedLine);
+      let similarity = similarityWithSoundalikes(normalizedBuffer, normalizedLine);
 
       // Initial-word rule: only treat as strong match if the line *starts* with the same idea as the buffer.
       // E.g. buffer "your name" vs "Worthy is your name" → line does not start with "your name" → penalize.
@@ -666,7 +718,7 @@ export function findBestMatchAcrossAllSongs(
       const lineWords = normalizedLine.split(/\s+/).filter((w) => w.length > 0);
       const lineFirstWords = lineWords.slice(0, bufferWords.length).join(' ');
       const prefixSimilarity = lineFirstWords.length > 0
-        ? compareTwoStrings(normalizedBuffer, lineFirstWords)
+        ? similarityWithSoundalikes(normalizedBuffer, lineFirstWords)
         : 0;
       const initialWordsMatch = prefixSimilarity >= MULTI_SONG_PREFIX_MATCH_THRESHOLD;
       if (!initialWordsMatch && similarity > 0) {
