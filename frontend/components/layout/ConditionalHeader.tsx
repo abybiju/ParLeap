@@ -23,6 +23,14 @@ export function ConditionalHeader() {
     pathname.startsWith('/operator') ||
     pathname.startsWith('/profile')
 
+  const isEmbeddedAuthHeaderRoute =
+    pathname.startsWith('/auth/login') ||
+    pathname.startsWith('/auth/signup')
+
+  if (isEmbeddedAuthHeaderRoute) {
+    return null
+  }
+
   // Render DashboardHeader for protected routes, Header for public routes
   return isProtectedRoute ? <DashboardHeader /> : <Header />
 }

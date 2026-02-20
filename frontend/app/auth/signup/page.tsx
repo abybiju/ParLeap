@@ -4,9 +4,11 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { AppPageWrapper } from '@/components/layout/AppPageWrapper'
+import { motion } from 'framer-motion'
+import { AuthFlowFrame } from '@/components/ui/sign-in-flow-1'
 
 const signUpSchema = z.object({
   email: z.string().email({ message: 'Enter a valid email' }),
@@ -17,6 +19,7 @@ export default function SignupPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -51,95 +54,119 @@ export default function SignupPage() {
   }
 
   return (
-    <AppPageWrapper className="flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      <div className="w-full max-w-md rounded-2xl bg-white/5 p-8 shadow-xl shadow-slate-900/50 backdrop-blur border border-white/10">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold text-white">Create your ParLeap account</h1>
-          <p className="text-sm text-slate-300 mt-2">
-            Automate your live presentations with AI
-          </p>
+    <AuthFlowFrame title="Create your ParLeap account" subtitle="Automate your live presentations with AI">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm text-slate-200 mb-2" htmlFor="email">
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={cn(
+              'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white',
+              'placeholder:text-slate-400 focus:border-[#FF8C42] focus:outline-none focus:ring-2 focus:ring-[#FF8C42]/30'
+            )}
+            placeholder="you@example.com"
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-slate-200 mb-2" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={cn(
-                'w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white',
-                'placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/40'
-              )}
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-200 mb-2" htmlFor="password">
-              Password
-            </label>
+        <div>
+          <label className="block text-sm text-slate-200 mb-2" htmlFor="password">
+            Password
+          </label>
+          <div className="relative">
             <input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={cn(
-                'w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white',
-                'placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/40'
+                'w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-11 text-white',
+                'placeholder:text-slate-400 focus:border-[#FF8C42] focus:outline-none focus:ring-2 focus:ring-[#FF8C42]/30'
               )}
               placeholder="••••••••"
               required
             />
+            {password.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-white"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            ) : null}
           </div>
+        </div>
 
-          {error ? (
-            <div className="text-sm text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          ) : null}
+        {error ? (
+          <div className="text-sm text-rose-200 bg-rose-500/10 border border-rose-400/30 rounded-xl px-3 py-2">
+            {error}
+          </div>
+        ) : null}
 
-          {message ? (
-            <div className="text-sm text-emerald-200 bg-emerald-500/10 border border-emerald-400/30 rounded-lg px-3 py-2">
-              {message}
-            </div>
-          ) : null}
+        {message ? (
+          <div className="text-sm text-emerald-200 bg-emerald-500/10 border border-emerald-400/30 rounded-xl px-3 py-2">
+            {message}
+          </div>
+        ) : null}
 
-          <button
-            type="submit"
-            disabled={isPending}
-            className={cn(
-              'w-full rounded-lg bg-indigo-500 px-4 py-2 text-white font-medium',
-              'hover:bg-indigo-400 transition disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/30',
-              'flex items-center justify-center gap-2'
-            )}
-          >
-            {isPending ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Signing up...</span>
-              </>
-            ) : (
-              'Create account'
-            )}
-          </button>
-        </form>
+        <motion.button
+          type="submit"
+          disabled={isPending}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          className={cn(
+            'w-full rounded-xl bg-gradient-to-r from-[#FF8C42] to-[#FF3C38] px-4 py-3 text-white font-semibold',
+            'hover:opacity-95 transition disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-orange-500/25',
+            'flex items-center justify-center gap-2'
+          )}
+        >
+          {isPending ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>Signing up...</span>
+            </>
+          ) : (
+            'Create account'
+          )}
+        </motion.button>
+      </form>
 
-        <p className="mt-6 text-center text-sm text-slate-300">
-          Already have an account?{' '}
-          <Link className="text-indigo-300 hover:text-indigo-200" href="/auth/login">
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </AppPageWrapper>
+      <p className="mt-6 text-center text-sm text-slate-300">
+        Already have an account?{' '}
+        <Link className="text-orange-300 hover:text-orange-200" href="/auth/login">
+          Sign in
+        </Link>
+      </p>
+      <p className="mt-6 text-center text-xs text-slate-400">
+        By signing up, you agree to the{' '}
+        <Link href="/terms" className="underline hover:text-slate-200 transition-colors">
+          Product Terms
+        </Link>
+        ,{' '}
+        <Link href="/terms#policies" className="underline hover:text-slate-200 transition-colors">
+          Policies
+        </Link>
+        ,{' '}
+        <Link href="/privacy" className="underline hover:text-slate-200 transition-colors">
+          Privacy Notice
+        </Link>
+        , and{' '}
+        <Link href="/privacy#cookies" className="underline hover:text-slate-200 transition-colors">
+          Cookie Notice
+        </Link>
+        .
+      </p>
+    </AuthFlowFrame>
   )
 }
