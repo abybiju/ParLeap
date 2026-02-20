@@ -297,6 +297,32 @@ describe('Matcher Service', () => {
         expect(result.suggestedSongSwitch.confidence).toBeGreaterThan(0.5);
       }
     });
+
+    it('suggests song switch when buffer matches song title (e.g. "holy forever" → Holy Forever)', () => {
+      const worthy: SongData = {
+        id: 'worthy',
+        title: 'Worthy',
+        lyrics: 'Worthy is your name',
+        lines: ['Worthy is your name'],
+      };
+      const holyForever: SongData = {
+        id: 'holy',
+        title: 'Holy Forever',
+        lyrics: 'Holy forever\nYou will always be holy',
+        lines: ['Holy forever', 'You will always be holy'],
+      };
+      const currentContext = createSongContext(null, worthy, 0);
+      const allSongs: SongData[] = [worthy, holyForever];
+      const config = validateConfig({ minBufferLength: 1, similarityThreshold: 0.5 });
+
+      const result = findBestMatchAcrossAllSongs('holy forever', currentContext, allSongs, 0, config);
+
+      expect(result.currentSongMatch.confidence).toBeLessThan(0.6);
+      expect(result.suggestedSongSwitch).toBeDefined();
+      expect(result.suggestedSongSwitch!.songTitle).toBe('Holy Forever');
+      expect(result.suggestedSongSwitch!.matchedLineIndex).toBe(0);
+      expect(result.suggestedSongSwitch!.confidence).toBeGreaterThanOrEqual(0.75);
+    });
   });
 
   describe('validateConfig', () => {

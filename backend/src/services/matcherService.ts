@@ -659,6 +659,8 @@ export function validateConfig(config: Partial<MatcherConfig>): MatcherConfig {
 const MULTI_SONG_PREFIX_PENALTY = 0.5;
 /** Minimum similarity between buffer and the first N words of a line to count as "initial words match" (no penalty). */
 const MULTI_SONG_PREFIX_MATCH_THRESHOLD = 0.8;
+/** Min similarity for buffer matching a song title (e.g. "Holy forever" → switch to "Holy Forever"). */
+const TITLE_MATCH_MIN_CONFIDENCE = 0.75;
 
 export function findBestMatchAcrossAllSongs(
   buffer: string,
@@ -711,6 +713,28 @@ export function findBestMatchAcrossAllSongs(
       : splitLyricsIntoLines(song.lyrics || '');
 
     if (lines.length === 0) continue;
+
+    // Song title match: e.g. "Holy forever" → advance to "Holy Forever" at first slide
+    const normalizedTitle = normalizeText(song.title || '');
+    const titleSimilarity = normalizedTitle.length > 0
+      ? similarityWithSoundalikes(normalizedBuffer, normalizedTitle)
+      : 0;
+    if (config.debug && normalizedTitle.length > 0) {
+      console.log(
+        `[MULTI-SONG] Song ${i} ("${song.title}") Title: ${(titleSimilarity * 100).toFixed(1)}%`
+      );
+    }
+    if (titleSimilarity >= TITLE_MATCH_MIN_CONFIDENCE && titleSimilarity > bestOtherSongScore) {
+      bestOtherSongScore = titleSimilarity;
+      bestOtherSongIndex = i;
+      bestOtherSongLineIndex = 0;
+      bestOtherSongLineText = lines[0];
+      if (config.debug) {
+        console.log(
+          `[MULTI-SONG] 🎵 Title match wins → first slide`
+        );
+      }
+    }
 
     // Check this song (look at first few lines only for efficiency)
     const lookAheadLines = Math.min(5, lines.length); // Only check first 5 lines
