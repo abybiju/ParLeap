@@ -159,7 +159,7 @@ const DEFAULT_CONFIG: MatcherConfig = {
   minBufferLength: 3, // At least 3 words before trying to match
   bufferWindow: 100, // Compare against last 100 words
   debug: false,
-  lookAheadWindow: 3,
+  lookAheadWindow: 6, // Wider window so chorus/pre-chorus can match when singer starts from there
   allowBackward: false,
 };
 
@@ -171,6 +171,8 @@ const NEXT_LINE_SUPPORT_THRESHOLD = 0.55; // Require reasonable next-line confid
 const END_TRIGGER_MATCH_GATE = 0.58; // Allow end-trigger even if full-line confidence is lower
 /** When target line is this similar to current line, block next-line advance; require end-of-line so singer can repeat verse. */
 const SIMILAR_LINE_THRESHOLD = 0.65;
+/** When buffer matches target line this well, allow advance even if current and target lines are similar (e.g. repeated chorus). */
+const ADVANCE_WHEN_CLEAR_THRESHOLD = 0.75;
 // Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**
@@ -345,7 +347,7 @@ export function findBestMatch(
 
   // Compare against all upcoming lines (current and next few)
   // This helps handle edge cases where buffer might partially match next line
-  const lookAheadWindow = config.lookAheadWindow ?? 3; // Look at current + next N lines
+  const lookAheadWindow = config.lookAheadWindow ?? 6; // Look at current + next N lines (wider for chorus/pre-chorus)
   
   if (config.debug) {
     console.log(`[MATCHER] Search window: lines ${effectiveLineIndex} to ${Math.min(effectiveLineIndex + lookAheadWindow, songContext.lines.length - 1)}`);
@@ -489,8 +491,9 @@ export function findBestMatch(
       const targetLineText = songContext.normalizedLines?.[bestLineIndex]
         ?? normalizeText(songContext.lines[bestLineIndex]);
       const lineSimilarity = compareTwoStrings(currentLineText, targetLineText);
+      const bufferClearlyMatchesTarget = bestScore >= ADVANCE_WHEN_CLEAR_THRESHOLD;
 
-      if (lineSimilarity >= SIMILAR_LINE_THRESHOLD) {
+      if (lineSimilarity >= SIMILAR_LINE_THRESHOLD && !bufferClearlyMatchesTarget) {
         result.currentLineIndex = effectiveLineIndex;
         result.matchedText = songContext.lines[effectiveLineIndex];
         result.isLineEnd = false;
@@ -502,6 +505,11 @@ export function findBestMatch(
           );
         }
       } else {
+        if (bufferClearlyMatchesTarget && lineSimilarity >= SIMILAR_LINE_THRESHOLD && config.debug) {
+          console.log(
+            `[MATCHER] Advance allowed: buffer clearly matches target line (${(bestScore * 100).toFixed(1)}% >= ${(ADVANCE_WHEN_CLEAR_THRESHOLD * 100).toFixed(0)}%) despite similar line.`
+          );
+        }
         result.isLineEnd = true;
         result.nextLineIndex = bestLineIndex;
         result.advanceReason = 'next-line';
@@ -628,7 +636,7 @@ export function validateConfig(config: Partial<MatcherConfig>): MatcherConfig {
     minBufferLength: Math.max(1, config.minBufferLength ?? DEFAULT_CONFIG.minBufferLength),
     bufferWindow: Math.max(1, config.bufferWindow ?? DEFAULT_CONFIG.bufferWindow),
     debug: config.debug ?? DEFAULT_CONFIG.debug,
-    lookAheadWindow: Math.max(1, config.lookAheadWindow ?? DEFAULT_CONFIG.lookAheadWindow ?? 3),
+    lookAheadWindow: Math.max(1, config.lookAheadWindow ?? DEFAULT_CONFIG.lookAheadWindow ?? 6),
     allowBackward: config.allowBackward ?? DEFAULT_CONFIG.allowBackward,
   };
 }
