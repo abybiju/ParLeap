@@ -726,7 +726,7 @@ async function handleStartSession(
     minBufferLength: parseNumberEnv(process.env.MATCHER_MIN_BUFFER_LENGTH, 2),
     bufferWindow: parseNumberEnv(process.env.MATCHER_BUFFER_WINDOW, 100),
     debug: process.env.DEBUG_MATCHER === 'true' || process.env.NODE_ENV !== 'production',
-    useBigramEndOfSlide: process.env.MATCHER_BIGRAM_END_OF_SLIDE === 'true',
+    useBigramEndOfSlide: process.env.MATCHER_BIGRAM_END_OF_SLIDE !== 'false',
   });
 
   // If there's an existing session, sync to its current state
