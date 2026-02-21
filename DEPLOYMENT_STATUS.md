@@ -1,7 +1,16 @@
 # 🚀 Deployment Status & Session Summary
 
-**Date:** January 25, 2026  
-**Status:** ✅ **Songs Library Complete + UX Fixes Applied + DEPLOYED TO PRODUCTION**
+**Date:** February 20, 2026  
+**Status:** ✅ **Live operator UI + Landing showcase updates — DOCUMENTED & PUSHED**
+
+---
+
+## ✅ February 20, 2026 — Live operator UI + Landing
+
+- **Live session header**: Event name visible (flex-1 + tooltip); ConnectionStatus moved to left sidebar (Audio System).
+- **STT label**: Operator shows "Scribe v2" instead of "Elevenlabs" (STTStatus).
+- **Landing**: New operator-console screenshot; reduced showcase motion (tilt, spring, hover, scroll-in).
+- **Docs**: memory/2026-02-20.md, MEMORY.md, README.md, DEPLOYMENT_STATUS.md, project-context.mdc, SESSION_SUMMARY_FEB_20_2026.md.
 
 ---
 
