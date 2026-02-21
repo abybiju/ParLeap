@@ -114,18 +114,18 @@ export function WorshipStream() {
         </motion.h2>
       </div>
 
-      {/* Fade masks - left and right */}
+      {/* Fade masks - left and right (match main section background from body gradient) */}
       <div
         className="absolute left-0 top-0 bottom-0 w-24 lg:w-32 z-20 pointer-events-none"
         style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0.9) 0%, transparent 100%)',
+          background: 'linear-gradient(to right, rgba(15,10,26,0.95) 0%, transparent 100%)',
         }}
         aria-hidden
       />
       <div
         className="absolute right-0 top-0 bottom-0 w-24 lg:w-32 z-20 pointer-events-none"
         style={{
-          background: 'linear-gradient(to left, rgba(0,0,0,0.9) 0%, transparent 100%)',
+          background: 'linear-gradient(to left, rgba(15,10,26,0.95) 0%, transparent 100%)',
         }}
         aria-hidden
       />
