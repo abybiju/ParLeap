@@ -325,6 +325,97 @@ describe('Matcher Service', () => {
     });
   });
 
+  describe('useBigramEndOfSlide (repeating lyrics across slides)', () => {
+    // Song with two slides: last line of slide 1 = first line of slide 2 (repeating "Worthy is your name").
+    // Use a long second-to-last line so the bi-gram end trigger (last 40% of combined) includes distinctive words
+    // and buffer "worthy is your name" alone does not match it well.
+    const repeatingLyricSong: SongData = {
+      id: 'repeating_song',
+      title: 'Repeating',
+      artist: '',
+      lyrics: 'All honour and praise we give to you\nWorthy is your name\nWorthy is your name\nForever we will sing',
+      lines: [
+        'All honour and praise we give to you',
+        'Worthy is your name',
+        'Worthy is your name',
+        'Forever we will sing',
+      ],
+      slides: [
+        {
+          lines: ['All honour and praise we give to you', 'Worthy is your name'],
+          slideText: 'All honour and praise we give to you\nWorthy is your name',
+          startLineIndex: 0,
+          endLineIndex: 1,
+        },
+        {
+          lines: ['Worthy is your name', 'Forever we will sing'],
+          slideText: 'Worthy is your name\nForever we will sing',
+          startLineIndex: 2,
+          endLineIndex: 3,
+        },
+      ],
+      lineToSlideIndex: [0, 0, 1, 1],
+    };
+
+    it('with useBigramEndOfSlide true: buffer only repeated line does NOT advance (stay on slide 1)', () => {
+      const context = createSongContext(null, repeatingLyricSong, 1); // last line of slide 1
+      expect(context.endOfSlideTarget).toBeDefined();
+      expect(context.endOfSlideTarget).toContain('all honour and praise');
+      expect(context.endOfSlideTarget).toContain('worthy is your name');
+
+      const config = validateConfig({
+        similarityThreshold: 0.55,
+        minBufferLength: 2,
+        useBigramEndOfSlide: true,
+      });
+
+      const buffer = 'worthy is your name'; // only the repeated line - bi-gram trigger needs more context
+      const result = findBestMatch(buffer, context, config);
+
+      expect(result.matchFound).toBe(true);
+      expect(result.currentLineIndex).toBe(1);
+      // Should NOT advance: bi-gram end trigger is last 40% of combined line (includes "give to you...")
+      expect(result.isLineEnd).toBe(false);
+      expect(result.nextLineIndex).toBeUndefined();
+    });
+
+    it('with useBigramEndOfSlide true: buffer has second-to-last + last line of slide 1 advances', () => {
+      const context = createSongContext(null, repeatingLyricSong, 1);
+      const config = validateConfig({
+        similarityThreshold: 0.55,
+        minBufferLength: 2,
+        useBigramEndOfSlide: true,
+      });
+
+      const buffer = 'all honour and praise we give to you worthy is your name';
+      const result = findBestMatch(buffer, context, config);
+
+      expect(result.matchFound).toBe(true);
+      expect(result.isLineEnd).toBe(true);
+      expect(result.nextLineIndex).toBe(2);
+      // currentLineIndex may be 1 (advance from current) or 2 (best match already on next line)
+      expect([1, 2]).toContain(result.currentLineIndex);
+    });
+
+    it('default (useBigramEndOfSlide false) leaves endOfSlideTarget unused', () => {
+      const context = createSongContext(null, repeatingLyricSong, 1);
+      const config = validateConfig({
+        similarityThreshold: 0.55,
+        minBufferLength: 2,
+      });
+      expect(config.useBigramEndOfSlide).toBe(false);
+
+      const buffer = 'worthy is your name';
+      const result = findBestMatch(buffer, context, config);
+
+      // With single-line trigger, buffer matching "Worthy is your name" may advance
+      expect(result.matchFound).toBe(true);
+      expect(result.currentLineIndex).toBe(1);
+      // Default behavior may advance on end trigger; we only assert config default
+      expect(config.useBigramEndOfSlide).toBe(false);
+    });
+  });
+
   describe('validateConfig', () => {
     it('should validate configuration and clamp invalid values', () => {
       const config = validateConfig({

@@ -144,6 +144,8 @@ export interface SongContext {
   /** Pre-normalized lines (set at session start to avoid repeated work in hot path) */
   normalizedLines?: string[];
   currentLineIndex: number;
+  /** When on last line of a multi-line slide: combined second-to-last + last line (normalized) for bi-gram end-of-slide matching */
+  endOfSlideTarget?: string;
 }
 
 /**
@@ -156,6 +158,8 @@ export interface MatcherConfig {
   debug?: boolean;
   lookAheadWindow?: number; // Override lookahead window for matching
   allowBackward?: boolean; // Allow backward matches (e.g., after bible mode)
+  /** Use combined second-to-last + last line of slide for end-of-line detection when on last line of multi-line slide (reduces false advances on repeating lyrics) */
+  useBigramEndOfSlide?: boolean;
 }
 
 const DEFAULT_CONFIG: MatcherConfig = {
@@ -165,6 +169,7 @@ const DEFAULT_CONFIG: MatcherConfig = {
   debug: false,
   lookAheadWindow: 6, // Wider window so chorus/pre-chorus can match when singer starts from there
   allowBackward: false,
+  useBigramEndOfSlide: false,
 };
 
 // End-of-line detection - tuned for reliability across varied songs/accents
@@ -431,7 +436,11 @@ export function findBestMatch(
     if (bestLineIndex === effectiveLineIndex) {
       // Still on current line - check if we've reached the END of this line
       const currentLine = songContext.lines[effectiveLineIndex];
-      const endTriggerInfo = getAdaptiveEndTrigger(currentLine);
+      const endOfLineTarget =
+        config.useBigramEndOfSlide && songContext.endOfSlideTarget
+          ? songContext.endOfSlideTarget
+          : currentLine;
+      const endTriggerInfo = getAdaptiveEndTrigger(endOfLineTarget);
       const normalizedEndTrigger = normalizeText(endTriggerInfo.triggerText);
 
       // Check if buffer contains the end trigger words (last 40% of current line)
@@ -454,7 +463,13 @@ export function findBestMatch(
       const endTriggerSupported =
         endMatchScore >= END_TRIGGER_SECONDARY_THRESHOLD &&
         nextLineConfidence >= NEXT_LINE_SUPPORT_THRESHOLD;
-      
+
+      // When using bi-gram end-of-slide, require buffer to have at least as many words as the trigger
+      // so we don't advance on the repeated line alone (e.g. "worthy is your name" with 4 words vs 6-word trigger)
+      const usingBigram = config.useBigramEndOfSlide && !!songContext.endOfSlideTarget;
+      const endBufferWordCount = bufferWords.length >= endWindowWords ? endWindowWords : bufferWords.length;
+      const bigramBufferLongEnough = !usingBigram || endBufferWordCount >= endTriggerInfo.triggerWords;
+
       if (config.debug) {
         console.log(
           `[MATCHER] ✅ MATCH FOUND: Line ${bestLineIndex} @ ${(bestScore * 100).toFixed(1)}% (current line)`
@@ -469,7 +484,7 @@ export function findBestMatch(
         }
       }
       
-      if (endTriggerStrong || endTriggerSupported) {
+      if (bigramBufferLongEnough && (endTriggerStrong || endTriggerSupported)) {
         // We've reached the END of this line - advance immediately!
         result.isLineEnd = true;
         result.nextLineIndex = effectiveLineIndex + 1;
@@ -545,7 +560,11 @@ export function findBestMatch(
   } else if (bestLineIndex === effectiveLineIndex) {
     // Allow end-trigger to advance even if overall confidence is lower
     const currentLine = songContext.lines[effectiveLineIndex];
-    const endTriggerInfo = getAdaptiveEndTrigger(currentLine);
+    const endOfLineTarget =
+      config.useBigramEndOfSlide && songContext.endOfSlideTarget
+        ? songContext.endOfSlideTarget
+        : currentLine;
+    const endTriggerInfo = getAdaptiveEndTrigger(endOfLineTarget);
     const normalizedEndTrigger = normalizeText(endTriggerInfo.triggerText);
     const endMatchScore = compareTwoStrings(normalizedEndBuffer, normalizedEndTrigger);
 
@@ -564,7 +583,11 @@ export function findBestMatch(
       endMatchScore >= END_TRIGGER_SECONDARY_THRESHOLD &&
       nextLineConfidence >= NEXT_LINE_SUPPORT_THRESHOLD;
 
-    if ((endTriggerStrong || endTriggerSupported) && bestScore >= END_TRIGGER_MATCH_GATE) {
+    const usingBigram = config.useBigramEndOfSlide && !!songContext.endOfSlideTarget;
+    const endBufferWordCount = bufferWords.length >= endWindowWords ? endWindowWords : bufferWords.length;
+    const bigramBufferLongEnough = !usingBigram || endBufferWordCount >= endTriggerInfo.triggerWords;
+
+    if (bigramBufferLongEnough && (endTriggerStrong || endTriggerSupported) && bestScore >= END_TRIGGER_MATCH_GATE) {
       result.matchFound = true;
       result.currentLineIndex = bestLineIndex;
       result.confidence = bestScore;
@@ -624,13 +647,40 @@ export function createSongContext(
       : splitLyricsIntoLines(songData.lyrics || '');
 
   const normalizedLines = lines.map((l) => normalizeText(l));
+  const clampedLineIndex = Math.min(currentLineIndex, lines.length - 1);
+
+  let endOfSlideTarget: string | undefined;
+  const slides = songData.slides;
+  const lineToSlideIndex = songData.lineToSlideIndex;
+  if (
+    slides &&
+    slides.length > 0 &&
+    lineToSlideIndex &&
+    clampedLineIndex >= 0 &&
+    clampedLineIndex < lineToSlideIndex.length
+  ) {
+    const slideIndex = lineToSlideIndex[clampedLineIndex];
+    const slide = slides[slideIndex];
+    if (
+      slide &&
+      slide.lines &&
+      slide.lines.length >= 2 &&
+      clampedLineIndex === slide.endLineIndex
+    ) {
+      const secondToLast = slide.lines[slide.lines.length - 2] ?? '';
+      const last = slide.lines[slide.lines.length - 1] ?? '';
+      endOfSlideTarget = normalizeText(secondToLast + ' ' + last);
+    }
+  }
+
   return {
     id: songData.id,
     title: songData.title,
     artist: songData.artist,
     lines,
     normalizedLines,
-    currentLineIndex: Math.min(currentLineIndex, lines.length - 1),
+    currentLineIndex: clampedLineIndex,
+    endOfSlideTarget,
   };
 }
 
@@ -657,6 +707,7 @@ export function validateConfig(config: Partial<MatcherConfig>): MatcherConfig {
     debug: config.debug ?? DEFAULT_CONFIG.debug,
     lookAheadWindow: Math.max(1, config.lookAheadWindow ?? DEFAULT_CONFIG.lookAheadWindow ?? 6),
     allowBackward: config.allowBackward ?? DEFAULT_CONFIG.allowBackward,
+    useBigramEndOfSlide: config.useBigramEndOfSlide ?? DEFAULT_CONFIG.useBigramEndOfSlide,
   };
 }
 
