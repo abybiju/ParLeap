@@ -535,25 +535,24 @@ export function OperatorHUD({
       )}
       {/* Command Bar */}
       <header className="relative z-40 flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-white/10 bg-white/5 backdrop-blur">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={cn(
-                'px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap',
-                sessionStatus === 'active'
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                  : sessionStatus === 'starting'
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                  : sessionStatus === 'error'
-                  ? 'bg-red-500/15 text-red-300 border-red-500/40'
-                  : 'bg-slate-500/15 text-slate-300 border-slate-500/40'
-              )}
-            >
-              Session: {sessionLabel}
-            </span>
-            <h1 className="text-lg font-semibold truncate">{eventName}</h1>
-          </div>
-          <ConnectionStatus />
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <span
+            className={cn(
+              'px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap flex-shrink-0',
+              sessionStatus === 'active'
+                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                : sessionStatus === 'starting'
+                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                : sessionStatus === 'error'
+                ? 'bg-red-500/15 text-red-300 border-red-500/40'
+                : 'bg-slate-500/15 text-slate-300 border-slate-500/40'
+            )}
+          >
+            Session: {sessionLabel}
+          </span>
+          <h1 className="text-lg font-semibold truncate min-w-0" title={eventName}>
+            {eventName}
+          </h1>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
           <div className="hidden md:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
@@ -765,6 +764,7 @@ export function OperatorHUD({
               <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
                 Audio System
               </h3>
+              <ConnectionStatus />
               <MicrophoneStatus
                 state={audioCapture.state}
                 requestPermission={audioCapture.requestPermission}

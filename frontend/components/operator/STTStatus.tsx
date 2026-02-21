@@ -5,6 +5,15 @@ import { useWebSocket } from '@/lib/hooks/useWebSocket';
 import { isTranscriptUpdateMessage, isErrorMessage } from '@/lib/websocket/types';
 import { cn } from '@/lib/utils';
 
+/** UI display name for STT provider (no brand name for elevenlabs; show product version). */
+function getSttProviderDisplayName(provider: string): string {
+  const p = provider.toLowerCase();
+  if (p === 'elevenlabs') return 'Scribe v2';
+  if (p === 'google') return 'Google';
+  if (p === 'mock') return 'Mock';
+  return provider.length > 0 ? provider.charAt(0).toUpperCase() + provider.slice(1).toLowerCase() : '—';
+}
+
 /**
  * STT Status Component
  * 
@@ -103,7 +112,7 @@ export function STTStatus({
         </div>
         <div className="text-right">
           <p className="text-xs text-slate-500">Provider</p>
-          <p className="text-xs font-mono text-slate-400 capitalize">{sttProvider}</p>
+          <p className="text-xs font-mono text-slate-400">{getSttProviderDisplayName(sttProvider)}</p>
         </div>
       </div>
       {sttProvider === 'mock' && (
