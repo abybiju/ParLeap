@@ -526,3 +526,106 @@ export async function updateEventItemSlideConfig(
   revalidatePath(`/events/${eventId}`);
   return { success: true, id: eventItemId };
 }
+
+// --- Shared search for Content Library and Command palette ---
+
+export interface SongOption {
+  id: string;
+  title: string;
+  artist: string | null;
+}
+
+export interface GetSongsSearchResult {
+  data: SongOption[];
+  total: number;
+}
+
+export async function getSongsSearch(options: {
+  query?: string;
+  limit: number;
+  offset: number;
+  excludeSongIds?: string[];
+}): Promise<GetSongsSearchResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) {
+    return { data: [], total: 0 };
+  }
+
+  const { query, limit, offset, excludeSongIds = [] } = options;
+  const safeQuery = query?.trim().replace(/'/g, "''") ?? '';
+  const excludeSet = new Set(excludeSongIds);
+
+  let base = supabase
+    .from('songs')
+    .select('id, title, artist', { count: 'exact' })
+    .eq('user_id', user.id)
+    .order('title', { ascending: true });
+
+  if (safeQuery.length > 0) {
+    base = base.or(`title.ilike.%${safeQuery}%,artist.ilike.%${safeQuery}%`);
+  }
+
+  const fetchLimit = excludeSet.size > 0 ? offset + limit + excludeSet.size : offset + limit;
+  const { data, error: fetchError, count } = await base.range(offset, fetchLimit - 1);
+
+  if (fetchError) {
+    return { data: [], total: 0 };
+  }
+
+  let rows = (data ?? []) as { id: string; title: string; artist: string | null }[];
+  if (excludeSet.size > 0) {
+    rows = rows.filter((r) => !excludeSet.has(r.id)).slice(0, limit);
+    const totalFromCount = count ?? 0;
+    return {
+      data: rows.map((r) => ({ id: r.id, title: r.title, artist: r.artist ?? null })),
+      total: Math.max(0, totalFromCount - excludeSet.size),
+    };
+  }
+
+  return {
+    data: rows.map((r) => ({ id: r.id, title: r.title, artist: r.artist ?? null })),
+    total: count ?? rows.length,
+  };
+}
+
+export interface EventSearchOption {
+  id: string;
+  name: string;
+  event_date: string | null;
+  status: string;
+}
+
+export interface GetEventsSearchResult {
+  data: EventSearchOption[];
+}
+
+export async function getEventsSearch(options: { query?: string; limit: number }): Promise<GetEventsSearchResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) {
+    return { data: [] };
+  }
+
+  const { query, limit } = options;
+  const safeQuery = query?.trim().replace(/'/g, "''") ?? '';
+
+  let q = supabase
+    .from('events')
+    .select('id, name, event_date, status')
+    .eq('user_id', user.id)
+    .order('event_date', { ascending: false, nullsFirst: false });
+
+  if (safeQuery.length > 0) {
+    q = q.ilike('name', `%${safeQuery}%`);
+  }
+
+  const { data, error: fetchError } = await q.limit(limit);
+
+  if (fetchError) {
+    return { data: [] };
+  }
+
+  const rows = (data ?? []) as { id: string; name: string; event_date: string | null; status: string }[];
+  return {
+    data: rows.map((r) => ({ id: r.id, name: r.name, event_date: r.event_date, status: r.status })),
+  };
+}

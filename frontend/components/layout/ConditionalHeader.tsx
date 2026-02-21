@@ -6,10 +6,14 @@ import { DashboardHeader } from '@/components/layout/DashboardHeader'
 
 /**
  * ConditionalHeader Component
- * 
+ *
  * Renders the appropriate header based on the current route:
  * - DashboardHeader for protected routes (dashboard, songs, events, live, operator, profile)
  * - Header (marketing) for public routes (homepage, auth pages)
+ *
+ * The center search in DashboardHeader is the global command palette (⌘K); it searches
+ * songs and events server-side. Add any new protected route to isProtectedRoute below
+ * so the same header (and search) appears there.
  */
 export function ConditionalHeader() {
   const pathname = usePathname()

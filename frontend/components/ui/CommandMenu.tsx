@@ -16,12 +16,12 @@ import {
 } from 'cmdk'
 import { Music, Calendar, BookOpen, Plus, Moon, Sun, LogOut, Home, X, Clock } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/authStore'
-import { createClient } from '@/lib/supabase/client'
-import type { Database } from '@/lib/supabase/types'
+import { getSongsSearch, getEventsSearch } from '@/app/events/actions'
 import { Badge } from '@/components/ui/badge'
 
-type Song = Database['public']['Tables']['songs']['Row']
-type Event = Database['public']['Tables']['events']['Row']
+const SONGS_SEARCH_LIMIT = 20
+const EVENTS_SEARCH_LIMIT = 10
+const SEARCH_DEBOUNCE_MS = 300
 
 interface RecentSearch {
   query: string
@@ -82,8 +82,8 @@ function parseInput(rawInput: string): ParsedInput {
 export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const router = useRouter()
   const { signOut } = useAuthStore()
-  const [songs, setSongs] = useState<Song[]>([])
-  const [events, setEvents] = useState<Event[]>([])
+  const [songs, setSongs] = useState<{ id: string; title: string; artist: string | null }[]>([])
+  const [events, setEvents] = useState<{ id: string; name: string; event_date: string | null; status: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [rawInput, setRawInput] = useState('')
   const [isDark, setIsDark] = useState(false)
@@ -106,6 +106,38 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
       }
     }
   }, [])
+
+  // Server-side search: debounced when user types (no fetch on open)
+  useEffect(() => {
+    if (!open) return
+
+    const q = searchQuery.trim()
+    const timer = setTimeout(() => {
+      if (!q) {
+        setSongs([])
+        setEvents([])
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      Promise.all([
+        getSongsSearch({ query: q, limit: SONGS_SEARCH_LIMIT, offset: 0 }),
+        getEventsSearch({ query: q, limit: EVENTS_SEARCH_LIMIT }),
+      ])
+        .then(([songsRes, eventsRes]) => {
+          setSongs(songsRes.data)
+          setEvents(eventsRes.data)
+        })
+        .catch((err) => {
+          console.error('Command menu search error:', err)
+          setSongs([])
+          setEvents([])
+        })
+        .finally(() => setLoading(false))
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+  }, [open, searchQuery])
 
   // Save search to recent searches
   const saveRecentSearch = (query: string) => {
@@ -160,52 +192,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     }
   }, [open])
 
-  // Fetch songs and events when palette opens
-  useEffect(() => {
-    if (open) {
-      setLoading(true)
-      const supabase = createClient()
-      
-      Promise.all([
-        supabase
-          .from('songs')
-          .select('id, title, artist, lyrics')
-          .order('title', { ascending: true }),
-        supabase
-          .from('events')
-          .select('id, name, event_date, status')
-          .order('event_date', { ascending: false, nullsFirst: false }),
-      ])
-        .then(([songsResult, eventsResult]) => {
-          if (songsResult.data) setSongs(songsResult.data)
-          if (eventsResult.data) setEvents(eventsResult.data)
-        })
-        .catch((error) => {
-          console.error('Error fetching data for command menu:', error)
-        })
-        .finally(() => {
-          setLoading(false)
-        })
-    }
-  }, [open])
-
-  // Filter songs by search query (title, artist, or lyrics)
-  const filteredSongs = songs.filter((song) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      song.title?.toLowerCase().includes(query) ||
-      song.artist?.toLowerCase().includes(query) ||
-      song.lyrics?.toLowerCase().includes(query)
-    )
-  })
-
-  // Filter events by search query
-  const filteredEvents = events.filter((event) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return event.name?.toLowerCase().includes(query)
-  })
+  // Songs and events are now server-side search results (set in debounced effect above)
 
   // Check if search looks like a Bible reference (e.g., "John 3:16", "Psalm 23")
   const isBibleReference = /^[a-z]+\s*\d+[:\d]*$/i.test(searchQuery.trim())
@@ -418,10 +405,10 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               </CommandGroup>
             )}
 
-            {/* GROUP 3: Songs */}
-            {(commandContext === 'ALL' || commandContext === 'SONG') && filteredSongs.length > 0 && (
+            {/* GROUP 3: Songs (server-side search; show when user has typed) */}
+            {(commandContext === 'ALL' || commandContext === 'SONG') && searchQuery.trim() && songs.length > 0 && (
               <CommandGroup heading="Songs">
-                {filteredSongs.slice(0, 10).map((song) => (
+                {songs.slice(0, 10).map((song) => (
                   <CommandItem
                     key={song.id}
                     onSelect={() => handleSongSelect(song.id)}
@@ -464,10 +451,10 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               </CommandGroup>
             )}
 
-            {/* GROUP 5: Events */}
-            {(commandContext === 'ALL' || commandContext === 'EVENT') && filteredEvents.length > 0 && (
+            {/* GROUP 5: Events (server-side search; show when user has typed) */}
+            {(commandContext === 'ALL' || commandContext === 'EVENT') && searchQuery.trim() && events.length > 0 && (
               <CommandGroup heading="Events">
-                {filteredEvents.slice(0, 10).map((event) => (
+                {events.slice(0, 10).map((event) => (
                   <CommandItem
                     key={event.id}
                     onSelect={() => handleEventSelect(event.id)}

@@ -24,12 +24,6 @@ import type {
 import type { AnnouncementSlideInput } from '@/lib/types/setlist';
 import { isSongItem } from '@/lib/types/setlist';
 
-interface SongOption {
-  id: string;
-  title: string;
-  artist: string | null;
-}
-
 interface EventEditWorkspaceProps {
   event: {
     id: string;
@@ -39,12 +33,11 @@ interface EventEditWorkspaceProps {
     background_image_url?: string | null;
   };
   initialSetlist: SetlistItem[];
-  songs: SongOption[];
 }
 
 type WorkspaceView = 'setlist' | 'library';
 
-export function EventEditWorkspace({ event, initialSetlist, songs }: EventEditWorkspaceProps) {
+export function EventEditWorkspace({ event, initialSetlist }: EventEditWorkspaceProps) {
   const [activeView, setActiveView] = useState<WorkspaceView>('setlist');
   const [setlistItems, setSetlistItems] = useState<SetlistItem[]>(initialSetlist);
   const [, startTransition] = useTransition();
@@ -99,10 +92,7 @@ export function EventEditWorkspace({ event, initialSetlist, songs }: EventEditWo
     });
   };
 
-  const handleAddSong = (songId: string) => {
-    const song = songs.find((s) => s.id === songId);
-    if (!song) return;
-
+  const handleAddSong = (songId: string, song: { title: string; artist: string | null }) => {
     const nextOrder = setlistItems.length + 1;
     startTransition(async () => {
       const result = await addSongToEvent(eventId, songId, nextOrder);
@@ -115,7 +105,7 @@ export function EventEditWorkspace({ event, initialSetlist, songs }: EventEditWo
         id: result.id as string,
         eventId,
         itemType: 'SONG',
-        songId: song.id,
+        songId,
         title: song.title,
         artist: song.artist,
         sequenceOrder: nextOrder,
@@ -234,7 +224,6 @@ export function EventEditWorkspace({ event, initialSetlist, songs }: EventEditWo
                   </p>
                 </div>
                 <SetlistLibrary
-                  songs={songs}
                   setlistItems={setlistItems.map((item) => ({
                     songId: isSongItem(item) ? item.songId : undefined,
                     bibleRef: item.itemType === 'BIBLE' ? item.bibleRef : undefined,
