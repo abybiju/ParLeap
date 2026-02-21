@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Music, Image as ImageIcon, BookOpen, Plus, Megaphone, Trash2, Link2, Upload, Cloud, Sparkles, Type, Eraser } from 'lucide-react';
+import { Music, Image as ImageIcon, BookOpen, Plus, Megaphone, Trash2, Link2, Upload, Cloud, Sparkles, Type, Eraser, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -12,7 +12,10 @@ import { uploadAnnouncementAsset, validateAnnouncementFile } from '@/lib/utils/a
 import { uploadMediaAsset, validateMediaFile } from '@/lib/utils/mediaUpload';
 import { openGoogleDrivePicker, isGoogleDrivePickerAvailable } from '@/lib/utils/googleDrivePicker';
 import { createClient } from '@/lib/supabase/client';
+import { getSongsSearch } from '@/app/events/actions';
 import dynamic from 'next/dynamic';
+
+const PAGE_SIZE = 10;
 
 const AnnouncementCanvasEditor = dynamic(
   () => import('./AnnouncementCanvasEditor').then((m) => m.AnnouncementCanvasEditor),
@@ -22,23 +25,15 @@ const AnnouncementCanvasEditor = dynamic(
 type TabType = 'songs' | 'bible' | 'media' | 'announcement';
 type AnnouncementSourceType = 'url' | 'device' | 'drive' | 'ideogram';
 
-interface SongOption {
-  id: string;
-  title: string;
-  artist: string | null;
-}
-
 interface SetlistLibraryProps {
-  songs: SongOption[];
   setlistItems: Array<{ songId?: string; bibleRef?: string; mediaUrl?: string }>;
-  onAddSong: (songId: string) => void;
+  onAddSong: (songId: string, song: { title: string; artist: string | null }) => void;
   onAddBible: (bibleRef: string) => void;
   onAddMedia: (mediaUrl: string, mediaTitle: string) => void;
   onAddAnnouncement: (slides: AnnouncementSlideInput[]) => void;
 }
 
 export function SetlistLibrary({
-  songs,
   setlistItems,
   onAddSong,
   onAddBible,
@@ -46,6 +41,11 @@ export function SetlistLibrary({
   onAddAnnouncement,
 }: SetlistLibraryProps) {
   const [activeTab, setActiveTab] = useState<TabType>('songs');
+  const [songsSearchQuery, setSongsSearchQuery] = useState('');
+  const [songsDebouncedQuery, setSongsDebouncedQuery] = useState('');
+  const [songsPage, setSongsPage] = useState(1);
+  const [songsPageData, setSongsPageData] = useState<{ data: { id: string; title: string; artist: string | null }[]; total: number } | null>(null);
+  const [songsLoading, setSongsLoading] = useState(false);
   const [mediaTitle, setMediaTitle] = useState('');
   type MediaSourceType = 'device' | 'drive';
   const [mediaSource, setMediaSource] = useState<MediaSourceType>('device');
@@ -69,10 +69,50 @@ export function SetlistLibrary({
   const [canvasEditorSlideIndex, setCanvasEditorSlideIndex] = useState<number | null>(null);
   const [canvasEditorObjectUrl, setCanvasEditorObjectUrl] = useState<string | null>(null);
 
-  // Filter out songs already in setlist
-  const availableSongs = songs.filter(
-    (song) => !setlistItems.some((item) => item.songId === song.id)
-  );
+  const excludeSongIds = setlistItems.map((i) => i.songId).filter((id): id is string => Boolean(id));
+  const excludeSongIdsKey = excludeSongIds.join(',');
+
+  // Debounce search query for Songs tab
+  useEffect(() => {
+    const t = setTimeout(() => setSongsDebouncedQuery(songsSearchQuery), 300);
+    return () => clearTimeout(t);
+  }, [songsSearchQuery]);
+
+  // Fetch songs page when Songs tab is active
+  useEffect(() => {
+    if (activeTab !== 'songs') return;
+
+    let cancelled = false;
+    setSongsLoading(true);
+    getSongsSearch({
+      query: songsDebouncedQuery.trim() || undefined,
+      limit: PAGE_SIZE,
+      offset: (songsPage - 1) * PAGE_SIZE,
+      excludeSongIds,
+    })
+      .then((result) => {
+        if (!cancelled) {
+          setSongsPageData({ data: result.data, total: result.total });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSongsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // excludeSongIdsKey is the serialized exclude list so we refetch when setlist changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- excludeSongIds used inside via closure; key drives refetch
+  }, [activeTab, songsDebouncedQuery, songsPage, excludeSongIdsKey]);
+
+  const handleSongsSearchChange = (value: string) => {
+    setSongsSearchQuery(value);
+    setSongsPage(1);
+  };
+
+  const totalPages = songsPageData ? Math.max(1, Math.ceil(songsPageData.total / PAGE_SIZE)) : 1;
+  const hasPrev = songsPage > 1;
+  const hasNext = songsPage < totalPages;
 
   const handleAddBible = () => {
     onAddBible('Bible'); // Generic slot – AI listens for any verse, not a pre-set reference
@@ -485,27 +525,72 @@ export function SetlistLibrary({
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'songs' && (
-          <div className="space-y-2">
-            {availableSongs.length === 0 ? (
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                type="search"
+                placeholder="Search by title or artist..."
+                value={songsSearchQuery}
+                onChange={(e) => handleSongsSearchChange(e.target.value)}
+                className="pl-9 bg-slate-900/60 border-white/10 text-white placeholder:text-slate-500"
+                aria-label="Search songs"
+              />
+            </div>
+            {songsLoading ? (
+              <div className="text-center text-slate-400 py-8 text-sm">Loading...</div>
+            ) : !songsPageData ? (
+              <div className="text-center text-slate-400 py-8 text-sm">Loading...</div>
+            ) : songsPageData.data.length === 0 ? (
               <div className="text-center text-slate-400 py-8 text-sm">
-                All songs are already in the setlist
+                {songsSearchQuery.trim() ? 'No songs match your search' : 'All songs are already in the setlist or you have no songs yet'}
               </div>
             ) : (
-              availableSongs.map((song) => (
-                <div
-                  key={song.id}
-                  className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-900/40 px-4 py-3 hover:border-blue-300/50 transition cursor-pointer"
-                  onClick={() => onAddSong(song.id)}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-white">{song.title}</p>
-                    {song.artist && <p className="text-xs text-slate-400">{song.artist}</p>}
+              <>
+                {songsPageData.data.map((song) => (
+                  <div
+                    key={song.id}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-900/40 px-4 py-3 hover:border-blue-300/50 transition cursor-pointer"
+                    onClick={() => onAddSong(song.id, { title: song.title, artist: song.artist })}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-white">{song.title}</p>
+                      {song.artist && <p className="text-xs text-slate-400">{song.artist}</p>}
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="sm">
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                ))}
+                <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                  <span className="text-xs text-slate-500">
+                    Page {songsPage} of {totalPages}
+                    {songsPageData.total > 0 && ` (${songsPageData.total} total)`}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-white/10 text-slate-300"
+                      disabled={!hasPrev}
+                      onClick={() => setSongsPage((p) => Math.max(1, p - 1))}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-white/10 text-slate-300"
+                      disabled={!hasNext}
+                      onClick={() => setSongsPage((p) => p + 1)}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              ))
+              </>
             )}
           </div>
         )}

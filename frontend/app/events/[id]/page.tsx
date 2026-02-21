@@ -55,12 +55,6 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     items = eventItems || [];
   }
 
-  const { data: songs } = await supabase
-    .from('songs')
-    .select('id, title, artist')
-    .eq('user_id', user.id)
-    .order('title', { ascending: true });
-
   // Convert to SetlistItem format
   const setlist = items
     .map((item: any) => {
@@ -127,7 +121,6 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         <EventEditWorkspace
           event={event}
           initialSetlist={setlist}
-          songs={songs ?? []}
         />
       </main>
     </AppPageWrapper>

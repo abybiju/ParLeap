@@ -16,24 +16,17 @@ import type { SetlistItem } from '@/lib/types/setlist';
 import type { AnnouncementSlideInput } from '@/lib/types/setlist';
 import { isSongItem } from '@/lib/types/setlist';
 
-interface SongOption {
-  id: string;
-  title: string;
-  artist: string | null;
-}
-
 interface SetlistBuilderProps {
   eventId: string;
   initialSetlist: SetlistItem[];
-  songs: SongOption[];
 }
 
 /**
  * Two-column Setlist Builder (Setlist | Library).
  * For the event edit page, EventEditWorkspace is used instead (Spotify-style sidebar + full-width views).
- * This component is kept for reuse elsewhere if needed.
+ * This component is kept for reuse elsewhere if needed. Songs are loaded via server-side search in SetlistLibrary.
  */
-export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilderProps) {
+export function SetlistBuilder({ eventId, initialSetlist }: SetlistBuilderProps) {
   const [setlistItems, setSetlistItems] = useState<SetlistItem[]>(initialSetlist);
   const [, startTransition] = useTransition();
 
@@ -71,9 +64,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
     });
   };
 
-  const handleAddSong = (songId: string) => {
-    const song = songs.find((s) => s.id === songId);
-    if (!song) return;
+  const handleAddSong = (songId: string, song: { title: string; artist: string | null }) => {
     const nextOrder = setlistItems.length + 1;
     startTransition(async () => {
       const result = await addSongToEvent(eventId, songId, nextOrder);
@@ -87,7 +78,7 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
           id: result.id as string,
           eventId,
           itemType: 'SONG' as const,
-          songId: song.id,
+          songId,
           title: song.title,
           artist: song.artist,
           sequenceOrder: nextOrder,
@@ -171,7 +162,6 @@ export function SetlistBuilder({ eventId, initialSetlist, songs }: SetlistBuilde
           <h3 className="text-sm font-medium text-slate-300 mb-3">Library</h3>
           <div className="flex-1 min-h-0 rounded-lg border border-white/10 bg-slate-900/40 p-4 overflow-y-auto">
             <SetlistLibrary
-              songs={songs}
               setlistItems={setlistItems.map((item) => ({
                 songId: isSongItem(item) ? item.songId : undefined,
                 bibleRef: item.itemType === 'BIBLE' ? item.bibleRef : undefined,
