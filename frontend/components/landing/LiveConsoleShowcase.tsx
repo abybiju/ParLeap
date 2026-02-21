@@ -9,8 +9,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-const TILT_MAX = 8
-const SPRING = { type: 'spring' as const, stiffness: 150, damping: 20 }
+const TILT_MAX = 3
+const SPRING = { type: 'spring' as const, stiffness: 80, damping: 28 }
 
 export function LiveConsoleShowcase() {
   const [modalOpen, setModalOpen] = useState(false)
@@ -59,10 +59,10 @@ export function LiveConsoleShowcase() {
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.1 }}
+          transition={{ duration: 0.45, delay: 0.08 }}
           className="flex justify-center"
           style={{ perspective: 1000 }}
         >
@@ -88,8 +88,8 @@ export function LiveConsoleShowcase() {
             }}
             transition={SPRING}
             whileHover={{
-              scale: 1.03,
-              transition: { duration: 0.2 },
+              scale: 1.01,
+              transition: { duration: 0.25 },
             }}
             className="glass-card cursor-pointer rounded-xl overflow-hidden border border-white/10 shadow-xl hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/20 transition-shadow duration-300 max-w-4xl w-full"
           >
