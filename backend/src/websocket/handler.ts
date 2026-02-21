@@ -1852,6 +1852,47 @@ async function handleTranscriptionResult(
           return;
         }
 
+        // When buffer matches current song title (e.g. "Holy forever") and we're not on first slide, go to first slide
+        if (multiSongResult.goToFirstSlideOfCurrentSong && session.currentLineIndex > 0) {
+          const curSong = session.songs[session.currentSongIndex];
+          if (curSong && session.songContext) {
+            const line0 = curSong.lines[0];
+            const newSlide0 = curSong.lineToSlideIndex && curSong.lineToSlideIndex.length > 0
+              ? curSong.lineToSlideIndex[0]
+              : 0;
+            let slideLines: string[] = [line0 ?? ''];
+            let slideText = line0 ?? '';
+            if (curSong.slides && newSlide0 < curSong.slides.length) {
+              const slide = curSong.slides[newSlide0];
+              slideLines = slide.lines;
+              slideText = slide.slideText;
+            }
+            session.currentLineIndex = 0;
+            session.currentSlideIndex = newSlide0;
+            session.songContext.currentLineIndex = 0;
+            const displayMsg: DisplayUpdateMessage = {
+              type: 'DISPLAY_UPDATE',
+              payload: {
+                lineText: slideLines[0],
+                slideText,
+                slideLines,
+                slideIndex: newSlide0,
+                lineIndex: 0,
+                songId: session.songContext.id,
+                songTitle: session.songContext.title,
+                matchConfidence: 1,
+                isAutoAdvance: true,
+                currentItemIndex: session.currentItemIndex,
+              },
+              timing: createTiming(receivedAt, processingStart),
+            };
+            if (!session.bibleMode) broadcastToEvent(session.eventId, displayMsg);
+            console.log(`[WS] 📍 Current song title said → first slide (line 0)`);
+            logTiming('song path (title to first slide)');
+            return;
+          }
+        }
+
       // Handle current song line matching (normal slide advance)
       const isEndTriggerMatch =
         matchResult.advanceReason === 'end-words' && matchResult.endTriggerScore !== undefined;

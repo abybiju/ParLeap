@@ -63,6 +63,8 @@ const SOUNDALIKE_PAIRS: Array<[string, string]> = [
   ['known', 'throne'],
   ['holy', 'wholly'],
   ['wholly', 'holy'],
+  ['forest', 'forever'],
+  ['forever', 'forest'],
 ];
 
 /**
@@ -127,6 +129,8 @@ export interface MultiSongMatchResult {
     lineText: string;
     confidence: number;
   };
+  /** When buffer matches current song title (e.g. "Holy forever") and we're not on first slide, go to first slide. */
+  goToFirstSlideOfCurrentSong?: boolean;
 }
 
 /**
@@ -173,6 +177,8 @@ const END_TRIGGER_MATCH_GATE = 0.58; // Allow end-trigger even if full-line conf
 const SIMILAR_LINE_THRESHOLD = 0.65;
 /** When buffer matches target line this well, allow advance even if current and target lines are similar (e.g. repeated chorus). */
 const ADVANCE_WHEN_CLEAR_THRESHOLD = 0.75;
+/** When buffer still matches current line this well, do not advance to next line (singer likely still on first verse). */
+const STAY_ON_CURRENT_IF_BUFFER_MATCHES_CURRENT = 0.55;
 // Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**
@@ -493,7 +499,20 @@ export function findBestMatch(
       const lineSimilarity = compareTwoStrings(currentLineText, targetLineText);
       const bufferClearlyMatchesTarget = bestScore >= ADVANCE_WHEN_CLEAR_THRESHOLD;
 
-      if (lineSimilarity >= SIMILAR_LINE_THRESHOLD && !bufferClearlyMatchesTarget) {
+      // Don't advance to next line if buffer still matches current line well (e.g. singer just started first verse)
+      const bufferMatchesCurrentLine = similarityWithSoundalikes(normalizedBuffer, currentLineText) >= STAY_ON_CURRENT_IF_BUFFER_MATCHES_CURRENT;
+      if (bestLineIndex === effectiveLineIndex + 1 && bufferMatchesCurrentLine) {
+        result.currentLineIndex = effectiveLineIndex;
+        result.matchedText = songContext.lines[effectiveLineIndex];
+        result.isLineEnd = false;
+        result.nextLineIndex = undefined;
+        result.advanceReason = undefined;
+        if (config.debug) {
+          console.log(
+            `[MATCHER] Buffer still matches current line (>= ${(STAY_ON_CURRENT_IF_BUFFER_MATCHES_CURRENT * 100).toFixed(0)}%): not advancing to line ${bestLineIndex}; wait for end-of-line.`
+          );
+        }
+      } else if (lineSimilarity >= SIMILAR_LINE_THRESHOLD && !bufferClearlyMatchesTarget) {
         result.currentLineIndex = effectiveLineIndex;
         result.matchedText = songContext.lines[effectiveLineIndex];
         result.isLineEnd = false;
@@ -825,6 +844,21 @@ export function findBestMatchAcrossAllSongs(
       lineText: bestOtherSongLineText,
       confidence: bestOtherSongScore,
     };
+  }
+
+  // When buffer matches current song title (e.g. "Holy forever") and we're not on first slide, go to first slide
+  const currentSong = allSongs[currentSongIndex];
+  if (currentSong && currentSongContext.currentLineIndex > 0) {
+    const currentTitleNorm = normalizeText(currentSong.title || '');
+    if (currentTitleNorm.length > 0) {
+      const titleSim = similarityWithSoundalikes(normalizedBuffer, currentTitleNorm);
+      if (titleSim >= TITLE_MATCH_MIN_CONFIDENCE) {
+        result.goToFirstSlideOfCurrentSong = true;
+        if (config.debug) {
+          console.log(`[MULTI-SONG] 📍 Current song title match (${(titleSim * 100).toFixed(1)}%) → go to first slide`);
+        }
+      }
+    }
   }
 
   return result;
