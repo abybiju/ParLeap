@@ -4,7 +4,7 @@ Real-time AI-powered presentation orchestration platform.
 
 ## 🟢 Current Status
 
-**Last Updated:** February 3, 2026
+**Last Updated:** February 20, 2026
 
 ### Live Deployments
 - **Frontend**: [www.parleap.com](https://www.parleap.com) (Vercel)
@@ -28,6 +28,11 @@ Real-time AI-powered presentation orchestration platform.
 - ✅ **Songs Library**: Notion-style CRUD interface with stanza-aware editor
 
 ### Recent Updates
+
+**February 20, 2026**
+- ✅ **Live session header**: Event name gets more space (flex-1 + tooltip when truncated); ConnectionStatus (latency) moved to left sidebar under Audio System.
+- ✅ **STT provider label**: Operator view shows **Scribe v2** instead of "Elevenlabs" (STTStatus uses product name).
+- ✅ **Landing operator showcase**: New operator-console screenshot; reduced 3D tilt and motion (subtler spring, hover, scroll-in).
 
 **February 3, 2026**
 - ✅ **Profile Settings (Sidebar Layout)**: New `/dashboard/profile` settings page with General / Account / Security / Billing tabs

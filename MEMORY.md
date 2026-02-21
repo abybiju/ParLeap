@@ -1,5 +1,17 @@
 # ParLeap AI - Memory Log
 
+## Session: February 20, 2026 — Live operator UI + Landing showcase
+
+### What we did
+- **Live session header**: Event name given more space (flex-1 + truncate + tooltip); **ConnectionStatus** (latency) moved from header to left sidebar under "Audio System" in OperatorHUD.
+- **STT label**: STTStatus now shows **"Scribe v2"** for ElevenLabs (via `getSttProviderDisplayName`) instead of vendor name.
+- **Landing operator showcase**: Replaced operator-console.png with current dashboard screenshot; reduced motion (tilt 8°→3°, softer spring, hover scale 1.03→1.01, gentler scroll-in).
+
+### Key lesson
+- Keep the header for identity and primary controls; move secondary/status (e.g. latency) into contextual panels (e.g. Audio System) so the session name stays visible.
+
+---
+
 ## Session: February 20, 2026 — Landing/Footer/Pricing + Auth redesign
 
 ### What we did

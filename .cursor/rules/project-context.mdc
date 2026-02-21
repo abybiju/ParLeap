@@ -46,6 +46,11 @@ ParLeap is a **real-time AI-powered presentation orchestration platform** for li
 
 ### Recent Features
 
+**Live session header + STT label; Landing operator showcase** (February 20, 2026)
+- **OperatorHUD**: Event name gets flex-1 + tooltip; ConnectionStatus (latency) moved to left sidebar under Audio System.
+- **STTStatus**: Displays "Scribe v2" for elevenlabs (getSttProviderDisplayName).
+- **Landing**: operator-console.png replaced with current screenshot; LiveConsoleShowcase motion reduced (tilt 3°, softer spring, hover 1.01, gentler scroll-in).
+
 **Decouple Live from setlist + Bible Mode STT** (February 19, 2026)
 - **Setlist = operator overview only**: Order does not control live matching; matching works with disordered setlist as long as event content exists.
 - **Bible path**: Runs only when Bible Mode is ON (operator toggle); routing by `session.bibleMode` only, not current setlist item type. No random Bible verse when Bible Mode off.
