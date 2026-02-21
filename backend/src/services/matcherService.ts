@@ -169,7 +169,7 @@ const DEFAULT_CONFIG: MatcherConfig = {
   debug: false,
   lookAheadWindow: 6, // Wider window so chorus/pre-chorus can match when singer starts from there
   allowBackward: false,
-  useBigramEndOfSlide: false,
+  useBigramEndOfSlide: true,
 };
 
 // End-of-line detection - tuned for reliability across varied songs/accents
@@ -184,6 +184,8 @@ const SIMILAR_LINE_THRESHOLD = 0.65;
 const ADVANCE_WHEN_CLEAR_THRESHOLD = 0.75;
 /** When buffer still matches current line this well, do not advance to next line (singer likely still on first verse). */
 const STAY_ON_CURRENT_IF_BUFFER_MATCHES_CURRENT = 0.55;
+/** When best match is 2+ lines ahead (e.g. next slide), require this confidence to advance; prevents skipping a slide on partial match. */
+const SKIP_AHEAD_MIN_CONFIDENCE = 0.88;
 // Fallback if using fixed word count: const END_TRIGGER_WORD_COUNT = 5;
 
 /**
@@ -536,6 +538,18 @@ export function findBestMatch(
         if (config.debug) {
           console.log(
             `[MATCHER] Similar line detected (${(lineSimilarity * 100).toFixed(1)}%): not advancing to line ${bestLineIndex}; require end-of-line.`
+          );
+        }
+      } else if (bestLineIndex >= effectiveLineIndex + 2 && bestScore < SKIP_AHEAD_MIN_CONFIDENCE) {
+        // Don't skip a whole slide (2+ lines ahead) on medium confidence; e.g. sang first verse, buffer matched next slide phrase
+        result.currentLineIndex = effectiveLineIndex;
+        result.matchedText = songContext.lines[effectiveLineIndex];
+        result.isLineEnd = false;
+        result.nextLineIndex = undefined;
+        result.advanceReason = undefined;
+        if (config.debug) {
+          console.log(
+            `[MATCHER] Skip-ahead guard: best match line ${bestLineIndex} (${bestLineIndex - effectiveLineIndex} lines ahead) @ ${(bestScore * 100).toFixed(1)}% < ${(SKIP_AHEAD_MIN_CONFIDENCE * 100).toFixed(0)}% - staying on line ${effectiveLineIndex}`
           );
         }
       } else {

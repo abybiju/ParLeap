@@ -397,22 +397,26 @@ describe('Matcher Service', () => {
       expect([1, 2]).toContain(result.currentLineIndex);
     });
 
-    it('default (useBigramEndOfSlide false) leaves endOfSlideTarget unused', () => {
+    it('default (useBigramEndOfSlide true) uses endOfSlideTarget when on last line of slide', () => {
+      const config = validateConfig({ similarityThreshold: 0.55, minBufferLength: 2 });
+      expect(config.useBigramEndOfSlide).toBe(true);
+    });
+
+    it('when useBigramEndOfSlide false, single-line trigger can advance', () => {
       const context = createSongContext(null, repeatingLyricSong, 1);
       const config = validateConfig({
         similarityThreshold: 0.55,
         minBufferLength: 2,
+        useBigramEndOfSlide: false,
       });
       expect(config.useBigramEndOfSlide).toBe(false);
 
       const buffer = 'worthy is your name';
       const result = findBestMatch(buffer, context, config);
 
-      // With single-line trigger, buffer matching "Worthy is your name" may advance
+      // With single-line trigger (bi-gram off), buffer matching "Worthy is your name" may advance
       expect(result.matchFound).toBe(true);
       expect(result.currentLineIndex).toBe(1);
-      // Default behavior may advance on end trigger; we only assert config default
-      expect(config.useBigramEndOfSlide).toBe(false);
     });
   });
 
