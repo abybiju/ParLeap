@@ -6,6 +6,18 @@ import { isDisplayUpdateMessage, isSessionStartedMessage, isEventSettingsUpdated
 import { getProjectorFontClass, getProjectorFontIdOrDefault } from '@/lib/projectorFonts';
 import { cn } from '@/lib/utils';
 
+/** Section labels (Verse 1, Chorus, etc.) to hide on projector — lyrics only, no labels */
+const SECTION_LABEL_PATTERN = /^(Verse\s*\d*|Chorus|Pre[- ]?Chorus|Post[- ]?Chorus|Bridge|Intro|Outro|Tag|Interlude|Ending|Refrain|Hook|Instrumental|Break)$/i;
+
+function isSectionLabel(line: string): boolean {
+  const t = line.trim();
+  return t.length > 0 && SECTION_LABEL_PATTERN.test(t);
+}
+
+function filterSectionLabelsFromLines(lines: string[]): string[] {
+  return lines.filter((line) => !isSectionLabel(line));
+}
+
 interface ProjectorDisplayProps {
   eventId: string;
 }
@@ -243,7 +255,9 @@ export function ProjectorDisplay({ eventId }: ProjectorDisplayProps) {
 
   const { lineText, slideText, slideLines, songTitle, slideIndex, slideImageUrl, slideVideoUrl } = currentSlide.payload;
 
-  const displayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
+  const rawDisplayLines = slideLines ?? (slideText ? slideText.split('\n') : [lineText]);
+  /** On projector we hide section labels (Verse 1, Chorus, etc.) — lyrics only */
+  const displayLines = filterSectionLabelsFromLines(rawDisplayLines);
   const hasStructuredText = displayLines.length > 0;
 
   // Announcement: image or video with optional structured text overlay (exact wording on top)
