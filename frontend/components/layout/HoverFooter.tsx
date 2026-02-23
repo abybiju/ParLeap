@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Instagram, Linkedin, Youtube, ArrowUpRight } from 'lucide-react'
+import { Instagram, Linkedin, ArrowUpRight } from 'lucide-react'
 
 import { FooterBackgroundGradient, TextHoverEffect } from '@/components/ui/hover-footer'
 
@@ -15,9 +15,8 @@ const productLinks = [
 ]
 
 const socialLinks = [
-  { label: 'Instagram', href: 'https://instagram.com/parleap', icon: Instagram },
-  { label: 'LinkedIn', href: 'https://linkedin.com/company/parleap', icon: Linkedin },
-  { label: 'YouTube', href: 'https://youtube.com/@parleap', icon: Youtube },
+  { label: 'Instagram', href: 'https://www.instagram.com/parleap_ai?igsh=MW1kajI3azV4eWlrbQ==', icon: Instagram },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/company/parleap/people/?viewAsMember=true', icon: Linkedin },
 ]
 
 export function HoverFooter() {

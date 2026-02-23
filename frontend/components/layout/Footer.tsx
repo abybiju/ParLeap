@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { Instagram, Linkedin, Youtube } from 'lucide-react'
+import { Instagram, Linkedin } from 'lucide-react'
 
 export function Footer() {
   return (
@@ -59,7 +59,7 @@ export function Footer() {
           {/* Right: Social Icons */}
           <div className="flex items-center gap-4 justify-center md:justify-end">
             <a
-              href="https://instagram.com/parleap"
+              href="https://www.instagram.com/parleap_ai?igsh=MW1kajI3azV4eWlrbQ=="
               target="_blank"
               rel="noopener noreferrer"
               className="text-neutral-500 hover:text-white transition-colors"
@@ -68,22 +68,13 @@ export function Footer() {
               <Instagram className="h-5 w-5" />
             </a>
             <a
-              href="https://linkedin.com/company/parleap"
+              href="https://www.linkedin.com/company/parleap/people/?viewAsMember=true"
               target="_blank"
               rel="noopener noreferrer"
               className="text-neutral-500 hover:text-white transition-colors"
               aria-label="LinkedIn"
             >
               <Linkedin className="h-5 w-5" />
-            </a>
-            <a
-              href="https://youtube.com/@parleap"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-neutral-500 hover:text-white transition-colors"
-              aria-label="YouTube"
-            >
-              <Youtube className="h-5 w-5" />
             </a>
           </div>
         </div>
