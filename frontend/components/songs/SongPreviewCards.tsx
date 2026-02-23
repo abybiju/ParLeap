@@ -209,7 +209,7 @@ export function SongPreviewCards({
             }}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              <span className="text-xs text-gray-300 font-medium uppercase tracking-wider">
                 Slide {index + 1}
               </span>
               <Badge variant="secondary" className="text-xs bg-orange-500/20 text-orange-400 border-orange-500/30">
@@ -224,8 +224,8 @@ export function SongPreviewCards({
                     key={lineIndex}
                     className={
                       isLabel
-                        ? 'text-xs text-muted-foreground font-medium uppercase tracking-wider'
-                        : 'text-foreground text-sm leading-relaxed font-light'
+                        ? 'text-xs text-gray-400 font-medium uppercase tracking-wider'
+                        : 'text-gray-200 text-sm leading-relaxed font-light'
                     }
                   >
                     {line}
