@@ -25,7 +25,8 @@ export function ConditionalHeader() {
     pathname.startsWith('/events') ||
     pathname.startsWith('/live') ||
     pathname.startsWith('/operator') ||
-    pathname.startsWith('/profile')
+    pathname.startsWith('/profile') ||
+    pathname.startsWith('/bible')
 
   const isEmbeddedAuthHeaderRoute =
     pathname.startsWith('/auth/login') ||
