@@ -23,6 +23,11 @@ import {
   isFormatSongEnabled,
   serializeSectionsToLyrics,
 } from './services/formatSongService';
+import {
+  findBibleReference,
+  fetchBibleVerse,
+  getBibleVersions,
+} from './services/bibleService';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -140,6 +145,56 @@ app.get('/health', (_req: Request, res: Response) => {
     supabaseUrlPrefix: getSupabaseUrlPrefix(),
     supabaseProjectRef: getSupabaseProjectRef(),
   });
+});
+
+// Bible API: versions list and verse by reference (for command palette / Bible reader)
+app.get('/api/bible/versions', async (_req: Request, res: Response) => {
+  try {
+    const versions = await getBibleVersions();
+    res.json({ versions });
+  } catch (err) {
+    console.error('[API] /api/bible/versions error:', err);
+    res.status(500).json({ error: 'Failed to load Bible versions' });
+  }
+});
+
+app.get('/api/bible/verse', async (req: Request, res: Response) => {
+  const ref = typeof req.query.ref === 'string' ? req.query.ref.trim() : '';
+  const versionId = typeof req.query.versionId === 'string' ? req.query.versionId.trim() : '';
+  if (!ref || !versionId) {
+    res.status(400).json({ error: 'ref and versionId query params required' });
+    return;
+  }
+  try {
+    const reference = findBibleReference(ref);
+    if (!reference) {
+      res.status(400).json({ error: 'Invalid Bible reference' });
+      return;
+    }
+    const endVerse = reference.endVerse ?? reference.verse;
+    const verses: { verse: number; text: string }[] = [];
+    let versionAbbrev = '';
+    for (let v = reference.verse; v <= endVerse; v++) {
+      const singleRef = { ...reference, verse: v, endVerse: undefined };
+      const result = await fetchBibleVerse(singleRef, versionId);
+      if (!result) {
+        res.status(404).json({ error: `Verse not found: ${reference.book} ${reference.chapter}:${v}` });
+        return;
+      }
+      versionAbbrev = result.versionAbbrev;
+      verses.push({ verse: result.verse, text: result.text });
+    }
+    res.json({
+      reference: ref,
+      book: reference.book,
+      chapter: reference.chapter,
+      verses,
+      versionAbbrev,
+    });
+  } catch (err) {
+    console.error('[API] /api/bible/verse error:', err);
+    res.status(500).json({ error: 'Failed to fetch verse' });
+  }
 });
 
 // Debug: show raw event_items for an event (temporary diagnostic)

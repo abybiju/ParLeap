@@ -18,6 +18,14 @@ import { Music, Calendar, BookOpen, Plus, Moon, Sun, LogOut, Home, X, Clock } fr
 import { useAuthStore } from '@/lib/stores/authStore'
 import { getSongsSearch, getEventsSearch } from '@/app/events/actions'
 import { Badge } from '@/components/ui/badge'
+import { getBackendHttpUrl } from '@/lib/utils/backendUrl'
+
+interface BibleVersionOption {
+  id: string
+  name: string
+  abbrev: string
+  is_default: boolean
+}
 
 const SONGS_SEARCH_LIMIT = 20
 const EVENTS_SEARCH_LIMIT = 10
@@ -88,9 +96,12 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
   const [rawInput, setRawInput] = useState('')
   const [isDark, setIsDark] = useState(false)
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([])
-  
+  const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([])
+
   // Parse input to get context and query
   const { context: commandContext, query: searchQuery } = parseInput(rawInput)
+
+  const defaultBibleVersionId = bibleVersions.find((v) => v.is_default)?.id ?? bibleVersions[0]?.id ?? null
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -192,10 +203,20 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     }
   }, [open])
 
+  // Fetch Bible versions when command palette opens (for VERSE context / version picker)
+  useEffect(() => {
+    if (!open) return
+    const backend = getBackendHttpUrl()
+    fetch(`${backend}/api/bible/versions`)
+      .then((res) => res.ok ? res.json() : Promise.reject(new Error('Failed to fetch versions')))
+      .then((data: { versions?: BibleVersionOption[] }) => setBibleVersions(data.versions ?? []))
+      .catch(() => setBibleVersions([]))
+  }, [open])
+
   // Songs and events are now server-side search results (set in debounced effect above)
 
-  // Check if search looks like a Bible reference (e.g., "John 3:16", "Psalm 23")
-  const isBibleReference = /^[a-z]+\s*\d+[:\d]*$/i.test(searchQuery.trim())
+  // Check if search looks like a Bible reference (e.g. "John 3:16", "Psalm 23", "Matthew 2:4-5")
+  const isBibleReference = /^[a-z]+\s*\d+([:\d\-]+)?$/i.test(searchQuery.trim())
 
   // Mock scripture items
   const scriptureItems = [
@@ -263,12 +284,14 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
     onOpenChange(false)
   }
 
-  const handleScriptureSelect = (reference: string) => {
+  const handleScriptureSelect = (reference: string, versionId?: string | null) => {
     if (searchQuery.trim()) {
       saveRecentSearch(searchQuery)
     }
-    // Future: Navigate to Bible Reader
-    console.log('Navigate to scripture:', reference)
+    const vid = versionId ?? defaultBibleVersionId
+    if (vid) {
+      router.push(`/bible?ref=${encodeURIComponent(reference)}&version=${encodeURIComponent(vid)}`)
+    }
     onOpenChange(false)
   }
 
@@ -405,6 +428,22 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               </CommandGroup>
             )}
 
+            {/* GROUP 2b: Open Song Library when /song with no query */}
+            {commandContext === 'SONG' && !searchQuery.trim() && (
+              <CommandGroup heading="Songs">
+                <CommandItem
+                  onSelect={() => handleNavigate('/songs')}
+                  className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-orange-500/10 data-[selected=true]:text-orange-500 data-[selected=true]:border-l-2 data-[selected=true]:border-orange-500"
+                >
+                  <Music className="mr-2 h-4 w-4" />
+                  <div className="flex flex-col">
+                    <span>Open Song Library</span>
+                    <span className="text-xs text-gray-500">Type a song name to search</span>
+                  </div>
+                </CommandItem>
+              </CommandGroup>
+            )}
+
             {/* GROUP 3: Songs (server-side search; show when user has typed) */}
             {(commandContext === 'ALL' || commandContext === 'SONG') && searchQuery.trim() && songs.length > 0 && (
               <CommandGroup heading="Songs">
@@ -426,8 +465,8 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
               </CommandGroup>
             )}
 
-            {/* GROUP 4: Scripture */}
-            {(commandContext === 'ALL' || commandContext === 'VERSE') && (filteredScripture.length > 0 || isBibleReference) && (
+            {/* GROUP 4: Scripture (shortcuts + typed reference with version picker) */}
+            {(commandContext === 'ALL' || commandContext === 'VERSE') && (filteredScripture.length > 0 || isBibleReference || (commandContext === 'VERSE' && !searchQuery.trim())) && (
               <CommandGroup heading="Scripture">
                 {filteredScripture.map((item) => (
                   <CommandItem
@@ -440,13 +479,27 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
                   </CommandItem>
                 ))}
                 {isBibleReference && !filteredScripture.some((s) => s.reference.toLowerCase() === searchQuery.trim().toLowerCase()) && (
-                  <CommandItem
-                    onSelect={() => handleScriptureSelect(searchQuery.trim())}
-                    className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-orange-500/10 data-[selected=true]:text-orange-500 data-[selected=true]:border-l-2 data-[selected=true]:border-orange-500"
-                  >
-                    <BookOpen className="mr-2 h-4 w-4 text-yellow-500" />
-                    <span>Open {searchQuery.trim()}</span>
-                  </CommandItem>
+                  <>
+                    {defaultBibleVersionId && (
+                      <CommandItem
+                        onSelect={() => handleScriptureSelect(searchQuery.trim())}
+                        className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-orange-500/10 data-[selected=true]:text-orange-500 data-[selected=true]:border-l-2 data-[selected=true]:border-orange-500"
+                      >
+                        <BookOpen className="mr-2 h-4 w-4 text-yellow-500" />
+                        <span>Open {searchQuery.trim()}</span>
+                      </CommandItem>
+                    )}
+                    {bibleVersions.map((v) => (
+                      <CommandItem
+                        key={v.id}
+                        onSelect={() => handleScriptureSelect(searchQuery.trim(), v.id)}
+                        className="text-gray-400 p-3 rounded-lg cursor-pointer transition-all data-[selected=true]:bg-orange-500/10 data-[selected=true]:text-orange-500 data-[selected=true]:border-l-2 data-[selected=true]:border-orange-500 pl-8"
+                      >
+                        <BookOpen className="mr-2 h-4 w-4 text-yellow-500/70" />
+                        <span>Open in {v.abbrev}</span>
+                      </CommandItem>
+                    ))}
+                  </>
                 )}
               </CommandGroup>
             )}

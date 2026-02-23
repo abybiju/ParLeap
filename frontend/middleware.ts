@@ -10,6 +10,7 @@ const PROTECTED_PATHS = [
   '/live',
   '/operator',
   '/profile',
+  '/bible',
 ]
 
 function isProtectedPath(pathname: string) {
@@ -72,6 +73,8 @@ export const config = {
     '/live/:path*',
     '/operator/:path*',
     '/profile/:path*',
+    '/bible',
+    '/bible/:path*',
     '/auth/:path*',
   ],
 }

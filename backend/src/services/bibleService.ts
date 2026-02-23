@@ -378,6 +378,34 @@ export async function getBibleVersionIdByAbbrev(abbrev: string): Promise<string 
   return match?.id ?? null;
 }
 
+export type BibleVersionOption = {
+  id: string;
+  name: string;
+  abbrev: string;
+  is_default: boolean;
+};
+
+/** Return all Bible versions for API/UI (e.g. command palette version picker). */
+export async function getBibleVersions(): Promise<BibleVersionOption[]> {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase
+    .from('bible_versions')
+    .select('id, name, abbrev, is_default')
+    .order('is_default', { ascending: false })
+    .order('name', { ascending: true });
+  if (error) {
+    console.warn('[BibleService] getBibleVersions failed:', error);
+    return [];
+  }
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: (row.name as string) ?? '',
+    abbrev: (row.abbrev as string) ?? '',
+    is_default: Boolean(row.is_default),
+  }));
+}
+
 function extractEsvText(payload: unknown): string | null {
   if (!payload) return null;
   if (typeof payload === 'string') {
