@@ -416,7 +416,7 @@ export function SongEditorForm({
                 id="ccli_number"
                 placeholder="1234567"
                 {...register('ccli_number')}
-                className="font-mono bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus-visible:ring-white/20"
+                className="font-mono bg-white/5 border-white/20 text-gray-100 placeholder:text-gray-500 focus-visible:ring-white/20 [color-scheme:dark]"
               />
             </div>
           </div>
