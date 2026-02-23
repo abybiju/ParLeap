@@ -59,7 +59,7 @@ export function getColumns({ onEdit, onDelete }: ColumnOptions): ColumnDef<Song>
       cell: ({ row }) => {
         const ccli = row.getValue('ccli_number') as string | null;
         return ccli ? (
-          <Badge variant="outline" className="font-mono text-xs">
+          <Badge variant="outline" className="font-mono text-xs border-white/20 text-gray-200 bg-white/5">
             {ccli}
           </Badge>
         ) : (
@@ -74,7 +74,7 @@ export function getColumns({ onEdit, onDelete }: ColumnOptions): ColumnDef<Song>
         const lyrics = row.getValue('lyrics') as string;
         const lineCount = countLines(lyrics);
         return (
-          <Badge variant="secondary">
+          <Badge variant="secondary" className="text-gray-200 border-white/20 bg-white/10">
             {lineCount}
           </Badge>
         );
