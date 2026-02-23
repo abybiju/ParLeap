@@ -347,6 +347,7 @@ export function SongEditorForm({
               variant="outline"
               size="sm"
               onClick={handleDiscardDraft}
+              className="border-white/30 bg-transparent text-gray-200 hover:bg-white/10 hover:text-white"
             >
               Discard
             </Button>
@@ -408,14 +409,14 @@ export function SongEditorForm({
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="ccli_number" className="text-sm font-medium text-white">
+              <label htmlFor="ccli_number" className="text-sm font-medium text-gray-100">
                 CCLI #
               </label>
               <Input
                 id="ccli_number"
                 placeholder="1234567"
                 {...register('ccli_number')}
-                className="font-mono bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                className="font-mono bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus-visible:ring-white/20"
               />
             </div>
           </div>
