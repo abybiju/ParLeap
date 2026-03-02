@@ -6,6 +6,32 @@
 
 ---
 
+## Update: March 2, 2026 - Security Advisor Remediation
+
+Applied additional hardening migrations after initial setup:
+
+- `022_security_advisor_fixes.sql`
+  - Set `public.template_stats` view to `security_invoker = true` (critical fix)
+  - Hardened function `search_path` for:
+    - `public.update_updated_at_column`
+    - `public.increment_template_usage`
+    - `public.match_songs`
+    - `public.match_songs_by_embedding`
+  - Added best-effort move of `vector` extension from `public` to `extensions` schema
+
+- `023_rls_init_plan_optimizations.sql`
+  - Rewrote RLS policy predicates to use `(select auth.uid())` / `(select auth.role())`
+  - Added supporting indexes for policy filters:
+    - `public.community_templates(created_by)`
+    - `public.template_votes(user_id)`
+  - Scope: `profiles`, `songs`, `events`, `event_items`, `community_templates`, `template_votes`, `bible_versions`
+
+Outcome:
+- Critical `Security Definer View` warning resolved.
+- Auth/RLS advisor performance warnings reduced with non-breaking policy updates.
+
+---
+
 ## 🎯 Migration Strategy
 
 **Approach**: Create a brand new Supabase project, run migrations, update environment variables, and test. Treat the old project as dead.
