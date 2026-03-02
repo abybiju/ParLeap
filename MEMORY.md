@@ -1,5 +1,19 @@
 # ParLeap AI - Memory Log
 
+## Session: February 20, 2026 — UI contrast fixes + footer social links
+
+### What we did
+- **Dark-theme contrast**: (1) Song editor: CCLI # label and input `text-gray-100`, input `border-white/20` and `[color-scheme:dark]`; draft bar "Discard" button explicit border/text so visible on dark bar. (2) Slide preview: Slide labels `text-gray-300`, lyric lines `text-gray-200`, section labels `text-gray-400`. (3) Song library table: CCLI # and Lines badges `text-gray-200` + light borders/backgrounds so numbers readable on dark rows.
+- **Footer social links**: LinkedIn set to `https://www.linkedin.com/company/parleap/people/?viewAsMember=true`; Instagram to `https://www.instagram.com/parleap_ai?igsh=...`; YouTube removed from both Footer.tsx and HoverFooter.tsx.
+
+### Commits
+- `0602b16`, `4d4b49b`, `ac77070`
+
+### Key lesson
+- In dark theme, inputs and badges need explicit light text (`text-gray-100`/`text-gray-200`); default `text-foreground` can be too dark. Use `[color-scheme:dark]` on inputs where helpful.
+
+---
+
 ## Session: February 20, 2026 — Live operator UI + Landing showcase
 
 ### What we did
@@ -1055,8 +1069,8 @@ frontend/tailwind.config.ts               (new animations)
 
 ---
 
-**Last Updated:** February 19, 2026  
-**Status:** Railway backend build fixed (tsc via project binary, TypeScript + @types in dependencies, Express handlers typed). Songs UX: strict metadata + iTunes Auto-Fill, CCLI-only template fetch, community save dialog (max 3/CCLI), section labels in preview. Matcher: similar-line block. Live fixes: matcher crash on jump, Event Not Found, RATE_LIMITED. Hum-to-Search dual-path (YouTube-style + BasicPitch); templates structure-only.
+**Last Updated:** February 20, 2026  
+**Status:** UI contrast fixes (CCLI, slide preview, Discard, table badges); footer social links (LinkedIn, Instagram updated; YouTube removed). Railway backend build fixed (tsc via project binary, TypeScript + @types in dependencies, Express handlers typed). Songs UX: strict metadata + iTunes Auto-Fill, CCLI-only template fetch, community save dialog (max 3/CCLI), section labels in preview. Matcher: similar-line block. Live fixes: matcher crash on jump, Event Not Found, RATE_LIMITED. Hum-to-Search dual-path (YouTube-style + BasicPitch); templates structure-only.
 
 ---
 
@@ -1116,3 +1130,16 @@ frontend/tailwind.config.ts               (new animations)
 - Added ESV API support (on-demand fetch, no local storage) with voice-command version switching.
 - Railway env configured with `ESV_API_KEY` + `ESV_API_URL` for live ESV fetches.
 - Voice-command version changes now persist to `events` so refreshes keep the selected version.
+
+## Session: March 2, 2026 — Supabase Security Advisor fixes
+
+### What we did
+- Added `022_security_advisor_fixes.sql` to resolve critical advisor issue and harden DB functions:
+  - `template_stats` set to `security_invoker = true`
+  - Fixed mutable `search_path` warnings for core functions
+  - Added best-effort move for `vector` extension out of `public`
+- Added `023_rls_init_plan_optimizations.sql` with non-breaking RLS policy rewrites using `(select auth.uid())/(select auth.role())` and supporting indexes.
+- Updated `SUPABASE_MIGRATION_PLAN.md` with March 2 remediation notes.
+
+### Key lesson
+- Advisor-critical findings should be fixed immediately; RLS initialization advisories can usually be improved safely by rewriting policy predicates without changing access semantics.
