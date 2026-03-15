@@ -141,7 +141,18 @@ After setup is complete:
 
 ## Keep Supabase Project Awake
 
-We schedule a weekly cron that hits the built-in `now()` RPC so Supabase still sees activity:
+We schedule a weekly cron that inserts into a tiny `heartbeat_pings` table so Supabase sees real writes:
+
+Before the workflow runs for the first time, create the table in SQL:
+
+```sql
+CREATE TABLE IF NOT EXISTS public.heartbeat_pings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  source TEXT NOT NULL DEFAULT 'github-actions'
+);
+```
+
 
 1. Create GitHub secrets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` matching your project.
 2. The workflow `.github/workflows/keep-supabase-active.yml` runs every Sunday 00:00 UTC and executes `node scripts/keep-supabase-active.js` using those secrets.
