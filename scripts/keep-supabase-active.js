@@ -22,8 +22,12 @@ if (!url || !key) {
       console.error('Supabase insert failed', res.status, await res.text());
       process.exit(1);
     }
-    const payload = await res.json();
-    console.log('Supabase heartbeat inserted:', JSON.stringify(payload));
+    const text = await res.text();
+    if (text) {
+      console.log('Supabase heartbeat inserted:', text);
+    } else {
+      console.log('Supabase heartbeat inserted (no body)');
+    }
   } catch (error) {
     console.error('Supabase ping failed', error);
     process.exit(1);
