@@ -138,3 +138,17 @@ After setup is complete:
 3. ✅ Environment variables configured
 4. ⏭️ Implement Supabase clients (frontend & backend)
 5. ⏭️ Build authentication flow
+
+## Keep Supabase Project Awake
+
+We schedule a weekly cron that hits the built-in `now()` RPC so Supabase still sees activity:
+
+1. Create GitHub secrets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` matching your project.
+2. The workflow `.github/workflows/keep-supabase-active.yml` runs every Sunday 00:00 UTC and executes `node scripts/keep-supabase-active.js` using those secrets.
+3. To verify locally, run:
+
+```bash
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/keep-supabase-active.js
+```
+
+If the RPC call succeeds, you’ll see a timestamp output and the script exits `0`; any failure exits non-zero so GitHub surfaces the error.
