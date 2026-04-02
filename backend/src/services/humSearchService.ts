@@ -107,7 +107,9 @@ export async function getPitchFromService(audioBuffer: Buffer): Promise<PitchExt
     throw new Error('EMBEDDING_SERVICE_URL is not set — needed for CREPE pitch extraction');
   }
 
-  const url = `${base.replace(/\/$/, '')}/extract-pitch`;
+  // Use low voiced_threshold for browser-recorded audio (mic quality is lower than studio).
+  // Ingestion uses 0 for polyphonic music; 0.05 filters silence but captures browser hums.
+  const url = `${base.replace(/\/$/, '')}/extract-pitch?voiced_threshold=0.05`;
   const form = new FormData();
   form.append('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'hum.wav');
 
