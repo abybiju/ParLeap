@@ -42,7 +42,8 @@ MAX_DURATION_SECONDS = 30  # Process up to 30s of audio
 # CREPE model size: 'tiny' is fastest (~10x realtime on CPU)
 CREPE_MODEL = "tiny"
 # Minimum confidence to consider a frame voiced
-VOICED_THRESHOLD = 0.3
+# Lower for browser-recorded audio (noisier, lower quality than studio)
+VOICED_THRESHOLD = 0.15
 # Hop size in samples (10ms at 16kHz = 160 samples)
 HOP_LENGTH = 160
 # RMS threshold for silence detection
@@ -177,11 +178,17 @@ async def extract_pitch(
         )
         y = y[:max_samples]
 
+    # Diagnostic: log audio energy so we can tell silence from real audio
+    rms = float(np.sqrt(np.mean(y**2)))
+    max_amp = float(np.max(np.abs(y)))
     logger.info(
-        "Extracting pitch from %.1fs of audio (voiced_threshold=%.2f)...",
-        len(y) / TARGET_SR,
-        voiced_threshold,
+        "Audio: %.1fs, rms=%.6f, max_amp=%.4f, voiced_threshold=%.2f",
+        len(y) / TARGET_SR, rms, max_amp, voiced_threshold,
     )
+
+    if max_amp < 0.001:
+        logger.warning("Audio appears to be silence (max_amp < 0.001)")
+
     pitch_hz, intervals, confidences = extract_pitch_contour(y, TARGET_SR, voiced_threshold)
 
     voiced_frames = sum(1 for p in pitch_hz if p > 0)
