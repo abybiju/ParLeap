@@ -54,6 +54,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const audioChunksRef = useRef<Float32Array[]>([])
+  const actualSampleRateRef = useRef<number>(SAMPLE_RATE)
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -120,8 +121,14 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
     let offset = 0
     for (const c of chunks) { combined.set(c, offset); offset += c.length }
 
-    // Create a temporary offline context just for buffer creation
-    const buffer = new AudioBuffer({ length: combined.length, sampleRate: SAMPLE_RATE, numberOfChannels: 1 })
+    // Log audio level for debugging (is the mic actually capturing audio?)
+    const rms = Math.sqrt(combined.reduce((s, v) => s + v * v, 0) / combined.length)
+    const maxAmp = combined.reduce((m, v) => Math.max(m, Math.abs(v)), 0)
+    console.log(`[HumSearch] Audio RMS: ${rms.toFixed(6)}, maxAmp: ${maxAmp.toFixed(4)}, samples: ${combined.length}, sampleRate: ${actualSampleRateRef.current}`)
+
+    // Use the actual sample rate from the AudioContext (may differ from requested SAMPLE_RATE)
+    const sr = actualSampleRateRef.current
+    const buffer = new AudioBuffer({ length: combined.length, sampleRate: sr, numberOfChannels: 1 })
     buffer.copyToChannel(combined, 0)
 
     const wavBuffer = audioBufferToWav(buffer)
@@ -204,6 +211,9 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
       const ctx = new AudioContext({ sampleRate: SAMPLE_RATE })
       audioContextRef.current = ctx
       if (ctx.state === 'suspended') await ctx.resume()
+      // Store actual sample rate (browser may not honor the requested rate)
+      actualSampleRateRef.current = ctx.sampleRate
+      console.log(`[HumSearch] AudioContext sampleRate: ${ctx.sampleRate} (requested ${SAMPLE_RATE})`)
 
       const source = ctx.createMediaStreamSource(stream)
 
