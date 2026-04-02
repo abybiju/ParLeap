@@ -1,5 +1,9 @@
 # Used when building from repo root (e.g. Railway backend service).
 # Ensures devDependencies (TypeScript, @types/*) are installed so backend build succeeds.
+# ffmpeg needed for audio processing (hum-to-search).
+[phases.setup]
+aptPkgs = ["ffmpeg"]
+
 [phases.install]
 cmds = ["npm ci --include=dev"]
 
