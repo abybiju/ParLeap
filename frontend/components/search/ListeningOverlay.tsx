@@ -1,19 +1,20 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { X, Music, Sparkles, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { audioBufferToWav, arrayBufferToBase64 } from '@/lib/audioUtils'
 
-/** Max recording duration (seconds). User can stop earlier with "Stop & Search". */
-const RECORDING_MAX_SECONDS = 10
-/** In live mode, keep listening up to this many seconds. */
-const LIVE_MAX_SECONDS = 60
-/** Send this many seconds of audio per chunk in live mode. */
-const LIVE_CHUNK_SECONDS = 2
+/** How often we send accumulated audio for matching (ms). */
+const MATCH_INTERVAL_MS = 3000
+/** Minimum audio before first match attempt (seconds). */
+const MIN_AUDIO_SECONDS = 2
+/** Max recording time before auto-stopping (seconds). */
+const MAX_RECORDING_SECONDS = 30
+/** Sample rate for recording. */
 const SAMPLE_RATE = 22050
-/** Only show results when best match is at least this confident (avoids showing songs for silence/random hum). */
-const MIN_CONFIDENCE_TO_SHOW = 0.35
+/** Only show results above this confidence. */
+const MIN_CONFIDENCE = 0.25
 
 function getBackendUrl(): string {
   if (typeof window === 'undefined') return ''
@@ -35,23 +36,19 @@ interface ListeningOverlayProps {
   open: boolean
   onClose?: () => void
   onSelectSong?: (songId: string) => void
-  /** IDs of songs in the current user's library — used to show "Add to Library" for unknown songs */
   userSongIds?: Set<string>
-  /** Called when user wants to add a matched song to their library */
   onAddSong?: (title: string, artist: string) => void
 }
 
-type RecordingState = 'idle' | 'recording' | 'processing' | 'results' | 'error'
+type OverlayState = 'idle' | 'listening' | 'results' | 'no-match' | 'error'
 
 export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onAddSong }: ListeningOverlayProps) {
-  const [state, setState] = useState<RecordingState>('idle')
+  const [state, setState] = useState<OverlayState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<SearchResult[]>([])
   const [audioLevels, setAudioLevels] = useState<number[]>(Array(16).fill(0.1))
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [processingElapsed, setProcessingElapsed] = useState(0)
-  const [liveAvailable, setLiveAvailable] = useState(false)
-  const [liveMode, setLiveMode] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [statusText, setStatusText] = useState('Start humming your melody')
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -59,422 +56,226 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
   const audioChunksRef = useRef<Float32Array[]>([])
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const isRecordingRef = useRef<boolean>(false)
-  const liveSessionIdRef = useRef<string | null>(null)
-  const liveChunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const matchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isActiveRef = useRef(false)
+  const matchInFlightRef = useRef(false)
+  const matchAttemptRef = useRef(0)
 
-  // Clean up on unmount or close
-  useEffect(() => {
-    return () => {
-      isRecordingRef.current = false
-      if (timerRef.current) clearInterval(timerRef.current)
-      if (autoStopTimeoutRef.current) clearTimeout(autoStopTimeoutRef.current)
-      if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current)
-      if (liveChunkIntervalRef.current) clearInterval(liveChunkIntervalRef.current)
-      stopRecording()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const cleanup = useCallback(() => {
+    isActiveRef.current = false
+    matchInFlightRef.current = false
+
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    if (matchIntervalRef.current) { clearInterval(matchIntervalRef.current); matchIntervalRef.current = null }
+    if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null }
+    if (scriptProcessorRef.current) { scriptProcessorRef.current.disconnect(); scriptProcessorRef.current = null }
+    if (mediaStreamRef.current) { mediaStreamRef.current.getTracks().forEach((t) => t.stop()); mediaStreamRef.current = null }
+    if (audioContextRef.current?.state !== 'closed') { audioContextRef.current?.close() }
+    audioContextRef.current = null
+    analyserRef.current = null
   }, [])
 
-  // When opening: check if live hum is available; do not auto-start (user clicks Start)
+  // Reset on close
   useEffect(() => {
     if (open) {
       setState('idle')
       setError(null)
       setResults([])
-      setRecordingTime(0)
-      isRecordingRef.current = false
-      liveSessionIdRef.current = null
-      if (liveChunkIntervalRef.current) {
-        clearInterval(liveChunkIntervalRef.current)
-        liveChunkIntervalRef.current = null
-      }
-      const url = getBackendUrl()
-      if (url) {
-        fetch(`${url}/api/hum-search/live/available`)
-          .then((r) => r.json())
-          .then((d: { available?: boolean }) => setLiveAvailable(!!d?.available))
-          .catch(() => setLiveAvailable(false))
-      }
-    } else {
-      isRecordingRef.current = false
-      stopRecording()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  const startRecording = async () => {
-    try {
-      const maxSeconds = liveMode ? LIVE_MAX_SECONDS : RECORDING_MAX_SECONDS
-
-      if (liveMode) {
-        const url = getBackendUrl()
-        const res = await fetch(`${url}/api/hum-search/live/start`, { method: 'POST' })
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({})) as { error?: string }
-          throw new Error(data?.error ?? 'Live search not available')
-        }
-        const data = await res.json() as { sessionId?: string }
-        if (data.sessionId) liveSessionIdRef.current = data.sessionId
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 22050,
-        } 
-      })
-
-      mediaStreamRef.current = stream
-
-      const ctx = new AudioContext({ sampleRate: 22050 })
-      audioContextRef.current = ctx
-      if (ctx.state === 'suspended') {
-        await ctx.resume()
-      }
-      const source = ctx.createMediaStreamSource(stream)
-      
-      analyserRef.current = ctx.createAnalyser()
-      analyserRef.current.fftSize = 64
-      source.connect(analyserRef.current)
-
-      const bufferSize = 4096
-      const scriptProcessor = ctx.createScriptProcessor(bufferSize, 1, 1)
-      scriptProcessorRef.current = scriptProcessor
-      
+      setElapsedSeconds(0)
+      setStatusText('Start humming your melody')
+      matchAttemptRef.current = 0
       audioChunksRef.current = []
-      
-      scriptProcessor.onaudioprocess = (e) => {
-        const inputData = e.inputBuffer.getChannelData(0)
-        audioChunksRef.current.push(new Float32Array(inputData))
-      }
-      
-      source.connect(scriptProcessor)
-      scriptProcessor.connect(ctx.destination)
-
-      visualize()
-
-      isRecordingRef.current = true
-      setState('recording')
-      setRecordingTime(0)
-
-      // Live mode: send chunk every 2s and check for match
-      if (liveMode && liveSessionIdRef.current) {
-        const url = getBackendUrl()
-        const samplesPerChunk = SAMPLE_RATE * LIVE_CHUNK_SECONDS
-
-        liveChunkIntervalRef.current = setInterval(async () => {
-          const chunks = audioChunksRef.current
-          if (chunks.length === 0) return
-          const total = chunks.reduce((s, c) => s + c.length, 0)
-          if (total < samplesPerChunk) return
-
-          const combined = new Float32Array(total)
-          let offset = 0
-          for (const c of chunks) {
-            combined.set(c, offset)
-            offset += c.length
-          }
-          const last = combined.slice(-samplesPerChunk)
-
-          const audioBuffer = ctx.createBuffer(1, last.length, SAMPLE_RATE)
-          audioBuffer.copyToChannel(last, 0)
-          const wavBuffer = audioBufferToWav(audioBuffer)
-          const base64Audio = arrayBufferToBase64(wavBuffer)
-
-          try {
-            const chunkRes = await fetch(`${url}/api/hum-search/live/chunk`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sessionId: liveSessionIdRef.current,
-                audio: base64Audio,
-              }),
-            })
-            const chunkData = await chunkRes.json() as { status: string; results?: SearchResult[] }
-            const list = chunkData.results ?? []
-            const bestSim = list.length > 0 ? list[0].similarity : 0
-            if (chunkData.status === 'match' && list.length > 0 && bestSim >= MIN_CONFIDENCE_TO_SHOW) {
-              if (liveChunkIntervalRef.current) {
-                clearInterval(liveChunkIntervalRef.current)
-                liveChunkIntervalRef.current = null
-              }
-              setResults(list)
-              setState('results')
-              stopRecording('match')
-            }
-          } catch (e) {
-            console.error('[HumSearch] Live chunk error:', e)
-          }
-        }, 2000)
-      }
-
-      timerRef.current = setInterval(() => {
-        setRecordingTime((t) => {
-          const next = t + 1
-          if (next >= maxSeconds) {
-            if (isRecordingRef.current) stopRecording()
-            return maxSeconds
-          }
-          return next
-        })
-      }, 1000)
-
-      autoStopTimeoutRef.current = setTimeout(() => {
-        if (isRecordingRef.current) stopRecording()
-      }, maxSeconds * 1000)
-    } catch (err) {
-      console.error('Failed to start recording:', err)
-      setError(err instanceof Error ? err.message : 'Could not access microphone. Please grant permission.')
-      setState('error')
+    } else {
+      cleanup()
     }
-  }
+    return () => cleanup()
+  }, [open, cleanup])
 
-  const stopRecording = (reason?: 'match' | 'user' | 'timeout') => {
-    if (!isRecordingRef.current) return
-    
-    isRecordingRef.current = false
-    
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-    if (liveChunkIntervalRef.current) {
-      clearInterval(liveChunkIntervalRef.current)
-      liveChunkIntervalRef.current = null
-    }
-    
-    if (autoStopTimeoutRef.current) {
-      clearTimeout(autoStopTimeoutRef.current)
-      autoStopTimeoutRef.current = null
-    }
-    
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
-    }
-    
-    if (scriptProcessorRef.current) {
-      scriptProcessorRef.current.disconnect()
-      scriptProcessorRef.current = null
-    }
-    
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop())
-      mediaStreamRef.current = null
-    }
-
-    if (liveMode && liveSessionIdRef.current) {
-      const url = getBackendUrl()
-      fetch(`${url}/api/hum-search/live/stop`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: liveSessionIdRef.current }),
-      }).catch(() => {})
-      liveSessionIdRef.current = null
-      if (reason !== 'match') {
-        setError('No match yet. Try humming a bit longer or use record-then-search (uncheck "Match as you hum").')
-        setState('error')
-      }
-    }
-    
-    if (!liveMode && audioChunksRef.current.length > 0) {
-      processRecording()
-    } else if (!liveMode && audioChunksRef.current.length === 0) {
-      setError('No audio recorded. Please try again.')
-      setState('error')
-    }
-    
-    if (audioContextRef.current?.state !== 'closed') {
-      audioContextRef.current?.close()
-    }
-  }
-
-  const visualize = () => {
+  const visualize = useCallback(() => {
     if (!analyserRef.current) return
-
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
-
     const draw = () => {
       if (!analyserRef.current) return
       animationFrameRef.current = requestAnimationFrame(draw)
       analyserRef.current.getByteFrequencyData(dataArray)
-
-      // Convert to normalized levels (0-1)
       const levels = Array.from({ length: 16 }, (_, i) => {
         const index = Math.floor((i / 16) * dataArray.length)
         return Math.max(0.1, dataArray[index] / 255)
       })
       setAudioLevels(levels)
     }
-
     draw()
-  }
+  }, [])
 
-  const processRecording = async () => {
-    setState('processing')
-    setProcessingElapsed(0)
-    setAudioLevels(Array(16).fill(0.1))
-    
-    // Show elapsed time while processing (BasicPitch can take 30-60s)
-    let processingTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
-      setProcessingElapsed((prev) => prev + 1)
-    }, 1000)
+  /** Build a WAV from all accumulated audio chunks. */
+  const getAccumulatedWav = useCallback((): string | null => {
+    const chunks = audioChunksRef.current
+    if (chunks.length === 0) return null
+
+    const totalLength = chunks.reduce((s, c) => s + c.length, 0)
+    if (totalLength < SAMPLE_RATE * MIN_AUDIO_SECONDS) return null
+
+    const combined = new Float32Array(totalLength)
+    let offset = 0
+    for (const c of chunks) { combined.set(c, offset); offset += c.length }
+
+    // Create a temporary offline context just for buffer creation
+    const buffer = new AudioBuffer({ length: combined.length, sampleRate: SAMPLE_RATE, numberOfChannels: 1 })
+    buffer.copyToChannel(combined, 0)
+
+    const wavBuffer = audioBufferToWav(buffer)
+    return arrayBufferToBase64(wavBuffer)
+  }, [])
+
+  /** Send accumulated audio to backend for matching. */
+  const tryMatch = useCallback(async () => {
+    if (matchInFlightRef.current || !isActiveRef.current) return
+    const audio = getAccumulatedWav()
+    if (!audio) return
+
+    matchInFlightRef.current = true
+    matchAttemptRef.current++
+    const attempt = matchAttemptRef.current
 
     try {
-      if (!audioContextRef.current || audioChunksRef.current.length === 0) {
-        throw new Error('No audio data recorded')
+      const url = getBackendUrl()
+      console.log(`[HumSearch] Match attempt #${attempt}, audio: ${audio.length} chars`)
+
+      const res = await fetch(`${url}/api/hum-search/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio, limit: 5, threshold: MIN_CONFIDENCE }),
+      })
+
+      if (!isActiveRef.current) return // User closed while we were fetching
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string }
+        console.error(`[HumSearch] Match error ${res.status}:`, data?.error)
+        // Don't stop — just try again on next interval
+        matchInFlightRef.current = false
+        return
       }
 
-      // Combine all audio chunks into a single Float32Array
-      const totalLength = audioChunksRef.current.reduce((sum, chunk) => sum + chunk.length, 0)
-      const combinedAudio = new Float32Array(totalLength)
-      let offset = 0
-      for (const chunk of audioChunksRef.current) {
-        combinedAudio.set(chunk, offset)
-        offset += chunk.length
+      const data = await res.json() as { results?: SearchResult[]; count?: number }
+      const matches = data.results ?? []
+
+      if (matches.length > 0 && matches[0].similarity >= MIN_CONFIDENCE) {
+        // Found a match!
+        console.log(`[HumSearch] Match found: "${matches[0].title}" (${Math.round(matches[0].similarity * 100)}%)`)
+        setResults(matches)
+        setState('results')
+        cleanup()
+        return
       }
 
-      // Create AudioBuffer from the combined samples
-      const sampleRate = audioContextRef.current.sampleRate
-      const audioBuffer = audioContextRef.current.createBuffer(1, combinedAudio.length, sampleRate)
-      audioBuffer.copyToChannel(combinedAudio, 0)
-
-      // Convert AudioBuffer to WAV format
-      const wavBuffer = audioBufferToWav(audioBuffer)
-      const base64Audio = arrayBufferToBase64(wavBuffer)
-
-      // Send to backend with async job pattern
-      // Use production backend URL if NEXT_PUBLIC_BACKEND_URL is not set
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
-        (typeof window !== 'undefined' && window.location.hostname === 'www.parleap.com' 
-          ? 'https://parleapbackend-production.up.railway.app'
-          : 'http://localhost:3001')
-      
-      console.log('[HumSearch] Sending request to:', `${backendUrl}/api/hum-search`)
-      console.log('[HumSearch] Audio size:', base64Audio.length, 'chars (base64)')
-      
-      // Create job (returns immediately)
-      let response: Response
-      try {
-        response = await fetch(`${backendUrl}/api/hum-search`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            audio: base64Audio,
-            limit: 5,
-            threshold: MIN_CONFIDENCE_TO_SHOW,
-          }),
-        })
-        console.log('[HumSearch] Response status:', response.status, response.statusText)
-      } catch (err) {
-        console.error('[HumSearch] Fetch error:', err)
-        if (err instanceof Error && err.message.includes('Failed to fetch')) {
-          throw new Error(`Cannot connect to backend. Check if ${backendUrl} is accessible.`)
-        }
-        throw err
+      // No match yet — update status text
+      if (attempt <= 2) {
+        setStatusText('Keep humming...')
+      } else if (attempt <= 5) {
+        setStatusText('Still listening — try the chorus')
+      } else {
+        setStatusText('Hmm, keep going...')
       }
-
-      if (!response.ok) {
-        const responseClone = response.clone()
-        let errorData: { error?: string } = {}
-        let errorMessage = `Search failed: ${response.status} ${response.statusText}`
-        
-        try {
-          errorData = (await responseClone.json()) as { error?: string }
-          errorMessage = errorData.error ?? errorMessage
-        } catch {
-          try {
-            const text = await response.text()
-            console.error('[HumSearch] Non-JSON error response:', text)
-            errorMessage = text || errorMessage
-          } catch {
-            console.error('[HumSearch] Cannot read error response')
-          }
-        }
-        
-        if (response.status === 413) {
-          throw new Error('Audio file too large. Please record a shorter clip (3-5 seconds).')
-        } else if (response.status === 400) {
-          throw new Error(errorMessage || 'Invalid audio format. Please try again.')
-        } else if (response.status >= 500) {
-          throw new Error('Server error. Please try again later.')
-        } else {
-          throw new Error(errorMessage)
-        }
-      }
-
-      const jobData = await response.json()
-      console.log('[HumSearch] Created job:', jobData.jobId)
-      
-      if (!jobData.jobId) {
-        throw new Error('Failed to create search job')
-      }
-
-      // Poll for results (max 60 seconds, every 1 second)
-      const maxAttempts = 60
-      let attempts = 0
-      
-      const pollForResults = async (): Promise<void> => {
-        try {
-          const statusResponse = await fetch(`${backendUrl}/api/hum-search/${jobData.jobId}`)
-          const statusData = await statusResponse.json().catch(() => ({})) as { status?: string; error?: string; results?: SearchResult[] }
-          
-          if (!statusResponse.ok) {
-            const msg = statusData?.error ?? `Failed to check job status: ${statusResponse.status}`
-            throw new Error(msg)
-          }
-          console.log(`[HumSearch] Job ${jobData.jobId} status:`, statusData.status)
-          
-          if (statusData.status === 'completed') {
-            const list = statusData.results ?? []
-            const bestSimilarity = list.length > 0 ? list[0].similarity : 0
-            if (list.length > 0 && bestSimilarity >= MIN_CONFIDENCE_TO_SHOW) {
-              setResults(list)
-              setState('results')
-            } else {
-              console.log('[HumSearch] Job completed but no confident match (best:', bestSimilarity, ')')
-              setError('No confident match. Try humming the main tune of a song clearly for 5–10 seconds.')
-              setState('error')
-            }
-          } else if (statusData.status === 'failed') {
-            throw new Error(statusData.error || 'Search failed')
-          } else {
-            // Still processing, poll again
-            attempts++
-            if (attempts >= maxAttempts) {
-              throw new Error('Search timed out. Please try again.')
-            }
-            pollingTimeoutRef.current = setTimeout(pollForResults, 1000) // Poll every second
-          }
-        } catch (err) {
-          console.error('[HumSearch] Polling error:', err)
-          throw err
-        }
-      }
-      
-      // Start polling
-      await pollForResults()
     } catch (err) {
-      console.error('[HumSearch] Processing error:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to search. Please try again.'
-      setError(errorMessage)
-      setState('error')
+      console.error('[HumSearch] Match request failed:', err)
     } finally {
-      if (processingTimer) clearInterval(processingTimer)
-      // Clear audio chunks for next recording
-      audioChunksRef.current = []
+      matchInFlightRef.current = false
     }
-  }
+  }, [getAccumulatedWav, cleanup])
+
+  const startListening = useCallback(async () => {
+    try {
+      audioChunksRef.current = []
+      matchAttemptRef.current = 0
+      matchInFlightRef.current = false
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: SAMPLE_RATE },
+      })
+      mediaStreamRef.current = stream
+
+      const ctx = new AudioContext({ sampleRate: SAMPLE_RATE })
+      audioContextRef.current = ctx
+      if (ctx.state === 'suspended') await ctx.resume()
+
+      const source = ctx.createMediaStreamSource(stream)
+
+      analyserRef.current = ctx.createAnalyser()
+      analyserRef.current.fftSize = 64
+      source.connect(analyserRef.current)
+
+      const scriptProcessor = ctx.createScriptProcessor(4096, 1, 1)
+      scriptProcessorRef.current = scriptProcessor
+      scriptProcessor.onaudioprocess = (e) => {
+        audioChunksRef.current.push(new Float32Array(e.inputBuffer.getChannelData(0)))
+      }
+      source.connect(scriptProcessor)
+      scriptProcessor.connect(ctx.destination)
+
+      visualize()
+
+      isActiveRef.current = true
+      setState('listening')
+      setElapsedSeconds(0)
+      setStatusText('Listening...')
+
+      // Elapsed timer
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds((t) => {
+          const next = t + 1
+          if (next >= MAX_RECORDING_SECONDS) {
+            // Time's up — do one final match attempt then stop
+            isActiveRef.current = false
+            if (matchIntervalRef.current) { clearInterval(matchIntervalRef.current); matchIntervalRef.current = null }
+
+            // Final attempt
+            const audio = getAccumulatedWav()
+            if (audio) {
+              const url = getBackendUrl()
+              fetch(`${url}/api/hum-search/match`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audio, limit: 5, threshold: MIN_CONFIDENCE }),
+              })
+                .then((r) => r.json())
+                .then((data: { results?: SearchResult[] }) => {
+                  const matches = data.results ?? []
+                  if (matches.length > 0 && matches[0].similarity >= MIN_CONFIDENCE) {
+                    setResults(matches)
+                    setState('results')
+                  } else {
+                    setState('no-match')
+                  }
+                  cleanup()
+                })
+                .catch(() => { setState('no-match'); cleanup() })
+            } else {
+              setState('no-match')
+              cleanup()
+            }
+            return MAX_RECORDING_SECONDS
+          }
+          return next
+        })
+      }, 1000)
+
+      // Match interval — try every 3 seconds
+      matchIntervalRef.current = setInterval(() => {
+        tryMatch()
+      }, MATCH_INTERVAL_MS)
+    } catch (err) {
+      console.error('Failed to start recording:', err)
+      setError(err instanceof Error ? err.message : 'Could not access microphone. Please grant permission.')
+      setState('error')
+    }
+  }, [visualize, tryMatch, getAccumulatedWav, cleanup])
 
   const handleRetry = () => {
     setError(null)
     setResults([])
-    startRecording()
+    startListening()
   }
 
   const handleSelectSong = (songId: string) => {
@@ -489,7 +290,6 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
       onClick={onClose}
     >
-      {/* Close button */}
       <button
         onClick={onClose}
         className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
@@ -501,8 +301,22 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
         className="glass-card p-8 max-w-lg w-full mx-4 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Recording State */}
-        {state === 'recording' && (
+        {/* Idle — Start button */}
+        {state === 'idle' && (
+          <div className="text-center py-8">
+            <p className="text-white/80 mb-6">Hum a melody to find a song</p>
+            <button
+              type="button"
+              onClick={startListening}
+              className="px-8 py-4 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-lg font-medium hover:opacity-90 transition-opacity"
+            >
+              Start humming
+            </button>
+          </div>
+        )}
+
+        {/* Listening — waveform + status */}
+        {state === 'listening' && (
           <div className="text-center">
             <div className="relative w-32 h-32 mx-auto mb-8">
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-red-500 animate-pulse-ring" />
@@ -512,62 +326,40 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
               </div>
             </div>
 
-            <p className="text-2xl font-bold text-white mb-2">
-              {liveMode ? 'Keep humming...' : 'Listening...'}
-            </p>
-            <p className="text-white/60 mb-6">
-              {liveMode
-                ? `Matching as you sing (${Math.max(0, LIVE_MAX_SECONDS - recordingTime)}s left)`
-                : `Hum your melody (${Math.max(0, RECORDING_MAX_SECONDS - recordingTime)}s remaining)`}
+            <p className="text-2xl font-bold text-white mb-2">{statusText}</p>
+            <p className="text-white/50 text-sm mb-6">
+              {elapsedSeconds}s / {MAX_RECORDING_SECONDS}s
             </p>
 
-            {/* Real Waveform Visualization */}
+            {/* Waveform */}
             <div className="flex items-end justify-center gap-1 h-20 mb-6">
               {audioLevels.map((level, i) => (
                 <div
                   key={i}
                   className="w-2 bg-gradient-to-t from-orange-500 via-red-500 to-pink-500 rounded-full transition-all duration-75"
-                  style={{
-                    height: `${level * 100}%`,
-                    opacity: 0.6 + level * 0.4,
-                  }}
+                  style={{ height: `${level * 100}%`, opacity: 0.6 + level * 0.4 }}
                 />
               ))}
             </div>
 
-            {/* Stop button */}
+            {/* Progress bar */}
+            <div className="w-full h-1 bg-white/10 rounded-full mb-6 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full transition-all duration-1000"
+                style={{ width: `${(elapsedSeconds / MAX_RECORDING_SECONDS) * 100}%` }}
+              />
+            </div>
+
             <button
-              onClick={() => stopRecording('user')}
+              onClick={() => { cleanup(); setState('no-match') }}
               className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
             >
-              Stop & Search
+              Cancel
             </button>
           </div>
         )}
 
-        {/* Processing State */}
-        {state === 'processing' && (
-          <div className="text-center py-8">
-            <div className="relative w-24 h-24 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-full border-4 border-orange-500/20" />
-              <div className="absolute inset-0 rounded-full border-4 border-orange-500 border-t-transparent animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-orange-500" />
-              </div>
-            </div>
-            <p className="text-xl font-semibold text-white mb-2">
-              Analyzing melody...
-            </p>
-            <p className="text-white/60 mb-1">
-              Finding matching songs
-            </p>
-            <p className="text-white/50 text-sm">
-              {processingElapsed}s elapsed
-            </p>
-          </div>
-        )}
-
-        {/* Results State */}
+        {/* Results */}
         {state === 'results' && results.length > 0 && (
           <div className="animate-fade-in-up">
             <div className="flex items-center gap-2 mb-6">
@@ -604,9 +396,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
                           {result.title}
                         </p>
                         {result.artist && (
-                          <p className="text-sm text-white/60 truncate">
-                            {result.artist}
-                          </p>
+                          <p className="text-sm text-white/60 truncate">{result.artist}</p>
                         )}
                       </div>
                       <div className="flex-shrink-0 flex items-center gap-2">
@@ -639,17 +429,17 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
           </div>
         )}
 
-        {/* Error State */}
-        {state === 'error' && (
+        {/* No match */}
+        {state === 'no-match' && (
           <div className="text-center py-8 animate-fade-in-up">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
-              <AlertCircle className="w-8 h-8 text-red-400" />
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-500/20 flex items-center justify-center">
+              <Music className="w-8 h-8 text-orange-400" />
             </div>
             <p className="text-xl font-semibold text-white mb-2">
-              Oops!
+              No match found
             </p>
             <p className="text-white/60 mb-6">
-              {error}
+              Try humming a clearer melody, or hum the chorus part of the song.
             </p>
             <button
               onClick={handleRetry}
@@ -660,27 +450,19 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
           </div>
         )}
 
-        {/* Idle State: Start button and optional "Match as you hum" */}
-        {state === 'idle' && (
-          <div className="text-center py-8">
-            <p className="text-white/80 mb-4">Hum a melody to find a song</p>
-            {liveAvailable && (
-              <label className="flex items-center justify-center gap-2 mb-6 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={liveMode}
-                  onChange={(e) => setLiveMode(e.target.checked)}
-                  className="rounded border-white/30 bg-white/10 text-orange-500 focus:ring-orange-500"
-                />
-                <span className="text-sm text-white/70">Match as you hum (keep going until we find it)</span>
-              </label>
-            )}
+        {/* Error */}
+        {state === 'error' && (
+          <div className="text-center py-8 animate-fade-in-up">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <p className="text-xl font-semibold text-white mb-2">Oops!</p>
+            <p className="text-white/60 mb-6">{error}</p>
             <button
-              type="button"
-              onClick={() => startRecording()}
+              onClick={handleRetry}
               className="px-6 py-3 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium hover:opacity-90 transition-opacity"
             >
-              Start humming
+              Try Again
             </button>
           </div>
         )}
