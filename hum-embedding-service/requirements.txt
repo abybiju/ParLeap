@@ -1,9 +1,9 @@
-# YouTube-style audio embedding service: WAV -> single vector for hum-to-search
+# Hum pitch extraction service: WAV -> pitch contour via TorchCrepe
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
-torch>=2.0.0
-transformers>=4.36.0
+numpy>=1.24.0
 librosa>=0.10.0
 soundfile>=0.12.0
-numpy>=1.24.0
+torch>=2.0.0
+torchcrepe>=0.0.22

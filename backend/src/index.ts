@@ -1,3 +1,7 @@
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
@@ -9,6 +13,7 @@ import {
   stopSession as stopLiveSession,
   isLiveHumAvailable,
 } from './services/humSearchLiveService';
+import { autoFingerprint, isAutoFingerprintAvailable } from './services/autoFingerprintService';
 import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
 import { getSupabaseClient, isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
 import {
@@ -484,6 +489,36 @@ app.post('/api/hum-search/live/stop', (req: Request, res: Response) => {
   const { sessionId } = req.body;
   if (sessionId) stopLiveSession(sessionId);
   res.json({ success: true });
+});
+
+// ── Auto-fingerprint: triggered when a song is created/updated ──────────
+app.post('/api/fingerprint', async (req: Request, res: Response) => {
+  const { songId, title, artist } = req.body;
+
+  if (!title) {
+    res.status(400).json({ success: false, error: 'title is required' });
+    return;
+  }
+
+  if (!isAutoFingerprintAvailable()) {
+    res.status(503).json({
+      success: false,
+      error: 'Auto-fingerprint not available (CREPE service or yt-dlp missing)',
+    });
+    return;
+  }
+
+  // Return immediately — fingerprinting happens in background
+  res.json({ success: true, status: 'processing', message: 'Fingerprinting in background...' });
+
+  // Fire-and-forget: don't await
+  autoFingerprint(songId || '', title, artist || '').catch((err) => {
+    console.error('[AutoFingerprint] Background error:', err);
+  });
+});
+
+app.get('/api/fingerprint/status', (_req: Request, res: Response) => {
+  res.json({ available: isAutoFingerprintAvailable() });
 });
 
 app.use((err: Error, _req: Request, res: Response) => {

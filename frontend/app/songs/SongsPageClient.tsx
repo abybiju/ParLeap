@@ -73,6 +73,23 @@ export function SongsPageClient({ initialSongs }: SongsPageClientProps) {
     router.refresh();
   };
 
+  const handleAddSongFromHum = useCallback((title: string, artist: string) => {
+    // Create a partial song object to pre-fill the editor
+    setSelectedSong({
+      id: '',
+      title,
+      artist,
+      lyrics: '',
+      user_id: '',
+      created_at: '',
+      updated_at: '',
+      ccli_number: null,
+      slide_config: null,
+    } as Song);
+    setEditorOpen(true);
+    toast.info(`Add "${title}" to your library — paste the lyrics and save.`);
+  }, []);
+
   return (
     <>
       {/* Floating New Song Button */}
@@ -89,6 +106,7 @@ export function SongsPageClient({ initialSongs }: SongsPageClientProps) {
         onEdit={handleEditSong}
         onDelete={handleDeleteClick}
         onRowClick={handleEditSong}
+        onAddSong={handleAddSongFromHum}
       />
 
       {/* Song Editor Modal */}
