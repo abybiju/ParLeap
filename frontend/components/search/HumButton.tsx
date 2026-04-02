@@ -9,9 +9,11 @@ interface HumButtonProps {
   variant?: 'icon' | 'full'
   className?: string
   onSelectSong?: (songId: string) => void
+  userSongIds?: Set<string>
+  onAddSong?: (title: string, artist: string) => void
 }
 
-export function HumButton({ variant = 'icon', className, onSelectSong }: HumButtonProps) {
+export function HumButton({ variant = 'icon', className, onSelectSong, userSongIds, onAddSong }: HumButtonProps) {
   const [listening, setListening] = useState(false)
 
   const handleToggle = () => {
@@ -59,6 +61,8 @@ export function HumButton({ variant = 'icon', className, onSelectSong }: HumButt
           open={listening}
           onClose={() => setListening(false)}
           onSelectSong={onSelectSong}
+          userSongIds={userSongIds}
+          onAddSong={onAddSong}
         />
       </>
     )

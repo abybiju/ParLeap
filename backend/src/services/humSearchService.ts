@@ -1,13 +1,22 @@
 /**
- * Hum-to-Search Service
+ * Hum-to-Search Service (v2 — CREPE + DTW)
  *
- * Handles searching for songs by melody/embedding similarity.
- * - If EMBEDDING_SERVICE_URL is set: YouTube-style path — POST WAV to embedding service, then match_songs_by_embedding (768-dim).
- * - Otherwise: BasicPitch melody vector (128-dim) + match_songs().
+ * Architecture:
+ *   User hum (WAV) → CREPE pitch extraction service → interval sequence
+ *   → DTW match against all song_fingerprints → ranked results
+ *
+ * CREPE extracts a pitch contour (F0 at 10ms intervals) with high accuracy.
+ * Interval sequences (semitone deltas) are key-invariant.
+ * DTW handles tempo differences naturally.
+ *
+ * For a catalog of ~2000 songs, brute-force DTW runs in milliseconds.
+ *
+ * Fallback: if EMBEDDING_SERVICE_URL is not set and BasicPitch is available,
+ * falls back to the legacy 128D vector path (match_songs RPC).
  */
 
 import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
-import { getMelodyVector } from './melodyService';
+import { matchAgainstCatalog, distanceToSimilarity, subsequenceDtwDistance } from './dtwService';
 
 function getEmbeddingServiceUrl(): string {
   return process.env.EMBEDDING_SERVICE_URL?.trim() || '';
@@ -21,14 +30,108 @@ export interface SearchResult {
   lyrics: string;
 }
 
-interface EmbeddingResponse {
-  embedding: number[];
-  dim: number;
+interface PitchExtractionResponse {
+  pitch_contour: number[];
+  interval_sequence: number[];
+  confidence: number[];
+  num_frames: number;
+  num_voiced: number;
+  num_intervals: number;
+  duration_seconds: number;
+}
+
+// Cache of fingerprints for DTW matching (loaded once, refreshed periodically)
+interface CachedFingerprint {
+  id: string;
+  song_id: string | null;
+  title: string;
+  artist: string | null;
+  interval_sequence: number[];
+}
+
+let fingerprintCache: CachedFingerprint[] = [];
+let cacheLoadedAt = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // Refresh cache every 5 minutes
+
+/**
+ * Load fingerprints with interval_sequence from Supabase into memory cache.
+ */
+async function loadFingerprintCache(): Promise<CachedFingerprint[]> {
+  const now = Date.now();
+  if (fingerprintCache.length > 0 && now - cacheLoadedAt < CACHE_TTL_MS) {
+    return fingerprintCache;
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    console.warn('[HumSearch] Supabase not configured, cannot load fingerprints');
+    return [];
+  }
+
+  console.log('[HumSearch] Loading fingerprint cache from Supabase...');
+  const { data, error } = await supabase
+    .from('song_fingerprints')
+    .select('id, song_id, title, artist, interval_sequence')
+    .not('interval_sequence', 'is', null);
+
+  if (error) {
+    console.error('[HumSearch] Error loading fingerprints:', error);
+    return fingerprintCache; // Return stale cache if available
+  }
+
+  fingerprintCache = (data || []).map((row: {
+    id: string;
+    song_id: string | null;
+    title: string;
+    artist: string | null;
+    interval_sequence: number[];
+  }) => ({
+    id: row.id,
+    song_id: row.song_id,
+    title: row.title,
+    artist: row.artist,
+    interval_sequence: row.interval_sequence,
+  }));
+  cacheLoadedAt = now;
+
+  console.log(`[HumSearch] Cached ${fingerprintCache.length} fingerprints with interval sequences`);
+  return fingerprintCache;
 }
 
 /**
- * Get 768-dim embedding from the Python embedding service (YouTube-style).
- * Exported for use by the ingest script.
+ * Extract pitch contour and intervals from audio via the CREPE service.
+ */
+export async function getPitchFromService(audioBuffer: Buffer): Promise<PitchExtractionResponse> {
+  const base = getEmbeddingServiceUrl();
+  if (!base) {
+    throw new Error('EMBEDDING_SERVICE_URL is not set — needed for CREPE pitch extraction');
+  }
+
+  const url = `${base.replace(/\/$/, '')}/extract-pitch`;
+  const form = new FormData();
+  form.append('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'hum.wav');
+
+  const res = await fetch(url, {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Pitch extraction service error ${res.status}: ${text}`);
+  }
+
+  const json = (await res.json()) as PitchExtractionResponse;
+  if (!Array.isArray(json.interval_sequence)) {
+    throw new Error('Pitch service did not return interval_sequence array');
+  }
+
+  return json;
+}
+
+/**
+ * Legacy: get embedding from the old Wav2Vec2 service.
+ * Kept for backward compatibility during migration.
  */
 export async function getEmbeddingFromService(audioBuffer: Buffer): Promise<number[]> {
   const base = getEmbeddingServiceUrl();
@@ -49,109 +152,152 @@ export async function getEmbeddingFromService(audioBuffer: Buffer): Promise<numb
     throw new Error(`Embedding service error ${res.status}: ${text}`);
   }
 
-  const json = (await res.json()) as EmbeddingResponse;
-  if (!Array.isArray(json.embedding)) {
-    throw new Error('Embedding service did not return embedding array');
+  const json = (await res.json()) as { embedding?: number[]; pitch_contour?: number[]; interval_sequence?: number[] };
+
+  // New service returns pitch data, not embeddings
+  if (json.interval_sequence) {
+    return json.interval_sequence;
   }
-  return json.embedding;
+  if (Array.isArray(json.embedding)) {
+    return json.embedding;
+  }
+  throw new Error('Service did not return expected data');
 }
 
 /**
- * Search for songs matching a hummed melody
- *
- * @param audioBuffer - WAV audio buffer of the user's hum
- * @param limit - Maximum number of results (default: 5)
- * @param threshold - Minimum similarity threshold (default: 0.5)
- * @returns Array of matching songs sorted by similarity
+ * Search for songs matching a hummed melody using CREPE + DTW.
  */
 export async function searchByHum(
   audioBuffer: Buffer,
   limit: number = 5,
-  threshold: number = 0.5
+  threshold: number = 0.3
 ): Promise<SearchResult[]> {
-  const supabase = getSupabaseClient();
-  if (!isSupabaseConfigured() || !supabase) {
-    throw new Error('Supabase not configured - cannot perform hum search');
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase not configured — cannot perform hum search');
   }
 
   const embeddingServiceUrl = getEmbeddingServiceUrl();
-  const useEmbeddingService = embeddingServiceUrl.length > 0;
 
-  if (useEmbeddingService) {
-    console.log('[HumSearch] Using YouTube-style embedding service:', embeddingServiceUrl);
-  } else {
-    console.log('[HumSearch] Using BasicPitch melody vector (match_songs)');
+  // ── CREPE + DTW path (primary) ──────────────────────────────────
+  if (embeddingServiceUrl) {
+    console.log('[HumSearch] Using CREPE + DTW matching');
+    const startTime = Date.now();
+
+    // Step 1: Extract pitch from the hum
+    console.log('[HumSearch] Extracting pitch contour via CREPE...');
+    const pitchData = await getPitchFromService(audioBuffer);
+    const extractionTime = Date.now() - startTime;
+    console.log(
+      `[HumSearch] Pitch extraction: ${extractionTime}ms — ${pitchData.num_voiced} voiced frames, ${pitchData.num_intervals} intervals, ${pitchData.duration_seconds}s audio`
+    );
+
+    if (pitchData.num_intervals < 5) {
+      console.log('[HumSearch] Too few intervals extracted (need at least 5). Did you hum a melody?');
+      return [];
+    }
+
+    // Step 2: Load fingerprint catalog
+    const catalog = await loadFingerprintCache();
+    if (catalog.length === 0) {
+      console.log('[HumSearch] No fingerprints in database. Ingest songs first.');
+      return [];
+    }
+
+    // Step 3: DTW match against catalog
+    console.log(`[HumSearch] DTW matching against ${catalog.length} fingerprints...`);
+    const matchStart = Date.now();
+
+    const matches = matchAgainstCatalog(
+      pitchData.interval_sequence,
+      catalog.map((fp) => ({ intervals: fp.interval_sequence })),
+      { threshold, limit, useSubsequence: true }
+    );
+
+    const matchTime = Date.now() - matchStart;
+    console.log(`[HumSearch] DTW matching took ${matchTime}ms — found ${matches.length} matches`);
+
+    if (matches.length === 0) {
+      // Log closest match for debugging
+      let bestSimilarity = 0;
+      let bestTitle = '?';
+      for (let i = 0; i < catalog.length; i++) {
+        const fp = catalog[i];
+        if (!fp.interval_sequence || fp.interval_sequence.length < 3) continue;
+        const dist = subsequenceDtwDistance(pitchData.interval_sequence, fp.interval_sequence);
+        const sim = distanceToSimilarity(dist);
+        if (sim > bestSimilarity) {
+          bestSimilarity = sim;
+          bestTitle = fp.title;
+        }
+      }
+      console.log(
+        `[HumSearch] Closest match below threshold: "${bestTitle}" (${Math.round(bestSimilarity * 100)}% similarity, threshold: ${Math.round(threshold * 100)}%)`
+      );
+      return [];
+    }
+
+    // Step 4: Fetch lyrics for matched songs
+    const supabase = getSupabaseClient()!;
+    const results: SearchResult[] = [];
+
+    for (const match of matches) {
+      const fp = catalog[match.index];
+      let lyrics = '';
+
+      // Try to get lyrics from linked song
+      if (fp.song_id) {
+        const { data: songData } = await supabase
+          .from('songs')
+          .select('lyrics')
+          .eq('id', fp.song_id)
+          .single();
+        if (songData?.lyrics) {
+          lyrics = songData.lyrics;
+        }
+      }
+
+      results.push({
+        songId: fp.song_id || fp.id,
+        title: fp.title,
+        artist: fp.artist,
+        similarity: match.similarity,
+        lyrics,
+      });
+
+      console.log(
+        `[HumSearch]   → "${fp.title}" by ${fp.artist || 'Unknown'} — ${Math.round(match.similarity * 100)}% similarity`
+      );
+    }
+
+    const totalTime = Date.now() - startTime;
+    console.log(`[HumSearch] Total search time: ${totalTime}ms`);
+
+    return results;
   }
 
-  console.log('[HumSearch] Extracting vector from audio...');
+  // ── Legacy BasicPitch fallback ──────────────────────────────────
+  console.log('[HumSearch] EMBEDDING_SERVICE_URL not set — falling back to BasicPitch (legacy)');
+  const { getMelodyVector } = await import('./melodyService');
+
+  const supabase = getSupabaseClient()!;
   const startTime = Date.now();
 
-  let queryVector: number[];
-  let rpcName: string;
-  let rpcParams: { query_embedding?: number[]; query_vector?: number[]; match_threshold: number; match_count: number };
+  const queryVector = await getMelodyVector(audioBuffer);
+  console.log(`[HumSearch] BasicPitch extraction took ${Date.now() - startTime}ms`);
 
-  if (useEmbeddingService) {
-    queryVector = await getEmbeddingFromService(audioBuffer);
-    rpcName = 'match_songs_by_embedding';
-    rpcParams = {
-      query_embedding: queryVector,
-      match_threshold: threshold,
-      match_count: limit,
-    };
-  } else {
-    queryVector = await getMelodyVector(audioBuffer);
-    rpcName = 'match_songs';
-    rpcParams = {
-      query_vector: queryVector,
-      match_threshold: threshold,
-      match_count: limit,
-    };
-  }
-
-  const extractionTime = Date.now() - startTime;
-  console.log(`[HumSearch] Vector extraction took ${extractionTime}ms (dim: ${queryVector.length})`);
-
-  const { count: tableCount } = await supabase
-    .from('song_fingerprints')
-    .select('id', { count: 'exact', head: true });
-  console.log('[HumSearch] song_fingerprints row count (from backend):', tableCount ?? 'null');
-
-  console.log('[HumSearch] Searching database for matches...');
-  const searchStart = Date.now();
-
-  const { data, error } = await supabase.rpc(rpcName, rpcParams);
-
-  const searchTime = Date.now() - searchStart;
-  console.log(`[HumSearch] Database search took ${searchTime}ms`);
+  const { data, error } = await supabase.rpc('match_songs', {
+    query_vector: queryVector,
+    match_threshold: threshold,
+    match_count: limit,
+  });
 
   if (error) {
-    console.error('[HumSearch] Database error:', error);
     throw new Error(`Search failed: ${error.message}`);
   }
 
-  if (!data || data.length === 0) {
-    console.log('[HumSearch] No matches found');
-    const closestParams = useEmbeddingService
-      ? { query_embedding: queryVector, match_threshold: 0, match_count: 1 }
-      : { query_vector: queryVector, match_threshold: 0, match_count: 1 };
-    const closestRpc = useEmbeddingService ? 'match_songs_by_embedding' : 'match_songs';
-    const { data: closest, error: closestError } = await supabase.rpc(closestRpc, closestParams);
-    if (closestError) {
-      console.warn('[HumSearch] Could not get closest match (for logging):', closestError.message);
-    } else if (closest && closest.length > 0) {
-      const row = closest[0] as { similarity?: number; title?: string };
-      console.log(
-        `[HumSearch] Closest match below threshold: "${row?.title ?? '?'}" (${row?.similarity != null ? Math.round(row.similarity * 100) : '?'}% similarity)`
-      );
-    } else {
-      console.log('[HumSearch] No matching fingerprints (closest query returned empty)');
-    }
-    return [];
-  }
+  if (!data || data.length === 0) return [];
 
-  console.log(`[HumSearch] Found ${data.length} matches`);
-
-  const results: SearchResult[] = data.map((row: {
+  return data.map((row: {
     song_id: string;
     title: string;
     artist: string | null;
@@ -164,14 +310,21 @@ export async function searchByHum(
     similarity: row.similarity,
     lyrics: row.lyrics ?? '',
   }));
-
-  return results;
 }
 
 /**
- * Get the melody vector for an audio buffer without searching
- * Useful for debugging or pre-computing vectors
+ * Force refresh the fingerprint cache (e.g., after ingesting new songs).
+ */
+export function invalidateFingerprintCache(): void {
+  fingerprintCache = [];
+  cacheLoadedAt = 0;
+  console.log('[HumSearch] Fingerprint cache invalidated');
+}
+
+/**
+ * Get the melody vector for an audio buffer without searching (legacy).
  */
 export async function extractMelodyVector(audioBuffer: Buffer): Promise<number[]> {
+  const { getMelodyVector } = await import('./melodyService');
   return getMelodyVector(audioBuffer);
 }

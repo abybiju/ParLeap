@@ -1,11 +1,13 @@
 /**
- * Live hum-to-search: stream audio chunks, match on the fly (YouTube-style).
- * Requires EMBEDDING_SERVICE_URL and match_songs_by_embedding (768D).
+ * Live hum-to-search: stream audio chunks, match on the fly using CREPE + DTW.
+ *
+ * Requires EMBEDDING_SERVICE_URL pointing to the CREPE pitch extraction service.
+ * Accumulates a rolling buffer of audio, extracts pitch at each chunk,
+ * and runs DTW against the fingerprint catalog.
  */
 
 import { WaveFile } from 'wavefile';
-import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
-import { getEmbeddingFromService } from './humSearchService';
+import { isSupabaseConfigured } from '../config/supabase';
 import type { SearchResult } from './humSearchService';
 
 const EMBEDDING_SERVICE_URL = process.env.EMBEDDING_SERVICE_URL?.trim() || '';
@@ -13,11 +15,11 @@ const EMBEDDING_SERVICE_URL = process.env.EMBEDDING_SERVICE_URL?.trim() || '';
 /** Keep last 5 seconds of audio (samples). */
 const SAMPLE_RATE = 22050;
 const MAX_SAMPLES = SAMPLE_RATE * 5;
-/** Minimum samples before we run embedding (e.g. 2s). */
+/** Minimum samples before we run pitch extraction (e.g. 2s). */
 const MIN_SAMPLES = SAMPLE_RATE * 2;
 
 /** Require confident match so silence/random hum does not return results. */
-const LIVE_MATCH_THRESHOLD = 0.55;
+const LIVE_MATCH_THRESHOLD = 0.4;
 const LIVE_MATCH_COUNT = 5;
 
 /** Session: rolling PCM buffer (int16 range). */
@@ -106,44 +108,21 @@ export async function processChunk(sessionId: string, audioBase64: string): Prom
     return { status: 'listening' };
   }
 
+  // Convert rolling buffer to WAV and run CREPE + DTW via searchByHum
   const wavBuffer = pcmToWavBuffer(session.pcmSamples, session.sampleRate);
-  let embedding: number[];
-  try {
-    embedding = await getEmbeddingFromService(wavBuffer);
-  } catch (err) {
-    console.error('[HumSearchLive] Embedding service error:', err);
-    throw err;
-  }
 
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
+  const { searchByHum } = await import('./humSearchService');
+  const results = await searchByHum(
+    wavBuffer,
+    LIVE_MATCH_COUNT,
+    LIVE_MATCH_THRESHOLD
+  );
 
-  const { data, error } = await supabase.rpc('match_songs_by_embedding', {
-    query_embedding: embedding,
-    match_threshold: LIVE_MATCH_THRESHOLD,
-    match_count: LIVE_MATCH_COUNT,
-  });
-
-  if (error) {
-    console.error('[HumSearchLive] match_songs_by_embedding error:', error);
-    throw new Error(`Search failed: ${error.message}`);
-  }
-
-  if (data && data.length > 0) {
-    const top = data[0] as { song_id: string; title: string; artist: string | null; similarity: number; lyrics?: string };
-    const results: SearchResult[] = data.map((row: { song_id: string; title: string; artist: string | null; similarity: number; lyrics?: string }) => ({
-      songId: row.song_id,
-      title: row.title,
-      artist: row.artist,
-      similarity: row.similarity,
-      lyrics: row.lyrics ?? '',
-    }));
+  if (results.length > 0) {
     return {
       status: 'match',
       results,
-      similarity: top.similarity,
+      similarity: results[0].similarity,
     };
   }
 
