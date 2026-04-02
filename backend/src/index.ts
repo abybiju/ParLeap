@@ -318,6 +318,56 @@ app.post('/api/format-song', async (req: Request, res: Response) => {
 
 // Hum-to-Search endpoint
 // Accepts audio as base64 WAV in JSON body
+// Synchronous hum-search: takes audio, returns results directly (CREPE + DTW is fast)
+app.post('/api/hum-search/match', async (req: Request, res: Response) => {
+  const startTime = Date.now();
+  try {
+    const { audio, limit = 5, threshold = 0.25 } = req.body;
+
+    if (!audio) {
+      res.status(400).json({ error: 'Missing audio data' });
+      return;
+    }
+
+    let audioBuffer: Buffer;
+    try {
+      audioBuffer = Buffer.from(audio, 'base64');
+    } catch {
+      res.status(400).json({ error: 'Invalid base64 audio data' });
+      return;
+    }
+
+    if (audioBuffer.length < 12) {
+      res.status(400).json({ error: 'Audio too small' });
+      return;
+    }
+
+    const header = audioBuffer.slice(0, 4).toString('ascii');
+    const format = audioBuffer.slice(8, 12).toString('ascii');
+    if (header !== 'RIFF' || format !== 'WAVE') {
+      res.status(400).json({ error: 'Invalid audio format — expected WAV' });
+      return;
+    }
+
+    const results = await searchByHum(audioBuffer, limit, threshold);
+    const duration = Date.now() - startTime;
+    console.log(`[HumSearch/match] ${duration}ms — ${results.length} results`);
+
+    res.json({
+      success: true,
+      results,
+      count: results.length,
+      durationMs: duration,
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[HumSearch/match] Error after ${duration}ms:`, error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Search failed',
+    });
+  }
+});
+
 app.post('/api/hum-search', async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
