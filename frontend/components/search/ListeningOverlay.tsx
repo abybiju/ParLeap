@@ -13,7 +13,7 @@ const LIVE_MAX_SECONDS = 60
 const LIVE_CHUNK_SECONDS = 2
 const SAMPLE_RATE = 22050
 /** Only show results when best match is at least this confident (avoids showing songs for silence/random hum). */
-const MIN_CONFIDENCE_TO_SHOW = 0.55
+const MIN_CONFIDENCE_TO_SHOW = 0.35
 
 function getBackendUrl(): string {
   if (typeof window === 'undefined') return ''
@@ -35,11 +35,15 @@ interface ListeningOverlayProps {
   open: boolean
   onClose?: () => void
   onSelectSong?: (songId: string) => void
+  /** IDs of songs in the current user's library — used to show "Add to Library" for unknown songs */
+  userSongIds?: Set<string>
+  /** Called when user wants to add a matched song to their library */
+  onAddSong?: (title: string, artist: string) => void
 }
 
 type RecordingState = 'idle' | 'recording' | 'processing' | 'results' | 'error'
 
-export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverlayProps) {
+export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onAddSong }: ListeningOverlayProps) {
   const [state, setState] = useState<RecordingState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<SearchResult[]>([])
@@ -558,7 +562,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
               Finding matching songs
             </p>
             <p className="text-white/50 text-sm">
-              This may take 30–60 seconds · {processingElapsed}s
+              {processingElapsed}s elapsed
             </p>
           </div>
         )}
@@ -574,41 +578,56 @@ export function ListeningOverlay({ open, onClose, onSelectSong }: ListeningOverl
             </div>
 
             <div className="space-y-3 max-h-80 overflow-y-auto">
-              {results.map((result, index) => (
-                <button
-                  key={result.songId}
-                  onClick={() => handleSelectSong(result.songId)}
-                  className={cn(
-                    'w-full p-4 rounded-xl text-left transition-all',
-                    'bg-white/5 hover:bg-white/10 border border-white/10 hover:border-orange-500/50',
-                    'group animate-fade-in-up'
-                  )}
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-white truncate group-hover:text-orange-400 transition-colors">
-                        {result.title}
-                      </p>
-                      {result.artist && (
-                        <p className="text-sm text-white/60 truncate">
-                          {result.artist}
+              {results.map((result, index) => {
+                const isInLibrary = !userSongIds || userSongIds.has(result.songId)
+                return (
+                  <button
+                    key={result.songId}
+                    onClick={() => {
+                      if (isInLibrary) {
+                        handleSelectSong(result.songId)
+                      } else if (onAddSong) {
+                        onAddSong(result.title, result.artist || '')
+                        onClose?.()
+                      }
+                    }}
+                    className={cn(
+                      'w-full p-4 rounded-xl text-left transition-all',
+                      'bg-white/5 hover:bg-white/10 border border-white/10 hover:border-orange-500/50',
+                      'group animate-fade-in-up'
+                    )}
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white truncate group-hover:text-orange-400 transition-colors">
+                          {result.title}
                         </p>
-                      )}
+                        {result.artist && (
+                          <p className="text-sm text-white/60 truncate">
+                            {result.artist}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        <span className={cn(
+                          'px-2 py-1 rounded-full text-xs font-medium',
+                          result.similarity > 0.8 ? 'bg-green-500/20 text-green-400' :
+                          result.similarity > 0.6 ? 'bg-orange-500/20 text-orange-400' :
+                          'bg-white/10 text-white/60'
+                        )}>
+                          {Math.round(result.similarity * 100)}% match
+                        </span>
+                        {!isInLibrary && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400">
+                            + Add
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-shrink-0">
-                      <span className={cn(
-                        'px-2 py-1 rounded-full text-xs font-medium',
-                        result.similarity > 0.8 ? 'bg-green-500/20 text-green-400' :
-                        result.similarity > 0.6 ? 'bg-orange-500/20 text-orange-400' :
-                        'bg-white/10 text-white/60'
-                      )}>
-                        {Math.round(result.similarity * 100)}% match
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
 
             <button

@@ -30,16 +30,27 @@ interface SongDataTableProps {
   onEdit: (song: Song) => void;
   onDelete: (song: Song) => void;
   onRowClick?: (song: Song) => void;
+  onAddSong?: (title: string, artist: string) => void;
 }
 
-export function SongDataTable({ 
-  songs, 
-  onEdit, 
+export function SongDataTable({
+  songs,
+  onEdit,
   onDelete,
-  onRowClick 
+  onRowClick,
+  onAddSong
 }: SongDataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+
+  const userSongIds = useMemo(() => new Set(songs.map((s) => s.id)), [songs]);
+
+  const handleHumSelectSong = (songId: string) => {
+    const match = songs.find((s) => s.id === songId);
+    if (match) {
+      onEdit(match);
+    }
+  };
 
   const columns = useMemo(
     () => getColumns({ onEdit, onDelete }),
@@ -74,7 +85,11 @@ export function SongDataTable({
             className="pl-9 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-400 focus-visible:ring-indigo-500/60"
           />
         </div>
-        <HumButton />
+        <HumButton
+          onSelectSong={handleHumSelectSong}
+          userSongIds={userSongIds}
+          onAddSong={onAddSong}
+        />
       </div>
 
       {/* Table */}

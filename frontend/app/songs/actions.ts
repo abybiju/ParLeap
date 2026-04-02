@@ -104,6 +104,24 @@ export async function createSong(
     }
   }
 
+  // Auto-fingerprint for hum-to-search (fire-and-forget, never blocks)
+  if (songId && result.data.title) {
+    try {
+      const backendUrl = getBackendUrl();
+      fetch(`${backendUrl}/api/fingerprint`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songId,
+          title: result.data.title,
+          artist: result.data.artist || '',
+        }),
+      }).catch(() => { /* fingerprinting is best-effort */ });
+    } catch {
+      // Never fail song creation because of fingerprinting
+    }
+  }
+
   revalidatePath('/songs');
   return {
     success: true,
@@ -152,6 +170,24 @@ export async function updateSong(id: string, formData: FormData): Promise<Action
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  // Auto-fingerprint on update too (title/artist may have changed)
+  if (result.data.title) {
+    try {
+      const backendUrl = getBackendUrl();
+      fetch(`${backendUrl}/api/fingerprint`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songId: id,
+          title: result.data.title,
+          artist: result.data.artist || '',
+        }),
+      }).catch(() => {});
+    } catch {
+      // best-effort
+    }
   }
 
   revalidatePath('/songs');
