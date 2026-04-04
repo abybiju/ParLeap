@@ -362,21 +362,32 @@ app.post('/api/extract-lyrics', async (req: Request, res: Response) => {
     const html = await pageResponse.text();
     console.log(`[ExtractLyrics] Got ${html.length} chars of HTML`);
 
-    // Strip HTML tags to get raw text content (lightweight, no cheerio needed)
+    // Strip HTML to get text content — remove non-content elements first
     const textContent = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
       .replace(/<[^>]+>/g, '\n')
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
+      .replace(/&[a-z]+;/gi, '')
       .replace(/&#\d+;/g, '')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .join('\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    // Truncate to avoid hitting token limits (keep first 15k chars — more than enough for lyrics)
-    const truncated = textContent.slice(0, 15000);
+    // Truncate to 6000 chars — lyrics are typically 500-2000 chars,
+    // the rest is page chrome. This keeps us well within OpenAI token limits.
+    const truncated = textContent.slice(0, 6000);
 
     if (truncated.length < 50) {
       res.status(422).json({ error: 'Page has too little text content to extract lyrics from' });
