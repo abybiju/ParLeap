@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Hum Pitch Extraction Service", version="3.0.0")
+app = FastAPI(title="Hum Pitch Extraction Service", version="3.0.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -232,7 +232,7 @@ def health():
         "model": f"torchcrepe-{CREPE_MODEL}",
         "demucs_model": DEMUCS_MODEL,
         "device": DEVICE,
-        "version": "3.0.0",
+        "version": "3.0.1",
     }
 
 
