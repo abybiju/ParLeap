@@ -81,7 +81,7 @@ function downloadYouTubeAudio(url: string, outputDir: string): string {
     '--no-playlist',           // Single video only
     '--extract-audio',
     '--audio-format', 'wav',
-    '--postprocessor-args', '"ffmpeg:-ar 16000 -ac 1"', // 16kHz mono
+    '--postprocessor-args', '"ffmpeg:-ar 44100"', // 44.1kHz for Demucs vocal separation (keep stereo)
     '--output', `"${outputPath.replace('.wav', '.%(ext)s')}"`,
     '--quiet',
     '--no-warnings',
