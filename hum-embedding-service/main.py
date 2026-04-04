@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Hum Pitch Extraction Service", version="3.0.1")
+app = FastAPI(title="Hum Pitch Extraction Service", version="3.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,26 +61,20 @@ BP_HIGH = 2000.0
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Demucs model — mdx_q is smallest + CPU-friendly
-DEMUCS_MODEL = "mdx_q"
+# HPSS margin for harmonic-percussive separation (removes drums from full-mix audio)
+HPSS_MARGIN = 3.0
 
 # Pre-compute bandpass filter coefficients
 _bp_sos = butter(4, [BP_LOW, BP_HIGH], btype="band", fs=TARGET_SR, output="sos")
 
-# Lazy-loaded Demucs model (only initialized when needed)
-_demucs_model = None
-
-
-def _get_demucs_model():
-    """Lazy-load Demucs model on first use to save memory."""
-    global _demucs_model
-    if _demucs_model is None:
-        logger.info("Loading Demucs model '%s' (first use)...", DEMUCS_MODEL)
-        from demucs.pretrained import get_model
-        _demucs_model = get_model(DEMUCS_MODEL)
-        _demucs_model.to(DEVICE)
-        logger.info("Demucs model loaded (sources: %s)", _demucs_model.sources)
-    return _demucs_model
+def extract_harmonic(y: np.ndarray, margin: float = HPSS_MARGIN) -> np.ndarray:
+    """
+    Harmonic-Percussive Source Separation: remove drums/transients from full-mix audio.
+    Returns the harmonic component (vocals + melodic instruments, no drums).
+    Uses librosa.effects.hpss — fast, no neural network, no extra dependencies.
+    """
+    y_harmonic, _ = librosa.effects.hpss(y, margin=margin)
+    return y_harmonic
 
 
 def separate_vocals(audio_bytes: bytes) -> np.ndarray:
@@ -230,7 +224,7 @@ def health():
     return {
         "status": "ok",
         "model": f"torchcrepe-{CREPE_MODEL}",
-        "demucs_model": DEMUCS_MODEL,
+        "vocal_separation": "hpss",
         "device": DEVICE,
         "version": "3.0.1",
     }
@@ -338,51 +332,30 @@ async def extract_pitch(
 
 
 def separate_vocals_from_bytes(audio_bytes: bytes) -> np.ndarray:
-    """Run Demucs vocal separation and return mono vocals at TARGET_SR."""
-    from demucs.apply import apply_model
+    """
+    Extract melodic/vocal content from full-mix audio using HPSS.
+    Removes drums/percussion, keeps harmonic content (vocals + melodic instruments).
+    Returns mono audio at TARGET_SR.
+    """
+    # Load at TARGET_SR directly (no need for higher SR — HPSS works fine at 16kHz)
+    y, sr = librosa.load(io.BytesIO(audio_bytes), sr=TARGET_SR, mono=True)
 
-    model = _get_demucs_model()
-    model_sr = model.samplerate  # typically 44100
+    # Trim to max duration
+    max_samples = TARGET_SR * MAX_DURATION_SECONDS
+    if len(y) > max_samples:
+        logger.info("Trimming audio from %.1fs to %ds before HPSS", len(y) / TARGET_SR, MAX_DURATION_SECONDS)
+        y = y[:max_samples]
 
-    # Load at Demucs model's native sample rate
-    y, sr = librosa.load(io.BytesIO(audio_bytes), sr=model_sr, mono=False)
+    raw_rms = float(np.sqrt(np.mean(y**2)))
+    logger.info("HPSS input: %.1fs, rms=%.6f", len(y) / TARGET_SR, raw_rms)
 
-    # Trim to 30 seconds BEFORE Demucs to save memory
-    max_samples = int(model_sr * MAX_DURATION_SECONDS)
-    if y.ndim == 1:
-        if len(y) > max_samples:
-            y = y[:max_samples]
-    else:
-        if y.shape[-1] > max_samples:
-            y = y[..., :max_samples]
+    # Remove drums/transients, keep melodic content
+    y_harmonic = extract_harmonic(y)
 
-    # Demucs expects [batch, channels, samples]
-    if y.ndim == 1:
-        audio_tensor = torch.from_numpy(y).float().unsqueeze(0).unsqueeze(0)
-    else:
-        audio_tensor = torch.from_numpy(y).float().unsqueeze(0)
+    harmonic_rms = float(np.sqrt(np.mean(y_harmonic**2)))
+    logger.info("HPSS output (harmonic): rms=%.6f", harmonic_rms)
 
-    duration = y.shape[-1] / model_sr
-    channels = audio_tensor.shape[1]
-    logger.info("Demucs separating vocals (%.1fs, %dHz, %d ch)...", duration, model_sr, channels)
-
-    # apply_model returns [batch, sources, channels, samples]
-    with torch.no_grad():
-        sources = apply_model(model, audio_tensor, device=DEVICE, segment=10, overlap=0.1)
-
-    # Find vocal source index
-    vocal_idx = model.sources.index("vocals")
-    vocals = sources[0, vocal_idx]  # [channels, samples]
-
-    # To mono numpy
-    vocals_mono = vocals.mean(dim=0).cpu().numpy()
-
-    # Resample to TARGET_SR for pitch extraction
-    vocals_mono = librosa.resample(vocals_mono, orig_sr=model_sr, target_sr=TARGET_SR)
-
-    vocal_rms = float(np.sqrt(np.mean(vocals_mono**2)))
-    logger.info("Vocals isolated: %.1fs at %dHz, rms=%.6f", len(vocals_mono) / TARGET_SR, TARGET_SR, vocal_rms)
-    return vocals_mono
+    return y_harmonic
 
 
 # Legacy compatibility
