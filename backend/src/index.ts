@@ -322,7 +322,7 @@ app.post('/api/format-song', async (req: Request, res: Response) => {
 app.post('/api/hum-search/match', async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
-    const { audio, limit = 5, threshold = 0.55 } = req.body;
+    const { audio, limit = 5, threshold = 0.75 } = req.body;
 
     if (!audio) {
       res.status(400).json({ error: 'Missing audio data' });
