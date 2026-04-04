@@ -67,24 +67,20 @@ DEMUCS_MODEL = "mdx_q"
 # Pre-compute bandpass filter coefficients
 _bp_sos = butter(4, [BP_LOW, BP_HIGH], btype="band", fs=TARGET_SR, output="sos")
 
-# Lazy-loaded Demucs separator (only initialized when needed)
-_demucs_separator: Optional[object] = None
+# Lazy-loaded Demucs model (only initialized when needed)
+_demucs_model = None
 
 
-def _get_demucs_separator():
-    """Lazy-load Demucs separator on first use to save memory."""
-    global _demucs_separator
-    if _demucs_separator is None:
+def _get_demucs_model():
+    """Lazy-load Demucs model on first use to save memory."""
+    global _demucs_model
+    if _demucs_model is None:
         logger.info("Loading Demucs model '%s' (first use)...", DEMUCS_MODEL)
-        from demucs.api import Separator
-        _demucs_separator = Separator(
-            model=DEMUCS_MODEL,
-            device=DEVICE,
-            segment=8,    # 8-second chunks for memory efficiency
-            split=True,
-        )
-        logger.info("Demucs separator ready")
-    return _demucs_separator
+        from demucs.pretrained import get_model
+        _demucs_model = get_model(DEMUCS_MODEL)
+        _demucs_model.to(DEVICE)
+        logger.info("Demucs model loaded (sources: %s)", _demucs_model.sources)
+    return _demucs_model
 
 
 def separate_vocals(audio_bytes: bytes) -> np.ndarray:
@@ -343,24 +339,34 @@ async def extract_pitch(
 
 def separate_vocals_from_bytes(audio_bytes: bytes) -> np.ndarray:
     """Run Demucs vocal separation and return mono vocals at TARGET_SR."""
-    separator = _get_demucs_separator()
+    from demucs.apply import apply_model
 
-    # Load at original SR for Demucs (it resamples internally)
-    y, sr = librosa.load(io.BytesIO(audio_bytes), sr=None, mono=False)
+    model = _get_demucs_model()
 
+    # Load at original SR (Demucs needs high quality, ideally 44.1kHz)
+    y, sr = librosa.load(io.BytesIO(audio_bytes), sr=model.samplerate, mono=False)
+
+    # Demucs expects [batch, channels, samples]
     if y.ndim == 1:
-        audio_tensor = torch.from_numpy(y).float().unsqueeze(0)
+        audio_tensor = torch.from_numpy(y).float().unsqueeze(0).unsqueeze(0)  # [1, 1, samples]
     else:
-        audio_tensor = torch.from_numpy(y).float()
+        audio_tensor = torch.from_numpy(y).float().unsqueeze(0)  # [1, channels, samples]
 
-    logger.info("Demucs separating vocals (%.1fs, %dHz)...", y.shape[-1] / sr, sr)
-    _, separated = separator.separate_tensor(audio_tensor, sr)
-    vocals = separated["vocals"]
+    logger.info("Demucs separating vocals (%.1fs, %dHz, %d channels)...",
+                y.shape[-1] / sr, sr, audio_tensor.shape[1])
+
+    # apply_model returns [batch, sources, channels, samples]
+    with torch.no_grad():
+        sources = apply_model(model, audio_tensor, device=DEVICE, segment=8)
+
+    # Find vocal source index
+    vocal_idx = model.sources.index("vocals")
+    vocals = sources[0, vocal_idx]  # [channels, samples]
 
     # To mono numpy
-    vocals_mono = vocals.mean(dim=0).numpy() if vocals.dim() > 1 else vocals.numpy()
+    vocals_mono = vocals.mean(dim=0).cpu().numpy()
 
-    # Resample to TARGET_SR
+    # Resample to TARGET_SR for pitch extraction
     if sr != TARGET_SR:
         vocals_mono = librosa.resample(vocals_mono, orig_sr=sr, target_sr=TARGET_SR)
 
