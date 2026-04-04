@@ -355,7 +355,10 @@ app.post('/api/extract-lyrics', async (req: Request, res: Response) => {
 
     if (!pageResponse.ok) {
       console.error(`[ExtractLyrics] Fetch failed: ${pageResponse.status}`);
-      res.status(502).json({ error: `Could not fetch page (${pageResponse.status})` });
+      const msg = pageResponse.status === 403
+        ? `This site (${parsed.hostname}) blocks automated access. Try a different lyrics site like letras.com or songlyrics.com.`
+        : `Could not fetch page (${pageResponse.status})`;
+      res.status(502).json({ error: msg });
       return;
     }
 
