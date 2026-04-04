@@ -316,6 +316,102 @@ app.post('/api/format-song', async (req: Request, res: Response) => {
   }
 });
 
+// Extract lyrics from a webpage URL — fetches page, AI extracts + formats lyrics
+app.post('/api/extract-lyrics', async (req: Request, res: Response) => {
+  try {
+    if (!isFormatSongEnabled()) {
+      res.status(503).json({ error: 'AI extraction not configured. Set OPENAI_API_KEY on the backend.' });
+      return;
+    }
+    const { url } = req.body ?? {};
+    if (typeof url !== 'string' || !url.trim()) {
+      res.status(400).json({ error: 'url is required' });
+      return;
+    }
+
+    // Basic URL validation
+    let parsed: URL;
+    try {
+      parsed = new URL(url.trim());
+    } catch {
+      res.status(400).json({ error: 'Invalid URL format' });
+      return;
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      res.status(400).json({ error: 'URL must be http or https' });
+      return;
+    }
+
+    console.log(`[ExtractLyrics] Fetching: ${parsed.href}`);
+
+    // Fetch the webpage
+    const pageResponse = await fetch(parsed.href, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ParLeap/1.0; +https://www.parleap.com)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!pageResponse.ok) {
+      console.error(`[ExtractLyrics] Fetch failed: ${pageResponse.status}`);
+      res.status(502).json({ error: `Could not fetch page (${pageResponse.status})` });
+      return;
+    }
+
+    const html = await pageResponse.text();
+    console.log(`[ExtractLyrics] Got ${html.length} chars of HTML`);
+
+    // Strip HTML tags to get raw text content (lightweight, no cheerio needed)
+    const textContent = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, '\n')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#\d+;/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    // Truncate to avoid hitting token limits (keep first 15k chars — more than enough for lyrics)
+    const truncated = textContent.slice(0, 15000);
+
+    if (truncated.length < 50) {
+      res.status(422).json({ error: 'Page has too little text content to extract lyrics from' });
+      return;
+    }
+
+    // Pipe through existing formatSong AI pipeline — it handles extraction + formatting
+    const result = await formatSong(truncated);
+    if (!result || result.sections.length === 0) {
+      res.status(422).json({ error: 'Could not extract lyrics from this page. Try a different URL.' });
+      return;
+    }
+
+    const lyrics = serializeSectionsToLyrics(result.sections);
+    console.log(`[ExtractLyrics] Extracted: "${result.title}" by ${result.artist} — ${result.sections.length} sections`);
+
+    res.json({
+      title: result.title,
+      artist: result.artist,
+      sections: result.sections,
+      lyrics,
+      source: parsed.hostname,
+    });
+  } catch (err) {
+    console.error('[ExtractLyrics] Error:', err);
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      res.status(504).json({ error: 'Page took too long to load' });
+      return;
+    }
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Lyrics extraction failed',
+    });
+  }
+});
+
 // Hum-to-Search endpoint
 // Accepts audio as base64 WAV in JSON body
 // Synchronous hum-search: takes audio, returns results directly (CREPE + DTW is fast)
