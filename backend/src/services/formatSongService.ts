@@ -87,6 +87,7 @@ export async function formatSong(rawText: string): Promise<FormatSongResult | nu
         { role: 'system', content: FORMAT_SONG_SYSTEM_PROMPT },
         { role: 'user', content: trimmed },
       ],
+      max_tokens: 4096,
       response_format: {
         type: 'json_schema',
         json_schema: {
