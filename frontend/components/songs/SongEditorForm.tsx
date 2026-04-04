@@ -4,7 +4,7 @@ import { useEffect, useTransition, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2, Sparkles, Wand2 } from 'lucide-react'
+import { Globe, Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { fetchTemplates } from '@/lib/api/templates'
@@ -86,6 +86,8 @@ export function SongEditorForm({
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [metadataLookupLoading, setMetadataLookupLoading] = useState(false)
+  const [urlInput, setUrlInput] = useState('')
+  const [urlExtractLoading, setUrlExtractLoading] = useState(false)
   const ccliDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const formValues = watch()
   const titleValue = watch('title')
@@ -240,6 +242,37 @@ export function SongEditorForm({
       toast.error('Lookup failed')
     } finally {
       setMetadataLookupLoading(false)
+    }
+  }
+
+  const handleUrlExtract = async () => {
+    const url = urlInput.trim()
+    if (!url) {
+      toast.error('Paste a URL first')
+      return
+    }
+    setUrlExtractLoading(true)
+    setImportError(null)
+    try {
+      const res = await fetch(`${getBackendHttpUrl()}/api/extract-lyrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const data = await res.json().catch(() => ({})) as { title?: string; artist?: string; lyrics?: string; error?: string }
+      if (!res.ok) {
+        toast.error(data?.error ?? 'Could not extract lyrics from this URL')
+        return
+      }
+      if (data.title) setValue('title', data.title, { shouldDirty: true })
+      if (data.artist) setValue('artist', data.artist, { shouldDirty: true })
+      if (data.lyrics) setValue('lyrics', data.lyrics, { shouldDirty: true })
+      setUrlInput('')
+      toast.success('Lyrics extracted and formatted')
+    } catch {
+      toast.error('Failed to extract lyrics')
+    } finally {
+      setUrlExtractLoading(false)
     }
   }
 
@@ -463,6 +496,37 @@ export function SongEditorForm({
               )}
             </div>
           )}
+        </div>
+
+        {/* URL Import */}
+        <div className={mode === 'page' ? 'space-y-2' : 'px-6 py-3 border-b border-white/10'}>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+              <Input
+                placeholder="Paste a lyrics URL (e.g. genius.com, azlyrics.com)"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleUrlExtract() } }}
+                className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-gray-500 text-sm"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="bg-orange-500/20 border-orange-500/40 text-orange-200 hover:bg-orange-500/30 shrink-0"
+              onClick={handleUrlExtract}
+              disabled={urlExtractLoading || !urlInput.trim()}
+            >
+              {urlExtractLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Extract Lyrics
+            </Button>
+          </div>
         </div>
 
         {/* Split view: Lyrics input | Preview */}
