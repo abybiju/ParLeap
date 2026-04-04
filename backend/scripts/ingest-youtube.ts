@@ -122,9 +122,10 @@ function downloadYouTubeAudio(url: string, outputDir: string): string {
  */
 async function extractPitch(wavPath: string): Promise<PitchResponse> {
   const audioBuffer = fs.readFileSync(wavPath);
-  // Use same voiced_threshold as browser hums so fingerprints are structurally compatible.
-  // The CREPE service applies normalize + bandpass to all audio now.
-  const url = `${embeddingServiceUrl.replace(/\/$/, '')}/extract-pitch?voiced_threshold=0.05`;
+  // separate_vocals=true: Demucs isolates vocal track before pitch extraction.
+  // This makes reference fingerprints structurally compatible with browser hums
+  // (both represent isolated vocal melody, not full-mix instrument soup).
+  const url = `${embeddingServiceUrl.replace(/\/$/, '')}/extract-pitch?voiced_threshold=0.05&separate_vocals=true`;
 
   const form = new FormData();
   form.append('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');
