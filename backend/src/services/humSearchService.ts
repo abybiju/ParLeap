@@ -193,8 +193,15 @@ export async function searchByHum(
       `[HumSearch] Pitch extraction: ${extractionTime}ms — ${pitchData.num_voiced} voiced frames, ${pitchData.num_intervals} intervals, ${pitchData.duration_seconds}s audio`
     );
 
-    if (pitchData.num_intervals < 5) {
-      console.log('[HumSearch] Too few intervals extracted (need at least 5). Did you hum a melody?');
+    // Require enough pitched audio to avoid matching on noise/silence.
+    // 20 intervals ≈ 2s of sustained humming; voiced ratio filters ambient noise.
+    const voicedRatio = pitchData.num_frames > 0 ? pitchData.num_voiced / pitchData.num_frames : 0;
+    if (pitchData.num_intervals < 20) {
+      console.log(`[HumSearch] Too few intervals (${pitchData.num_intervals}, need 20+). Voiced ratio: ${(voicedRatio * 100).toFixed(1)}%`);
+      return [];
+    }
+    if (voicedRatio < 0.15) {
+      console.log(`[HumSearch] Voiced ratio too low (${(voicedRatio * 100).toFixed(1)}%, need 15%+). Likely noise, not humming.`);
       return [];
     }
 
