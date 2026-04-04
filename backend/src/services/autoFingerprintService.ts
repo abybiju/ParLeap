@@ -95,7 +95,8 @@ async function extractPitch(wavPath: string): Promise<PitchResponse | null> {
   if (!serviceUrl) return null;
 
   const audioBuffer = fs.readFileSync(wavPath);
-  const url = `${serviceUrl.replace(/\/$/, '')}/extract-pitch?voiced_threshold=0`;
+  // Match browser hum threshold so fingerprints are structurally compatible
+  const url = `${serviceUrl.replace(/\/$/, '')}/extract-pitch?voiced_threshold=0.05`;
 
   const form = new FormData();
   form.append('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');

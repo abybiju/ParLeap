@@ -122,9 +122,9 @@ function downloadYouTubeAudio(url: string, outputDir: string): string {
  */
 async function extractPitch(wavPath: string): Promise<PitchResponse> {
   const audioBuffer = fs.readFileSync(wavPath);
-  // Use voiced_threshold=0 for polyphonic YouTube audio (full songs with instruments)
-  // CREPE periodicity is near-zero on polyphonic audio, so we accept all frames
-  const url = `${embeddingServiceUrl.replace(/\/$/, '')}/extract-pitch?voiced_threshold=0`;
+  // Use same voiced_threshold as browser hums so fingerprints are structurally compatible.
+  // The CREPE service applies normalize + bandpass to all audio now.
+  const url = `${embeddingServiceUrl.replace(/\/$/, '')}/extract-pitch?voiced_threshold=0.05`;
 
   const form = new FormData();
   form.append('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');

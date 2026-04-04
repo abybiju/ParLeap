@@ -193,17 +193,30 @@ export async function searchByHum(
       `[HumSearch] Pitch extraction: ${extractionTime}ms — ${pitchData.num_voiced} voiced frames, ${pitchData.num_intervals} intervals, ${pitchData.duration_seconds}s audio`
     );
 
-    // Require enough pitched audio to avoid matching on noise/silence.
-    // 20 intervals ≈ 2s of sustained humming; voiced ratio filters ambient noise.
+    // Guard 1: Require enough intervals (~2.5s of sustained humming)
     const voicedRatio = pitchData.num_frames > 0 ? pitchData.num_voiced / pitchData.num_frames : 0;
-    if (pitchData.num_intervals < 20) {
-      console.log(`[HumSearch] Too few intervals (${pitchData.num_intervals}, need 20+). Voiced ratio: ${(voicedRatio * 100).toFixed(1)}%`);
+    if (pitchData.num_intervals < 25) {
+      console.log(`[HumSearch] Too few intervals (${pitchData.num_intervals}, need 25+). Voiced: ${(voicedRatio * 100).toFixed(0)}%`);
       return [];
     }
-    if (voicedRatio < 0.15) {
-      console.log(`[HumSearch] Voiced ratio too low (${(voicedRatio * 100).toFixed(1)}%, need 15%+). Likely noise, not humming.`);
+
+    // Guard 2: At least 25% of frames must be voiced (filters ambient noise)
+    if (voicedRatio < 0.25) {
+      console.log(`[HumSearch] Voiced ratio too low (${(voicedRatio * 100).toFixed(0)}%, need 25%+). Likely noise.`);
       return [];
     }
+
+    // Guard 3: Melody contour check — real melodies span ≥4 semitones, noise is flat/random
+    const queryIntervals = pitchData.interval_sequence;
+    const span = queryIntervals.length > 0
+      ? Math.max(...queryIntervals) - Math.min(...queryIntervals)
+      : 0;
+    if (span < 4) {
+      console.log(`[HumSearch] Melody span too narrow (${span.toFixed(1)} semitones, need 4+). Not enough contour.`);
+      return [];
+    }
+
+    console.log(`[HumSearch] Query: ${pitchData.num_intervals} intervals, voiced ${(voicedRatio * 100).toFixed(0)}%, span ${span.toFixed(1)} semitones`);
 
     // Step 2: Load fingerprint catalog
     const catalog = await loadFingerprintCache();
@@ -224,6 +237,12 @@ export async function searchByHum(
 
     const matchTime = Date.now() - matchStart;
     console.log(`[HumSearch] DTW matching took ${matchTime}ms — found ${matches.length} matches`);
+
+    // Debug: log top matches
+    for (const match of matches.slice(0, 3)) {
+      const fp = catalog[match.index];
+      console.log(`[HumSearch]   "${fp.title}" — ${Math.round(match.similarity * 100)}% (dist: ${match.distance.toFixed(3)})`);
+    }
 
     if (matches.length === 0) {
       // Log closest match for debugging
