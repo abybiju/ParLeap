@@ -342,22 +342,33 @@ def separate_vocals_from_bytes(audio_bytes: bytes) -> np.ndarray:
     from demucs.apply import apply_model
 
     model = _get_demucs_model()
+    model_sr = model.samplerate  # typically 44100
 
-    # Load at original SR (Demucs needs high quality, ideally 44.1kHz)
-    y, sr = librosa.load(io.BytesIO(audio_bytes), sr=model.samplerate, mono=False)
+    # Load at Demucs model's native sample rate
+    y, sr = librosa.load(io.BytesIO(audio_bytes), sr=model_sr, mono=False)
+
+    # Trim to 30 seconds BEFORE Demucs to save memory
+    max_samples = int(model_sr * MAX_DURATION_SECONDS)
+    if y.ndim == 1:
+        if len(y) > max_samples:
+            y = y[:max_samples]
+    else:
+        if y.shape[-1] > max_samples:
+            y = y[..., :max_samples]
 
     # Demucs expects [batch, channels, samples]
     if y.ndim == 1:
-        audio_tensor = torch.from_numpy(y).float().unsqueeze(0).unsqueeze(0)  # [1, 1, samples]
+        audio_tensor = torch.from_numpy(y).float().unsqueeze(0).unsqueeze(0)
     else:
-        audio_tensor = torch.from_numpy(y).float().unsqueeze(0)  # [1, channels, samples]
+        audio_tensor = torch.from_numpy(y).float().unsqueeze(0)
 
-    logger.info("Demucs separating vocals (%.1fs, %dHz, %d channels)...",
-                y.shape[-1] / sr, sr, audio_tensor.shape[1])
+    duration = y.shape[-1] / model_sr
+    channels = audio_tensor.shape[1]
+    logger.info("Demucs separating vocals (%.1fs, %dHz, %d ch)...", duration, model_sr, channels)
 
     # apply_model returns [batch, sources, channels, samples]
     with torch.no_grad():
-        sources = apply_model(model, audio_tensor, device=DEVICE, segment=8)
+        sources = apply_model(model, audio_tensor, device=DEVICE, segment=10, overlap=0.1)
 
     # Find vocal source index
     vocal_idx = model.sources.index("vocals")
@@ -367,11 +378,10 @@ def separate_vocals_from_bytes(audio_bytes: bytes) -> np.ndarray:
     vocals_mono = vocals.mean(dim=0).cpu().numpy()
 
     # Resample to TARGET_SR for pitch extraction
-    if sr != TARGET_SR:
-        vocals_mono = librosa.resample(vocals_mono, orig_sr=sr, target_sr=TARGET_SR)
+    vocals_mono = librosa.resample(vocals_mono, orig_sr=model_sr, target_sr=TARGET_SR)
 
     vocal_rms = float(np.sqrt(np.mean(vocals_mono**2)))
-    logger.info("Vocals isolated: %.1fs, rms=%.6f", len(vocals_mono) / TARGET_SR, vocal_rms)
+    logger.info("Vocals isolated: %.1fs at %dHz, rms=%.6f", len(vocals_mono) / TARGET_SR, TARGET_SR, vocal_rms)
     return vocals_mono
 
 
