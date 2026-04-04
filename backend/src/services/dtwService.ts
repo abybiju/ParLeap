@@ -100,7 +100,7 @@ export function subsequenceDtwDistance(
  *   - distance 2 → similarity ~0.37
  *   - distance 4 → similarity ~0.14
  */
-export function distanceToSimilarity(distance: number, scale: number = 1.5): number {
+export function distanceToSimilarity(distance: number, scale: number = 1.0): number {
   if (!isFinite(distance) || distance < 0) return 0;
   return Math.exp(-distance / scale);
 }

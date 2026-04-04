@@ -14,7 +14,7 @@ const MAX_RECORDING_SECONDS = 30
 /** Sample rate for recording. */
 const SAMPLE_RATE = 22050
 /** Only show results above this confidence. */
-const MIN_CONFIDENCE = 0.55
+const MIN_CONFIDENCE = 0.75
 
 function getBackendUrl(): string {
   if (typeof window === 'undefined') return ''

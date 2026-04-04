@@ -193,26 +193,26 @@ export async function searchByHum(
       `[HumSearch] Pitch extraction: ${extractionTime}ms — ${pitchData.num_voiced} voiced frames, ${pitchData.num_intervals} intervals, ${pitchData.duration_seconds}s audio`
     );
 
-    // Guard 1: Require enough intervals (~2.5s of sustained humming)
+    // Guard 1: Require enough intervals (~4s of sustained humming)
     const voicedRatio = pitchData.num_frames > 0 ? pitchData.num_voiced / pitchData.num_frames : 0;
-    if (pitchData.num_intervals < 25) {
-      console.log(`[HumSearch] Too few intervals (${pitchData.num_intervals}, need 25+). Voiced: ${(voicedRatio * 100).toFixed(0)}%`);
+    if (pitchData.num_intervals < 40) {
+      console.log(`[HumSearch] Too few intervals (${pitchData.num_intervals}, need 40+). Voiced: ${(voicedRatio * 100).toFixed(0)}%`);
       return [];
     }
 
-    // Guard 2: At least 25% of frames must be voiced (filters ambient noise)
-    if (voicedRatio < 0.25) {
-      console.log(`[HumSearch] Voiced ratio too low (${(voicedRatio * 100).toFixed(0)}%, need 25%+). Likely noise.`);
+    // Guard 2: At least 50% of frames must be voiced
+    if (voicedRatio < 0.50) {
+      console.log(`[HumSearch] Voiced ratio too low (${(voicedRatio * 100).toFixed(0)}%, need 50%+). Likely noise.`);
       return [];
     }
 
-    // Guard 3: Melody contour check — real melodies span ≥4 semitones, noise is flat/random
+    // Guard 3: Melody contour check — real melodies span ≥6 semitones
     const queryIntervals = pitchData.interval_sequence;
     const span = queryIntervals.length > 0
       ? Math.max(...queryIntervals) - Math.min(...queryIntervals)
       : 0;
-    if (span < 4) {
-      console.log(`[HumSearch] Melody span too narrow (${span.toFixed(1)} semitones, need 4+). Not enough contour.`);
+    if (span < 6) {
+      console.log(`[HumSearch] Melody span too narrow (${span.toFixed(1)} semitones, need 6+). Not enough contour.`);
       return [];
     }
 
