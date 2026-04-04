@@ -75,15 +75,14 @@ function downloadYouTubeAudio(url: string, outputDir: string): string {
 
   console.log('   Downloading audio from YouTube...');
 
-  // yt-dlp: download best audio, convert to 44.1kHz WAV (first 60s only).
-  // 44.1kHz stereo is optimal for Demucs vocal separation.
-  // CREPE service trims to 30s after separating vocals.
+  // yt-dlp: download best audio, convert to 16kHz mono WAV (first 60s).
+  // HPSS + pYIN work fine at 16kHz. Limit to 60s to save bandwidth.
   const cmd = [
     'yt-dlp',
     '--no-playlist',
     '--extract-audio',
     '--audio-format', 'wav',
-    '--postprocessor-args', '"ffmpeg:-ar 44100 -t 60"', // 44.1kHz, first 60s only
+    '--postprocessor-args', '"ffmpeg:-ar 16000 -ac 1 -t 60"', // 16kHz mono, 60s max
     '--output', `"${outputPath.replace('.wav', '.%(ext)s')}"`,
     '--quiet',
     '--no-warnings',
