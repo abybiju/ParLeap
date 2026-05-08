@@ -237,7 +237,19 @@ export async function deleteSong(id: string): Promise<ActionResult> {
     return { success: false, error: 'Not authenticated' };
   }
 
-  // First, remove any event_items referencing this song
+  // Verify user owns this song before any deletions
+  const { data: song } = await supabase
+    .from('songs')
+    .select('id')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
+
+  if (!song) {
+    return { success: false, error: 'Song not found or access denied' };
+  }
+
+  // Remove event_items referencing this song (RLS ensures only user's events are affected)
   await supabase
     .from('event_items')
     .delete()
@@ -248,7 +260,7 @@ export async function deleteSong(id: string): Promise<ActionResult> {
     .from('songs')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id); // Ensure user owns the song
+    .eq('user_id', user.id);
 
   if (error) {
     return { success: false, error: error.message };

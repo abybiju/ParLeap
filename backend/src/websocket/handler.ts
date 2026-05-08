@@ -316,6 +316,7 @@ function isRateLimited(ws: WebSocket, messageType: string): boolean {
 
 interface SessionState {
   sessionId: string;
+  userId: string;
   eventId: string;
   eventName: string;
   projectorFont?: string | null;
@@ -667,12 +668,13 @@ function initGoogleStream(session: SessionState, ws: WebSocket): void {
 async function handleStartSession(
   ws: WebSocket,
   payload: { eventId: string; smartListenEnabled?: boolean },
-  receivedAt: number
+  receivedAt: number,
+  userId: string
 ): Promise<void> {
   const eventId = payload.eventId;
   const smartListenEnabled = payload.smartListenEnabled === true;
   const processingStart = Date.now();
-  console.log(`[WS] Starting session for event: ${eventId}, smartListenEnabled: ${smartListenEnabled}`);
+  console.log(`[WS] Starting session for event: ${eventId}, user: ${userId.slice(0, 8)}..., smartListenEnabled: ${smartListenEnabled}`);
 
   // Check if session already exists for this WebSocket
   if (sessions.has(ws)) {
@@ -701,12 +703,12 @@ async function handleStartSession(
     }
   }
 
-  // Fetch real event data from Supabase
-  const eventData = await fetchEventData(eventId);
-  
+  // Fetch real event data from Supabase (ownership-verified)
+  const eventData = await fetchEventData(eventId, userId);
+
   if (!eventData) {
-    console.error(`[WS] Failed to fetch event data for ${eventId} (check Supabase URL/service role key and RLS)`);
-    sendError(ws, 'EVENT_NOT_FOUND', `Event not found or backend could not load it. Check that the backend has the correct Supabase URL and service role key.`, { eventId });
+    console.error(`[WS] Failed to fetch event data for ${eventId} user ${userId.slice(0, 8)}... (not found or access denied)`);
+    sendError(ws, 'EVENT_NOT_FOUND', `Event not found or access denied.`, { eventId });
     return;
   }
 
@@ -786,6 +788,7 @@ async function handleStartSession(
   
   const session: SessionState = {
     sessionId,
+    userId,
     eventId,
     eventName: eventData.name,
     projectorFont: existingSession?.projectorFont ?? eventData.projectorFont ?? null,
@@ -1036,7 +1039,8 @@ async function runBiblePathAsync(
           await supabase
             .from('events')
             .update({ bible_version_id: versionId, bible_mode: true })
-            .eq('id', session.eventId);
+            .eq('id', session.eventId)
+            .eq('user_id', session.userId);
         } catch (error) {
           console.warn('[WS] Failed to persist bible version change:', error);
         }
@@ -2898,7 +2902,7 @@ function handlePing(ws: WebSocket, receivedAt: number): void {
 /**
  * Process an incoming WebSocket message
  */
-export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<void> {
+export async function handleMessage(ws: WebSocket, rawMessage: string, userId: string): Promise<void> {
   // Track when the message was received for latency measurement
   const receivedAt = Date.now();
   
@@ -2934,7 +2938,7 @@ export async function handleMessage(ws: WebSocket, rawMessage: string): Promise<
   // Route message to appropriate handler
   try {
     if (isStartSessionMessage(message)) {
-      await handleStartSession(ws, message.payload, receivedAt);
+      await handleStartSession(ws, message.payload, receivedAt, userId);
     } else if (isUpdateEventSettingsMessage(message)) {
       handleUpdateEventSettings(ws, message.payload, receivedAt);
     } else if (isAudioDataMessage(message)) {

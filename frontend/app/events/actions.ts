@@ -178,7 +178,13 @@ export async function deleteEvent(id: string): Promise<ActionResult> {
     return { success: false, error };
   }
 
-  // Remove setlist items first
+  // Verify ownership before any deletions
+  const ownership = await ensureEventOwnership(supabase, user.id, id);
+  if (ownership.error) {
+    return { success: false, error: ownership.error };
+  }
+
+  // Remove setlist items first (RLS enforces ownership)
   await supabase
     .from('event_items')
     .delete()

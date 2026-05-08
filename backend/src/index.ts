@@ -610,7 +610,7 @@ wss.on('connection', async (ws, req) => {
 
   ws.on('message', async (data) => {
     const message = data.toString();
-    await handleMessage(ws, message);
+    await handleMessage(ws, message, userId);
   });
 
   ws.on('close', () => {
