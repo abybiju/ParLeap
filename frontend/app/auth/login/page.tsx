@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { checkAuthRateLimit, recordAuthFailure, resetAuthRateLimit } from '@/lib/utils/authRateLimit'
 import { motion } from 'framer-motion'
 import { AuthFlowFrame } from '@/components/ui/sign-in-flow-1'
 
@@ -39,6 +40,12 @@ function LoginForm() {
     event.preventDefault()
     setError(null)
 
+    const rateCheck = checkAuthRateLimit()
+    if (!rateCheck.allowed) {
+      setError(`Too many attempts. Please try again in ${rateCheck.retryAfterSeconds} seconds.`)
+      return
+    }
+
     const parsed = loginSchema.safeParse({ email, password })
     if (!parsed.success) {
       setError(parsed.error.errors[0]?.message ?? 'Invalid credentials')
@@ -52,10 +59,12 @@ function LoginForm() {
     })
 
     if (signInError) {
+      recordAuthFailure()
       setError(signInError.message)
       return
     }
 
+    resetAuthRateLimit()
     startTransition(() => {
       router.push(redirectTo)
     })

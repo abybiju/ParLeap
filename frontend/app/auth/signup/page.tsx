@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { checkAuthRateLimit, recordAuthFailure, resetAuthRateLimit } from '@/lib/utils/authRateLimit'
 import { motion } from 'framer-motion'
 import { AuthFlowFrame } from '@/components/ui/sign-in-flow-1'
 
@@ -34,6 +35,12 @@ export default function SignupPage() {
     setError(null)
     setMessage(null)
 
+    const rateCheck = checkAuthRateLimit()
+    if (!rateCheck.allowed) {
+      setError(`Too many attempts. Please try again in ${rateCheck.retryAfterSeconds} seconds.`)
+      return
+    }
+
     const parsed = signUpSchema.safeParse({ email, password })
     if (!parsed.success) {
       setError(parsed.error.errors[0]?.message ?? 'Invalid details')
@@ -47,10 +54,12 @@ export default function SignupPage() {
     })
 
     if (signUpError) {
+      recordAuthFailure()
       setError(signUpError.message)
       return
     }
 
+    resetAuthRateLimit()
     setMessage('Check your email to confirm your account, then sign in.')
 
     startTransition(() => {
