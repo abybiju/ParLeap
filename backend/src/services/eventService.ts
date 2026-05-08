@@ -122,11 +122,27 @@ function getMockEventData(eventId: string): EventData {
 const fallbackToMockData = process.env.SUPABASE_FALLBACK_TO_MOCK === 'true';
 
 /**
+ * Verify that the given user owns the event. Returns true if ownership confirmed.
+ */
+export async function verifyEventOwnership(eventId: string, userId: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { data } = await supabase
+    .from('events')
+    .select('id')
+    .eq('id', eventId)
+    .eq('user_id', userId)
+    .single();
+  return !!data;
+}
+
+/**
  * Fetch event data from Supabase
  * This includes the event name and all songs in the setlist
  * Falls back to mock data when Supabase isn't configured
+ * @param userId - Required. Only returns data if the user owns this event.
  */
-export async function fetchEventData(eventId: string): Promise<EventData | null> {
+export async function fetchEventData(eventId: string, userId?: string): Promise<EventData | null> {
   // Use mock data if Supabase isn't configured
   const supabase = getSupabaseClient();
   if (!isSupabaseConfigured() || !supabase) {
@@ -135,12 +151,15 @@ export async function fetchEventData(eventId: string): Promise<EventData | null>
   }
 
   try {
-    // 1. Fetch event details
-    const { data: eventData, error: eventError } = await supabase
+    // 1. Fetch event details (with ownership check)
+    let query = supabase
       .from('events')
       .select('id, name, projector_font, bible_mode, bible_version_id, background_image_url, background_media_type')
-      .eq('id', eventId)
-      .single();
+      .eq('id', eventId);
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    const { data: eventData, error: eventError } = await query.single();
 
     if (eventError || !eventData) {
       console.error(`[EventService] Failed to fetch event ${eventId}:`, eventError);
