@@ -2,7 +2,17 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
+// Validate required secrets at startup
+const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`[FATAL] Missing required environment variable: ${key}`);
+    process.exit(1);
+  }
+}
+
 import express, { type Request, type Response, type NextFunction } from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { handleMessage, handleClose, getSessionCount } from './websocket/handler';
@@ -33,9 +43,40 @@ import {
   fetchBibleVerse,
   getBibleVersions,
 } from './services/bibleService';
+import {
+  logAuthSuccess,
+  logAuthFailure,
+  logWsAuthSuccess,
+  logWsAuthFailure,
+  logRateLimitHit,
+  logApiError,
+} from './services/securityLogger';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Trust proxy so X-Forwarded-Proto / X-Forwarded-For are reliable (Railway, Vercel, etc.)
+app.set('trust proxy', 1);
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Enforce HTTPS in production — redirect plain HTTP requests
+if (IS_PRODUCTION) {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      res.redirect(301, `https://${req.hostname}${req.originalUrl}`);
+      return;
+    }
+    // HSTS: tell browsers to always use HTTPS (1 year)
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    next();
+  });
+}
 
 function numberEnv(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -109,6 +150,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use((req: Request, res: Response, next: NextFunction) => {
   const key = getClientKey(req);
   if (isHttpRateLimited(key)) {
+    logRateLimitHit(key, req.method, req.url);
     res.status(429).json({ error: 'Rate limit exceeded' });
     return;
   }
@@ -117,17 +159,21 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Authentication middleware for protected API routes
 async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const ip = getClientKey(req);
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
+    logAuthFailure(ip, req.url, 'missing_or_invalid_header');
     res.status(401).json({ error: 'Missing or invalid Authorization header' });
     return;
   }
   const token = authHeader.slice(7);
   const userId = await verifyUserToken(token);
   if (!userId) {
+    logAuthFailure(ip, req.url, 'invalid_or_expired_token');
     res.status(401).json({ error: 'Invalid or expired token' });
     return;
   }
+  logAuthSuccess(ip, userId, req.url);
   (req as Request & { userId: string }).userId = userId;
   next();
 }
@@ -569,7 +615,9 @@ app.get('/api/fingerprint/status', (_req: Request, res: Response) => {
   res.json({ available: isAutoFingerprintAvailable() });
 });
 
-app.use((err: Error, _req: Request, res: Response) => {
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const ip = getClientKey(req);
+  logApiError(ip, req.method, req.url, 500, err.message);
   console.error('[API] Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
@@ -594,18 +642,24 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', async (ws, req) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   const token = url.searchParams.get('token');
+  const wsIp = req.headers['x-forwarded-for']
+    ? String(req.headers['x-forwarded-for']).split(',')[0]?.trim() || 'unknown'
+    : req.socket.remoteAddress || 'unknown';
 
   if (!token) {
+    logWsAuthFailure(wsIp, 'missing_token');
     ws.close(4001, 'Authentication required');
     return;
   }
 
   const userId = await verifyUserToken(token);
   if (!userId) {
+    logWsAuthFailure(wsIp, 'invalid_or_expired_token');
     ws.close(4001, 'Invalid or expired token');
     return;
   }
 
+  logWsAuthSuccess(wsIp, userId);
   console.log(`[WS] Authenticated connection for user ${userId.slice(0, 8)}... (total: ${wss.clients.size})`);
 
   ws.on('message', async (data) => {
