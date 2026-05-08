@@ -48,9 +48,16 @@ import {
   logAuthFailure,
   logWsAuthSuccess,
   logWsAuthFailure,
-  logRateLimitHit,
   logApiError,
 } from './services/securityLogger';
+import {
+  globalRateLimit,
+  aiRateLimit,
+  templateRateLimit,
+  botDetection,
+  getClientIp,
+  isWsConnectionAllowed,
+} from './services/rateLimiter';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -78,43 +85,6 @@ if (IS_PRODUCTION) {
   });
 }
 
-function numberEnv(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-const HTTP_RATE_WINDOW_MS = numberEnv(process.env.HTTP_RATE_LIMIT_WINDOW_MS, 60000);
-const HTTP_RATE_LIMIT = numberEnv(process.env.HTTP_RATE_LIMIT_MAX, 120);
-
-interface RateLimitState {
-  windowStart: number;
-  count: number;
-}
-
-const httpRateLimits = new Map<string, RateLimitState>();
-
-function getClientKey(req: Request): string {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (typeof forwardedFor === 'string') {
-    return forwardedFor.split(',')[0]?.trim() || 'unknown';
-  }
-  if (Array.isArray(forwardedFor)) {
-    return forwardedFor[0] || 'unknown';
-  }
-  return req.socket.remoteAddress || 'unknown';
-}
-
-function isHttpRateLimited(key: string): boolean {
-  const now = Date.now();
-  const state = httpRateLimits.get(key) ?? { windowStart: now, count: 0 };
-  if (now - state.windowStart > HTTP_RATE_WINDOW_MS) {
-    state.windowStart = now;
-    state.count = 0;
-  }
-  state.count += 1;
-  httpRateLimits.set(key, state);
-  return state.count > HTTP_RATE_LIMIT;
-}
 
 // CORS configuration: allow comma-separated origins so both www and non-www work
 const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:3000';
@@ -147,19 +117,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   });
   next();
 });
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const key = getClientKey(req);
-  if (isHttpRateLimited(key)) {
-    logRateLimitHit(key, req.method, req.url);
-    res.status(429).json({ error: 'Rate limit exceeded' });
-    return;
-  }
-  next();
-});
+app.use(botDetection);
+app.use(globalRateLimit);
 
 // Authentication middleware for protected API routes
 async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const ip = getClientKey(req);
+  const ip = getClientIp(req);
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     logAuthFailure(ip, req.url, 'missing_or_invalid_header');
@@ -263,7 +226,7 @@ app.get('/api/bible/verse', async (req: Request, res: Response) => {
 });
 
 // Community template endpoints (structure-only)
-app.post('/api/templates', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/templates', templateRateLimit, requireAuth, async (req: Request, res: Response) => {
   const { ccliNumber, lineCount, sections = [], slides = [], linesPerSlide, sourceVersion, userId } = req.body || {};
   if (!ccliNumber || !lineCount || !Array.isArray(slides)) {
     res.status(400).json({ error: 'ccliNumber, lineCount, slides are required' });
@@ -329,7 +292,7 @@ app.post('/api/templates/:id/usage', requireAuth, async (req: Request, res: Resp
 });
 
 // Smart Paste / Auto-Format: extract and structure lyrics from raw text (OpenAI gpt-4o-mini)
-app.post('/api/format-song', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/format-song', aiRateLimit, requireAuth, async (req: Request, res: Response) => {
   try {
     if (!isFormatSongEnabled()) {
       res.status(503).json({ error: 'Auto-format is not configured. Set OPENAI_API_KEY on the backend.' });
@@ -363,7 +326,7 @@ app.post('/api/format-song', requireAuth, async (req: Request, res: Response) =>
 // Hum-to-Search endpoint
 // Accepts audio as base64 WAV in JSON body
 // Synchronous hum-search: takes audio, returns results directly (CREPE + DTW is fast)
-app.post('/api/hum-search/match', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/hum-search/match', aiRateLimit, requireAuth, async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
     const { audio, limit = 5, threshold = 0.75 } = req.body;
@@ -412,7 +375,7 @@ app.post('/api/hum-search/match', requireAuth, async (req: Request, res: Respons
   }
 });
 
-app.post('/api/hum-search', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/hum-search', aiRateLimit, requireAuth, async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
     const { audio, limit = 5, threshold = 0.5 } = req.body;
@@ -542,7 +505,7 @@ app.get('/api/hum-search/live/available', (_req: Request, res: Response) => {
   res.json({ available: isLiveHumAvailable() });
 });
 
-app.post('/api/hum-search/live/start', requireAuth, (_req: Request, res: Response) => {
+app.post('/api/hum-search/live/start', aiRateLimit, requireAuth, (_req: Request, res: Response) => {
   if (!isLiveHumAvailable()) {
     res.status(503).json({
       error: 'Live hum search requires the embedding service. Set EMBEDDING_SERVICE_URL on the backend.',
@@ -586,7 +549,7 @@ app.post('/api/hum-search/live/stop', requireAuth, (req: Request, res: Response)
 });
 
 // ── Auto-fingerprint: triggered when a song is created/updated ──────────
-app.post('/api/fingerprint', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/fingerprint', aiRateLimit, requireAuth, async (req: Request, res: Response) => {
   const { songId, title, artist } = req.body;
 
   if (!title) {
@@ -616,7 +579,7 @@ app.get('/api/fingerprint/status', (_req: Request, res: Response) => {
 });
 
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-  const ip = getClientKey(req);
+  const ip = getClientIp(req);
   logApiError(ip, req.method, req.url, 500, err.message);
   console.error('[API] Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
@@ -645,6 +608,12 @@ wss.on('connection', async (ws, req) => {
   const wsIp = req.headers['x-forwarded-for']
     ? String(req.headers['x-forwarded-for']).split(',')[0]?.trim() || 'unknown'
     : req.socket.remoteAddress || 'unknown';
+
+  const wsRateCheck = isWsConnectionAllowed(wsIp);
+  if (!wsRateCheck.allowed) {
+    ws.close(4029, 'Too many connections');
+    return;
+  }
 
   if (!token) {
     logWsAuthFailure(wsIp, 'missing_token');
