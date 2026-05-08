@@ -2,10 +2,20 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+function safeRedirectPath(raw: string | null): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/dashboard'
+  try {
+    const url = new URL(raw, 'http://localhost')
+    return url.pathname + url.search + url.hash
+  } catch {
+    return '/dashboard'
+  }
+}
+
 export async function GET(req: NextRequest) {
   const requestUrl = new URL(req.url)
   const code = requestUrl.searchParams.get('code')
-  const redirectTo = requestUrl.searchParams.get('redirect') ?? '/dashboard'
+  const redirectTo = safeRedirectPath(requestUrl.searchParams.get('redirect'))
 
   if (!code) {
     return NextResponse.redirect(new URL('/auth/login', requestUrl.origin))

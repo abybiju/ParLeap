@@ -44,12 +44,11 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  const { data } = await supabase.auth.getSession()
-  const session = data.session
+  const { data: { user } } = await supabase.auth.getUser()
 
   const isAuthPath = pathname.startsWith('/auth')
 
-  if (isProtectedPath(pathname) && !session) {
+  if (isProtectedPath(pathname) && !user) {
     const redirectTo = searchParams.toString()
       ? `${pathname}?${searchParams.toString()}`
       : pathname
@@ -57,7 +56,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  if (isAuthPath && session) {
+  if (isAuthPath && user) {
     const redirectUrl = new URL('/dashboard', origin)
     return NextResponse.redirect(redirectUrl)
   }

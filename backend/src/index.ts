@@ -15,7 +15,6 @@ import {
 } from './services/humSearchLiveService';
 import { autoFingerprint, isAutoFingerprintAvailable } from './services/autoFingerprintService';
 import { createJob, setJobProcessing, setJobCompleted, setJobFailed, getJobStatus } from './services/jobQueue';
-import { getSupabaseClient, isSupabaseConfigured, getSupabaseProjectRef, getSupabaseUrlPrefix } from './config/supabase';
 import {
   submitTemplate,
   fetchTemplates,
@@ -23,6 +22,7 @@ import {
   incrementTemplateUsage,
   getStructureHash,
 } from './services/templateService';
+import { verifyUserToken } from './config/supabase';
 import {
   formatSong,
   isFormatSongEnabled,
@@ -115,6 +115,23 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Authentication middleware for protected API routes
+async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing or invalid Authorization header' });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const userId = await verifyUserToken(token);
+  if (!userId) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+    return;
+  }
+  (req as Request & { userId: string }).userId = userId;
+  next();
+}
+
 // Root endpoint
 app.get('/', (_req: Request, res: Response) => {
   res.json({
@@ -146,9 +163,6 @@ app.get('/health', (_req: Request, res: Response) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     activeSessions: getSessionCount(),
-    supabaseConfigured: isSupabaseConfigured(),
-    supabaseUrlPrefix: getSupabaseUrlPrefix(),
-    supabaseProjectRef: getSupabaseProjectRef(),
   });
 });
 
@@ -202,24 +216,8 @@ app.get('/api/bible/verse', async (req: Request, res: Response) => {
   }
 });
 
-// Debug: show raw event_items for an event (temporary diagnostic)
-app.get('/api/debug/event-items/:eventId', async (req: Request, res: Response) => {
-  const supabase = getSupabaseClient();
-  if (!isSupabaseConfigured() || !supabase) {
-    res.json({ error: 'Supabase not configured' });
-    return;
-  }
-  const { eventId } = req.params;
-  const { data, error } = await supabase
-    .from('event_items')
-    .select('id, sequence_order, item_type, song_id, bible_ref, media_url, media_title')
-    .eq('event_id', eventId)
-    .order('sequence_order', { ascending: true });
-  res.json({ eventId, itemCount: data?.length ?? 0, items: data, error });
-});
-
 // Community template endpoints (structure-only)
-app.post('/api/templates', async (req: Request, res: Response) => {
+app.post('/api/templates', requireAuth, async (req: Request, res: Response) => {
   const { ccliNumber, lineCount, sections = [], slides = [], linesPerSlide, sourceVersion, userId } = req.body || {};
   if (!ccliNumber || !lineCount || !Array.isArray(slides)) {
     res.status(400).json({ error: 'ccliNumber, lineCount, slides are required' });
@@ -258,7 +256,7 @@ app.get('/api/templates', async (req: Request, res: Response) => {
   res.json({ templates });
 });
 
-app.post('/api/templates/:id/vote', async (req: Request, res: Response) => {
+app.post('/api/templates/:id/vote', requireAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
   const { userId, vote } = req.body || {};
   if (!id || !vote) {
@@ -274,7 +272,7 @@ app.post('/api/templates/:id/vote', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-app.post('/api/templates/:id/usage', async (req: Request, res: Response) => {
+app.post('/api/templates/:id/usage', requireAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) {
     res.status(400).json({ error: 'template id required' });
@@ -285,7 +283,7 @@ app.post('/api/templates/:id/usage', async (req: Request, res: Response) => {
 });
 
 // Smart Paste / Auto-Format: extract and structure lyrics from raw text (OpenAI gpt-4o-mini)
-app.post('/api/format-song', async (req: Request, res: Response) => {
+app.post('/api/format-song', requireAuth, async (req: Request, res: Response) => {
   try {
     if (!isFormatSongEnabled()) {
       res.status(503).json({ error: 'Auto-format is not configured. Set OPENAI_API_KEY on the backend.' });
@@ -319,7 +317,7 @@ app.post('/api/format-song', async (req: Request, res: Response) => {
 // Hum-to-Search endpoint
 // Accepts audio as base64 WAV in JSON body
 // Synchronous hum-search: takes audio, returns results directly (CREPE + DTW is fast)
-app.post('/api/hum-search/match', async (req: Request, res: Response) => {
+app.post('/api/hum-search/match', requireAuth, async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
     const { audio, limit = 5, threshold = 0.75 } = req.body;
@@ -368,7 +366,7 @@ app.post('/api/hum-search/match', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/hum-search', async (req: Request, res: Response) => {
+app.post('/api/hum-search', requireAuth, async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
     const { audio, limit = 5, threshold = 0.5 } = req.body;
@@ -498,7 +496,7 @@ app.get('/api/hum-search/live/available', (_req: Request, res: Response) => {
   res.json({ available: isLiveHumAvailable() });
 });
 
-app.post('/api/hum-search/live/start', (_req: Request, res: Response) => {
+app.post('/api/hum-search/live/start', requireAuth, (_req: Request, res: Response) => {
   if (!isLiveHumAvailable()) {
     res.status(503).json({
       error: 'Live hum search requires the embedding service. Set EMBEDDING_SERVICE_URL on the backend.',
@@ -509,7 +507,7 @@ app.post('/api/hum-search/live/start', (_req: Request, res: Response) => {
   res.json({ success: true, sessionId });
 });
 
-app.post('/api/hum-search/live/chunk', async (req: Request, res: Response) => {
+app.post('/api/hum-search/live/chunk', requireAuth, async (req: Request, res: Response) => {
   if (!isLiveHumAvailable()) {
     res.status(503).json({
       error: 'Live hum search requires the embedding service.',
@@ -535,14 +533,14 @@ app.post('/api/hum-search/live/chunk', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/hum-search/live/stop', (req: Request, res: Response) => {
+app.post('/api/hum-search/live/stop', requireAuth, (req: Request, res: Response) => {
   const { sessionId } = req.body;
   if (sessionId) stopLiveSession(sessionId);
   res.json({ success: true });
 });
 
 // ── Auto-fingerprint: triggered when a song is created/updated ──────────
-app.post('/api/fingerprint', async (req: Request, res: Response) => {
+app.post('/api/fingerprint', requireAuth, async (req: Request, res: Response) => {
   const { songId, title, artist } = req.body;
 
   if (!title) {
@@ -593,8 +591,22 @@ const server = app.listen(PORT, () => {
 // WebSocket server
 const wss = new WebSocketServer({ server });
 
-wss.on('connection', (ws) => {
-  console.log(`[WS] New connection (total: ${wss.clients.size})`);
+wss.on('connection', async (ws, req) => {
+  const url = new URL(req.url || '/', `http://${req.headers.host}`);
+  const token = url.searchParams.get('token');
+
+  if (!token) {
+    ws.close(4001, 'Authentication required');
+    return;
+  }
+
+  const userId = await verifyUserToken(token);
+  if (!userId) {
+    ws.close(4001, 'Invalid or expired token');
+    return;
+  }
+
+  console.log(`[WS] Authenticated connection for user ${userId.slice(0, 8)}... (total: ${wss.clients.size})`);
 
   ws.on('message', async (data) => {
     const message = data.toString();

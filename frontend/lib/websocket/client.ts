@@ -12,6 +12,7 @@
 
 import type { ClientMessage, ServerMessage } from './types';
 import { getLatencyTracker } from '../latency/tracker';
+import { createClient as createSupabaseClient } from '../supabase/client';
 
 export type WebSocketState = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -99,8 +100,25 @@ class WebSocketClient {
     this.setState('connecting');
     this.shouldReconnect = true;
 
+    this.connectWithAuth();
+  }
+
+  private async connectWithAuth(): Promise<void> {
     try {
-      this.ws = new WebSocket(this.url);
+      const supabase = createSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        console.error('WebSocket: no auth token available');
+        this.setState('error');
+        return;
+      }
+
+      const separator = this.url.includes('?') ? '&' : '?';
+      const authedUrl = `${this.url}${separator}token=${encodeURIComponent(token)}`;
+
+      this.ws = new WebSocket(authedUrl);
 
       this.ws.onopen = () => {
         console.log('WebSocket connected');
@@ -192,22 +210,6 @@ class WebSocketClient {
    * Send a typed message to the server
    */
   send(message: ClientMessage, micCaptureTime?: number): void {
-    // #region agent log
-    const payload = (message as { type: string; payload?: { action?: string; itemIndex?: number; itemId?: string } }).payload;
-    if (message.type === 'MANUAL_OVERRIDE' && payload?.action === 'GO_TO_ITEM') {
-      fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'client.ts:send',
-          message: 'GO_TO_ITEM send attempt',
-          data: { isConnected: this.isConnected(), itemIndex: payload.itemIndex, itemId: payload.itemId },
-          timestamp: Date.now(),
-          hypothesisId: 'H1',
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
     if (!this.isConnected() || !this.ws) {
       console.error('Cannot send message: WebSocket not connected');
       return;

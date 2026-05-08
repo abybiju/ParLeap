@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { X, Music, Sparkles, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { audioBufferToWav, arrayBufferToBase64 } from '@/lib/audioUtils'
+import { authFetch } from '@/lib/utils/backendUrl'
 
 /** How often we send accumulated audio for matching (ms). */
 const MATCH_INTERVAL_MS = 3000
@@ -149,7 +150,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
       const url = getBackendUrl()
       console.log(`[HumSearch] Match attempt #${attempt}, audio: ${audio.length} chars`)
 
-      const res = await fetch(`${url}/api/hum-search/match`, {
+      const res = await authFetch(`${url}/api/hum-search/match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audio, limit: 5, threshold: MIN_CONFIDENCE }),
@@ -249,7 +250,7 @@ export function ListeningOverlay({ open, onClose, onSelectSong, userSongIds, onA
             const audio = getAccumulatedWav()
             if (audio) {
               const url = getBackendUrl()
-              fetch(`${url}/api/hum-search/match`, {
+              authFetch(`${url}/api/hum-search/match`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ audio, limit: 5, threshold: MIN_CONFIDENCE }),

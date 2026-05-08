@@ -1,0 +1,26 @@
+[project]
+id = "ypbqqwevnxqnooplvdyn"
+
+[auth]
+enabled = true
+site_url = "https://parleap.com"
+additional_redirect_urls = ["http://localhost:3000"]
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+[auth.sessions]
+timebox = "24h"
+inactivity_timeout = "1h"
+
+[auth.password]
+min_length = 8
+required_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+[auth.rate_limit]
+email_sent = 5
+sms_sent = 5
+token_refresh = 30
+sign_in_sign_ups = 10

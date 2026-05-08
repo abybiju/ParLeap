@@ -12,13 +12,23 @@ import { AuthFlowFrame } from '@/components/ui/sign-in-flow-1'
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Enter a valid email' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+  password: z.string().min(8, { message: 'Password must be at least 8 characters' }),
 })
+
+function safeRedirectPath(raw: string | null): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/dashboard'
+  try {
+    const url = new URL(raw, 'http://localhost')
+    return url.pathname + url.search + url.hash
+  } catch {
+    return '/dashboard'
+  }
+}
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/dashboard'
+  const redirectTo = safeRedirectPath(searchParams.get('redirect'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)

@@ -3,6 +3,16 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { songSchema } from '@/lib/schemas/song';
+
+async function serverAuthFetch(url: string, init?: RequestInit): Promise<Response> {
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = new Headers(init?.headers);
+  if (session?.access_token) {
+    headers.set('Authorization', `Bearer ${session.access_token}`);
+  }
+  return fetch(url, { ...init, headers });
+}
 import { compileSlides, mergeSlideConfig, parseLyricLines } from '@/lib/slideServiceProxy';
 
 export interface ActionResult {
@@ -80,7 +90,7 @@ export async function createSong(
       }));
       try {
         const backendUrl = getBackendUrl();
-        const res = await fetch(`${backendUrl}/api/templates`, {
+        const res = await serverAuthFetch(`${backendUrl}/api/templates`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -108,7 +118,7 @@ export async function createSong(
   if (songId && result.data.title) {
     try {
       const backendUrl = getBackendUrl();
-      fetch(`${backendUrl}/api/fingerprint`, {
+      serverAuthFetch(`${backendUrl}/api/fingerprint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -176,7 +186,7 @@ export async function updateSong(id: string, formData: FormData): Promise<Action
   if (result.data.title) {
     try {
       const backendUrl = getBackendUrl();
-      fetch(`${backendUrl}/api/fingerprint`, {
+      serverAuthFetch(`${backendUrl}/api/fingerprint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
