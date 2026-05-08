@@ -81,6 +81,33 @@ Structured JSON logging in `backend/src/services/securityLogger.ts`:
 - `verifyEventOwnership()` helper in `eventService.ts`
 - WebSocket sessions store userId; all event access is ownership-verified
 
+## Input Validation & Sanitization
+
+### Command Injection Prevention
+- `autoFingerprintService.ts`: uses `execFileSync` with array arguments (never shell interpolation)
+- `sanitizeShellInput()` strips all shell metacharacters from user input before external commands
+- YouTube video IDs validated with `/^[\w-]{11}$/` regex
+
+### API Input Validation
+- `POST /api/templates`: strict type/length checks for ccliNumber (max 50), lineCount (1-10000), slides (max 500), sections (max 500)
+- `POST /api/fingerprint`: title/artist validated as strings (max 200 chars)
+- `POST /api/hum-search/live/chunk`: sessionId and audio type-validated
+- All audio endpoints: WAV format validation (RIFF/WAVE header check)
+
+### Server Action Validation
+- Song/Event CRUD: Zod schema validation (title max 200, lyrics required, status enum)
+- `updateEventBackground`: HTTPS-only URL validation, no private IP ranges
+- `addMediaToEvent`: HTTPS-only URL validation, title max 500 chars
+- `addBibleToEvent`: sanitized via `sanitizeText()` (strips control chars, max 200)
+- `updateSongSlideConfig` / `updateEventItemSlideConfig`: linesPerSlide 1-50, manualBreaks non-negative integers (max 500)
+- Search queries: PostgREST special chars (`%`, `_`, `\`) escaped to prevent filter injection
+
+### Shared Utilities (`frontend/lib/utils/validation.ts`)
+- `isValidHttpsUrl()`: protocol whitelist (HTTPS only)
+- `isValidMediaUrl()`: HTTPS + rejects private IP ranges (10.x, 172.16-31.x, 192.168.x)
+- `sanitizeSearchQuery()`: escapes PostgREST filter operators
+- `sanitizeText()`: strips control characters, trims, limits length
+
 ## CORS
 
 - Configurable via `CORS_ORIGIN` env var (comma-separated)
