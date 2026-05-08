@@ -578,6 +578,7 @@ app.get('/api/fingerprint/status', (_req: Request, res: Response) => {
   res.json({ available: isAutoFingerprintAvailable() });
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   const ip = getClientIp(req);
   logApiError(ip, req.method, req.url, 500, err.message);
