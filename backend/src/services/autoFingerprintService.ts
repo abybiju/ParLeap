@@ -12,7 +12,7 @@
  * it just won't be matchable by humming until manually fingerprinted.
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -36,12 +36,19 @@ interface PitchResponse {
  * Search YouTube for a song and return the video ID.
  * Returns null if no result found.
  */
+function sanitizeShellInput(input: string): string {
+  return input.replace(/[^\w\s\-'.,:()&!?]/g, '').trim();
+}
+
 function searchYouTube(title: string, artist: string): string | null {
-  const query = `${title} ${artist} lyrics`;
+  const safeTitle = sanitizeShellInput(title);
+  const safeArtist = sanitizeShellInput(artist);
+  const query = `ytsearch1:${safeTitle} ${safeArtist} lyrics`;
   try {
-    const result = execSync(
-      `yt-dlp "ytsearch1:${query.replace(/"/g, '\\"')}" --get-id --no-playlist 2>/dev/null`,
-      { timeout: 30000, encoding: 'utf-8' }
+    const result = execFileSync(
+      'yt-dlp',
+      [query, '--get-id', '--no-playlist'],
+      { timeout: 30000, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     ).trim();
     return result || null;
   } catch {
@@ -54,29 +61,28 @@ function searchYouTube(title: string, artist: string): string | null {
  * Returns path to temp WAV file, or null on failure.
  */
 function downloadAudio(videoId: string, tmpDir: string): string | null {
+  if (!/^[\w-]{11}$/.test(videoId)) return null;
+
   const outputTemplate = path.join(tmpDir, 'audio.%(ext)s');
   try {
-    execSync(
-      `yt-dlp --no-playlist --extract-audio --audio-format wav ` +
-      `--postprocessor-args "ffmpeg:-ar 16000 -ac 1" ` +
-      `--output "${outputTemplate}" --quiet --no-warnings ` +
-      `"https://www.youtube.com/watch?v=${videoId}"`,
-      { timeout: 120000 }
-    );
+    execFileSync('yt-dlp', [
+      '--no-playlist', '--extract-audio', '--audio-format', 'wav',
+      '--postprocessor-args', 'ffmpeg:-ar 16000 -ac 1',
+      '--output', outputTemplate, '--quiet', '--no-warnings',
+      `https://www.youtube.com/watch?v=${videoId}`,
+    ], { timeout: 120000, stdio: ['pipe', 'pipe', 'pipe'] });
   } catch {
     return null;
   }
 
-  // Find the output file
   const files = fs.readdirSync(tmpDir).filter((f) => f.startsWith('audio'));
   if (files.length === 0) return null;
 
   const filePath = path.join(tmpDir, files[0]);
   if (!filePath.endsWith('.wav')) {
-    // Convert if needed
     const wavPath = filePath.replace(/\.[^.]+$/, '.wav');
     try {
-      execSync(`ffmpeg -i "${filePath}" -ar 16000 -ac 1 "${wavPath}" -y -loglevel quiet`);
+      execFileSync('ffmpeg', ['-i', filePath, '-ar', '16000', '-ac', '1', wavPath, '-y', '-loglevel', 'quiet']);
       fs.unlinkSync(filePath);
       return wavPath;
     } catch {

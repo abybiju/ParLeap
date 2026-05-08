@@ -228,8 +228,28 @@ app.get('/api/bible/verse', async (req: Request, res: Response) => {
 // Community template endpoints (structure-only)
 app.post('/api/templates', templateRateLimit, requireAuth, async (req: Request, res: Response) => {
   const { ccliNumber, lineCount, sections = [], slides = [], linesPerSlide, sourceVersion, userId } = req.body || {};
-  if (!ccliNumber || !lineCount || !Array.isArray(slides)) {
-    res.status(400).json({ error: 'ccliNumber, lineCount, slides are required' });
+  if (typeof ccliNumber !== 'string' || !ccliNumber.trim() || ccliNumber.length > 50) {
+    res.status(400).json({ error: 'ccliNumber must be a non-empty string (max 50 chars)' });
+    return;
+  }
+  if (typeof lineCount !== 'number' || !Number.isInteger(lineCount) || lineCount < 1 || lineCount > 10000) {
+    res.status(400).json({ error: 'lineCount must be a positive integer' });
+    return;
+  }
+  if (!Array.isArray(slides) || slides.length === 0 || slides.length > 500) {
+    res.status(400).json({ error: 'slides must be a non-empty array (max 500)' });
+    return;
+  }
+  if (!Array.isArray(sections) || sections.length > 500) {
+    res.status(400).json({ error: 'sections must be an array (max 500)' });
+    return;
+  }
+  if (linesPerSlide !== undefined && (typeof linesPerSlide !== 'number' || linesPerSlide < 1 || linesPerSlide > 100)) {
+    res.status(400).json({ error: 'linesPerSlide must be a positive integer' });
+    return;
+  }
+  if (sourceVersion !== undefined && sourceVersion !== null && (typeof sourceVersion !== 'string' || sourceVersion.length > 100)) {
+    res.status(400).json({ error: 'sourceVersion must be a string (max 100 chars)' });
     return;
   }
   const result = await submitTemplate(
@@ -525,8 +545,12 @@ app.post('/api/hum-search/live/chunk', requireAuth, async (req: Request, res: Re
   }
   try {
     const { sessionId, audio } = req.body;
-    if (!sessionId || !audio) {
-      res.status(400).json({ error: 'Missing sessionId or audio' });
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 100) {
+      res.status(400).json({ error: 'Missing or invalid sessionId' });
+      return;
+    }
+    if (!audio || typeof audio !== 'string') {
+      res.status(400).json({ error: 'Missing or invalid audio data' });
       return;
     }
     const result = await processLiveChunk(sessionId, audio);
@@ -552,8 +576,16 @@ app.post('/api/hum-search/live/stop', requireAuth, (req: Request, res: Response)
 app.post('/api/fingerprint', aiRateLimit, requireAuth, async (req: Request, res: Response) => {
   const { songId, title, artist } = req.body;
 
-  if (!title) {
-    res.status(400).json({ success: false, error: 'title is required' });
+  if (typeof title !== 'string' || !title.trim() || title.length > 200) {
+    res.status(400).json({ success: false, error: 'title is required and must be under 200 characters' });
+    return;
+  }
+  if (artist !== undefined && (typeof artist !== 'string' || artist.length > 200)) {
+    res.status(400).json({ success: false, error: 'artist must be a string under 200 characters' });
+    return;
+  }
+  if (songId !== undefined && (typeof songId !== 'string' || songId.length > 100)) {
+    res.status(400).json({ success: false, error: 'invalid songId' });
     return;
   }
 

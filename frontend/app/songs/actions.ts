@@ -208,9 +208,23 @@ export async function updateSongSlideConfig(
   songId: string,
   slideConfig: { linesPerSlide?: number; respectStanzaBreaks?: boolean; manualBreaks?: number[] }
 ): Promise<ActionResult> {
+  if (slideConfig.linesPerSlide !== undefined &&
+      (typeof slideConfig.linesPerSlide !== 'number' || slideConfig.linesPerSlide < 1 || slideConfig.linesPerSlide > 50)) {
+    return { success: false, error: 'linesPerSlide must be between 1 and 50' };
+  }
+  if (slideConfig.respectStanzaBreaks !== undefined && typeof slideConfig.respectStanzaBreaks !== 'boolean') {
+    return { success: false, error: 'respectStanzaBreaks must be a boolean' };
+  }
+  if (slideConfig.manualBreaks !== undefined) {
+    if (!Array.isArray(slideConfig.manualBreaks) || slideConfig.manualBreaks.length > 500 ||
+        slideConfig.manualBreaks.some((b) => typeof b !== 'number' || !Number.isInteger(b) || b < 0)) {
+      return { success: false, error: 'manualBreaks must be an array of non-negative integers' };
+    }
+  }
+
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) {
     return { success: false, error: 'Not authenticated' };
   }
