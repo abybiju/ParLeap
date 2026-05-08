@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { eventSchema } from '@/lib/schemas/event';
 import type { AnnouncementSlideInput } from '@/lib/types/setlist';
+import { isValidMediaUrl, sanitizeSearchQuery, sanitizeText } from '@/lib/utils/validation';
 
 export interface ActionResult {
   success: boolean;
@@ -138,6 +139,14 @@ export async function updateEventBackground(
   backgroundImageUrl: string | null,
   backgroundMediaType?: string | null
 ): Promise<ActionResult> {
+  if (backgroundImageUrl !== null && !isValidMediaUrl(backgroundImageUrl)) {
+    return { success: false, error: 'Invalid background URL. Must be a valid HTTPS URL.' };
+  }
+  if (backgroundMediaType !== undefined && backgroundMediaType !== null &&
+      backgroundMediaType !== 'image' && backgroundMediaType !== 'video') {
+    return { success: false, error: 'backgroundMediaType must be "image" or "video"' };
+  }
+
   const { supabase, user, error } = await requireUser();
   if (!user) {
     return { success: false, error };
@@ -271,6 +280,11 @@ export async function addSongToEvent(eventId: string, songId: string, sequenceOr
 }
 
 export async function addBibleToEvent(eventId: string, bibleRef: string, sequenceOrder: number): Promise<ActionResult> {
+  if (typeof bibleRef !== 'string' || !bibleRef.trim() || bibleRef.length > 200) {
+    return { success: false, error: 'Invalid Bible reference' };
+  }
+  const sanitizedRef = sanitizeText(bibleRef, 200);
+
   const { supabase, user, error } = await requireUser();
   if (!user) {
     return { success: false, error };
@@ -284,7 +298,7 @@ export async function addBibleToEvent(eventId: string, bibleRef: string, sequenc
   const insertData: Record<string, unknown> = {
     event_id: eventId,
     item_type: 'BIBLE',
-    bible_ref: bibleRef,
+    bible_ref: sanitizedRef,
     sequence_order: sequenceOrder,
   };
 
@@ -307,6 +321,14 @@ export async function addBibleToEvent(eventId: string, bibleRef: string, sequenc
 }
 
 export async function addMediaToEvent(eventId: string, mediaUrl: string, mediaTitle: string, sequenceOrder: number): Promise<ActionResult> {
+  if (!isValidMediaUrl(mediaUrl)) {
+    return { success: false, error: 'Invalid media URL. Must be a valid HTTPS URL.' };
+  }
+  if (typeof mediaTitle !== 'string' || mediaTitle.length > 500) {
+    return { success: false, error: 'Media title must be a string under 500 characters' };
+  }
+  const sanitizedTitle = sanitizeText(mediaTitle, 500);
+
   const { supabase, user, error } = await requireUser();
   if (!user) {
     return { success: false, error };
@@ -321,7 +343,7 @@ export async function addMediaToEvent(eventId: string, mediaUrl: string, mediaTi
     event_id: eventId,
     item_type: 'MEDIA',
     media_url: mediaUrl,
-    media_title: mediaTitle,
+    media_title: sanitizedTitle,
     sequence_order: sequenceOrder,
   };
 
@@ -509,6 +531,20 @@ export async function updateEventItemSlideConfig(
   eventItemId: string,
   slideConfigOverride: { linesPerSlide?: number; respectStanzaBreaks?: boolean; manualBreaks?: number[] }
 ): Promise<ActionResult> {
+  if (slideConfigOverride.linesPerSlide !== undefined &&
+      (typeof slideConfigOverride.linesPerSlide !== 'number' || slideConfigOverride.linesPerSlide < 1 || slideConfigOverride.linesPerSlide > 50)) {
+    return { success: false, error: 'linesPerSlide must be between 1 and 50' };
+  }
+  if (slideConfigOverride.respectStanzaBreaks !== undefined && typeof slideConfigOverride.respectStanzaBreaks !== 'boolean') {
+    return { success: false, error: 'respectStanzaBreaks must be a boolean' };
+  }
+  if (slideConfigOverride.manualBreaks !== undefined) {
+    if (!Array.isArray(slideConfigOverride.manualBreaks) || slideConfigOverride.manualBreaks.length > 500 ||
+        slideConfigOverride.manualBreaks.some((b: unknown) => typeof b !== 'number' || !Number.isInteger(b as number) || (b as number) < 0)) {
+      return { success: false, error: 'manualBreaks must be an array of non-negative integers' };
+    }
+  }
+
   const { supabase, user, error } = await requireUser();
   if (!user) {
     return { success: false, error };
@@ -558,7 +594,7 @@ export async function getSongsSearch(options: {
   }
 
   const { query, limit, offset, excludeSongIds = [] } = options;
-  const safeQuery = query?.trim().replace(/'/g, "''") ?? '';
+  const safeQuery = sanitizeSearchQuery(query?.trim() ?? '', 200);
   const excludeSet = new Set(excludeSongIds);
 
   let base = supabase
@@ -612,7 +648,7 @@ export async function getEventsSearch(options: { query?: string; limit: number }
   }
 
   const { query, limit } = options;
-  const safeQuery = query?.trim().replace(/'/g, "''") ?? '';
+  const safeQuery = sanitizeSearchQuery(query?.trim() ?? '', 200);
 
   let q = supabase
     .from('events')
