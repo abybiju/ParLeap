@@ -1,4 +1,4 @@
-import { getBackendHttpUrl } from './utils/backendUrl';
+import { getBackendHttpUrl, authFetch } from './utils/backendUrl';
 import { TemplateStructure } from './templateHash';
 
 export async function upsertCommunityTemplate(structure: TemplateStructure): Promise<void> {
@@ -12,7 +12,7 @@ export async function upsertCommunityTemplate(structure: TemplateStructure): Pro
     sourceVersion: structure.sourceVersion,
   };
   // fire-and-forget
-  fetch(`${backend}/api/templates`, {
+  authFetch(`${backend}/api/templates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

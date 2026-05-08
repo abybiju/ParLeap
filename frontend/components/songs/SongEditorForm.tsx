@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { getBackendHttpUrl } from '@/lib/utils/backendUrl'
+import { getBackendHttpUrl, authFetch } from '@/lib/utils/backendUrl'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { SongPreviewCards } from './SongPreviewCards'
@@ -200,7 +200,7 @@ export function SongEditorForm({
     setAutoFormatLoading(true)
     setImportError(null)
     try {
-      const res = await fetch(`${getBackendHttpUrl()}/api/format-song`, {
+      const res = await authFetch(`${getBackendHttpUrl()}/api/format-song`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rawText: raw }),

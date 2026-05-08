@@ -1,4 +1,4 @@
-import { getBackendHttpUrl } from '../utils/backendUrl';
+import { getBackendHttpUrl, authFetch } from '../utils/backendUrl';
 
 export type TemplateSlide = { start_line: number; end_line: number };
 
@@ -35,7 +35,7 @@ export async function submitTemplate(payload: {
   userId?: string | null;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   const backend = getBackendHttpUrl();
-  const res = await fetch(`${backend}/api/templates`, {
+  const res = await authFetch(`${backend}/api/templates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -58,5 +58,5 @@ export async function submitTemplate(payload: {
 
 export async function recordTemplateUsage(templateId: string): Promise<void> {
   const backend = getBackendHttpUrl();
-  await fetch(`${backend}/api/templates/${templateId}/usage`, { method: 'POST' }).catch(() => {});
+  await authFetch(`${backend}/api/templates/${templateId}/usage`, { method: 'POST' }).catch(() => {});
 }
