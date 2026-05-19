@@ -168,10 +168,20 @@ app.get('/', (_req: Request, res: Response) => {
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
+  const supabaseUrl = process.env.SUPABASE_URL ?? '';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+  const supabaseConfigured = Boolean(supabaseUrl && supabaseServiceKey);
+  let supabaseProjectRef: string | null = null;
+  if (supabaseUrl) {
+    const match = supabaseUrl.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/i);
+    supabaseProjectRef = match ? match[1] : null;
+  }
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     activeSessions: getSessionCount(),
+    supabaseConfigured,
+    supabaseProjectRef,
   });
 });
 
