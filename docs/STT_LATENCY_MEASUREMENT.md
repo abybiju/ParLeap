@@ -54,3 +54,38 @@ Real backend lines and what they mean:
 2. Switch to **Google streaming** (`STT_PROVIDER=google`, `GOOGLE_APPLICATION_CREDENTIALS` set, frontend `NEXT_PUBLIC_STT_PROVIDER=google`).
 3. Run the same kind of session and compare the same log lines.
 4. If Google is not clearly better, stick with ElevenLabs.
+
+## Provider research summary (2026-05-19)
+
+Researched the landscape for live-lyric STT in May 2026. **Decision: stay on ElevenLabs `scribe_v2_realtime`.**
+
+| Provider | Model | TTFB Partial | $/hr | Sung-vocal tuned? |
+|---|---|---|---|---|
+| **ElevenLabs (current)** | scribe_v2_realtime | ~150 ms | $0.39–0.48 | Robust to background music; closest to sung-tuned |
+| Deepgram | Nova-3 / Flux | <300 ms | $0.46 | No |
+| AssemblyAI | Universal-3 Pro | ~150 ms | $0.45 | No |
+| Soniox | STT RT v3 | <200 ms | $0.30 | No |
+| Gladia | Solaria-1 | ~103 ms | ~$0.50 | No |
+| OpenAI | gpt-4o-realtime | 300–500 ms | ~$6 | No |
+| AudioShake | Lyric Transcription | **batch only** | custom | **~90% sung accuracy** (not realtime) |
+
+**Reality check:** No mainstream realtime STT is tuned for sung vocals. Academic ceiling is ~20% WER on sung lyrics vs 3–6% on speech. Switching providers buys 0–50 ms at best with real accuracy regression risk on sustained vowels and melisma.
+
+## Tuning recipe (do this before considering a switch)
+
+These env vars are already wired in `backend/src/services/sttService.ts` and read at WS handshake — no code changes needed. Set on Railway backend service and restart.
+
+```env
+ELEVENLABS_VAD_SILENCE_THRESHOLD_SECS=0.3   # default 1.5 — saves >1s on commit latency
+ELEVENLABS_MIN_SPEECH_DURATION_MS=50        # default 100 — catches short syllables
+ELEVENLABS_MIN_SILENCE_DURATION_MS=50       # default 100 — faster segment cut
+ELEVENLABS_VAD_THRESHOLD=0.4                # 0.3 for quiet singing
+```
+
+Bigger latency/accuracy wins beyond env tuning (require code changes — not yet implemented):
+- Match against `partial_transcript` rather than waiting for `committed_transcript`. Commits are for archive/display; partials stream every few hundred ms.
+- Send audio in 20–40 ms chunks instead of larger buffers — smaller chunks = faster partials.
+- Pass the current setlist's distinctive lyrics as `keyterms` at session start to bias recognition (max 50 terms / 20 chars each; +20% cost).
+- Phonetic matching (Metaphone/Soundex) on partials to survive sung-vowel errors.
+
+When to revisit this decision: if measured `audio_sent_to_transcript_received` is consistently >200 ms after VAD tuning, or if a new provider publishes a sung-vocal-tuned realtime model.
