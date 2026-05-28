@@ -1,5 +1,7 @@
 # Supabase Setup Guide
 
+> **Writing a new migration?** See [`MIGRATIONS.md`](./MIGRATIONS.md) first — explicit `GRANT` statements are required for any new `public` table after 2026-10-30.
+
 ## Quick Start
 
 ### 1. Create Supabase Project
