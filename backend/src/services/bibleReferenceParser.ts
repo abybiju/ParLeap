@@ -188,6 +188,14 @@ interface BookEntry {
 /** Short, common-word books that must have an adjacent number before they count. */
 const SHORT_BOOKS = new Set(['Job', 'Acts', 'Mark', 'John', 'Jude', 'Ruth', 'Amos', 'Joel', 'Ezra', 'Luke']);
 
+// Book names that double as common English words / first names. A stray nearby number in ordinary
+// speech ("number one", "act two", "mark my point") must not fabricate a reference: these require an
+// exact book match, an explicit "chapter" cue, or a verse number before they count.
+const COMMON_WORD_BOOKS = new Set([
+  'Numbers', '1 Kings', '2 Kings', 'Judges', 'Job', 'Acts', 'Mark', 'John', 'Luke',
+  'James', 'Jude', 'Ruth', 'Amos', 'Joel', 'Hosea', 'Song of Solomon', 'Titus',
+]);
+
 const ALIAS_MAP = new Map<string, string>(); // exact surface -> canonical name
 
 function coreOf(value: string): string {
@@ -243,13 +251,19 @@ function normalizeOrdinalBooks(text: string): string {
  * Parse the chapter:verse zone that trails the book. Scoped number-word conversion only here.
  * Returns null when no leading number is present (bare book).
  */
-function parseNumberZone(text: string): { chapter: number; verse: number | null; endVerse: number | null } | null {
+function parseNumberZone(
+  text: string
+): { chapter: number; verse: number | null; endVerse: number | null; explicitChapter: boolean } | null {
   // Convert number-words to digits, drop chapter markers, map verse markers to ':' and ranges to '-'.
   const tokens = text.split(/\s+/).filter(Boolean);
   const out: string[] = [];
+  let explicitChapter = false;
   for (const raw of tokens) {
     const t = raw.replace(/[.,]+$/g, '');
-    if (/^(chapter|chap|ch)$/.test(t)) continue;
+    if (/^(chapter|chap|ch)$/.test(t)) {
+      explicitChapter = true;
+      continue;
+    }
     if (/^(verse|verses|vs|v)$/.test(t)) {
       out.push(':');
       continue;
@@ -288,11 +302,11 @@ function parseNumberZone(text: string): { chapter: number; verse: number | null;
       const chapter = Number(match[1]);
       const verse = Number(match[2]);
       const endVerse = match[3] ? Number(match[3]) : null;
-      return { chapter, verse, endVerse: endVerse !== null && endVerse < verse ? null : endVerse };
+      return { chapter, verse, endVerse: endVerse !== null && endVerse < verse ? null : endVerse, explicitChapter };
     }
   }
   const chapterOnly = /^(\d{1,3})(?:-(\d{1,3}))?\s*$/.exec(zone);
-  if (chapterOnly) return { chapter: Number(chapterOnly[1]), verse: null, endVerse: null };
+  if (chapterOnly) return { chapter: Number(chapterOnly[1]), verse: null, endVerse: null, explicitChapter };
   return null;
 }
 
@@ -415,7 +429,11 @@ export function analyzeReference(input: string): ReferenceAnalysis {
       numbers.verse === null
         ? `${match.entry.name} ${numbers.chapter}`
         : `${match.entry.name} ${numbers.chapter}:${verse}${numbers.endVerse ? `-${numbers.endVerse}` : ''}`;
-    if (validateInRange(refString)) {
+    // Common-word/name books need a strong signal (exact match, an explicit "chapter" cue, or a
+    // verse number) so a stray number in prose ("number one", "act two") can't fabricate a reference.
+    const commonWordBlocked =
+      COMMON_WORD_BOOKS.has(match.entry.name) && !match.exact && numbers.verse === null && !numbers.explicitChapter;
+    if (validateInRange(refString) && !commonWordBlocked) {
       reference = { book: match.entry.name, chapter: numbers.chapter, verse, endVerse: numbers.endVerse };
     }
   }

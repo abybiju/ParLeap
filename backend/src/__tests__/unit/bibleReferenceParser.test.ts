@@ -65,6 +65,26 @@ describe('findBibleReference — false-positive & out-of-range guards (the bug f
   });
 });
 
+describe('common-word / name book guard', () => {
+  const blocked = ['number one', 'act two', 'we have three points number one', 'mark my words'];
+  it.each(blocked)('does not fabricate a reference from "%s"', (input) => {
+    expect(findBibleReference(input)).toBeNull();
+  });
+
+  const allowed: Array<[string, { book: string; chapter: number; verse: number }]> = [
+    ['Acts nine', { book: 'Acts', chapter: 9, verse: 1 }], // exact book + number
+    ['Numbers chapter 1', { book: 'Numbers', chapter: 1, verse: 1 }], // explicit "chapter" cue
+    ['Numbers 1 5', { book: 'Numbers', chapter: 1, verse: 5 }], // verse number present
+  ];
+  it.each(allowed)('still resolves real references like "%s"', (input, expected) => {
+    const ref = findBibleReference(input);
+    expect(ref).not.toBeNull();
+    expect(ref!.book).toBe(expected.book);
+    expect(ref!.chapter).toBe(expected.chapter);
+    expect(ref!.verse).toBe(expected.verse);
+  });
+});
+
 describe('shouldTrigger — recall-first (liberal)', () => {
   const triggers = ['Galatians 2:20', 'Galician 2:20', 'Acts chapter nine', 'turn to Romans 8', 'Romans'];
   it.each(triggers)('opens window for "%s"', (input) => {
