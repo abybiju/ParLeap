@@ -1,6 +1,7 @@
-import { compareTwoStrings } from 'string-similarity';
 import { getSupabaseClient, isSupabaseConfigured } from '../config/supabase';
-import { BIBLE_BOOKS } from '../data/bibleBooks';
+
+// Spoken-reference parsing lives in the dedicated fuzzy parser; re-exported for existing import sites.
+export { findBibleReference } from './bibleReferenceParser';
 
 export type BibleReference = {
   book: string;
@@ -38,24 +39,6 @@ let defaultVersionId: string | null = null;
 const esvApiKey = process.env.ESV_API_KEY || '';
 const esvApiUrl = process.env.ESV_API_URL || '';
 
-const aliasToBookName = new Map<string, string>();
-const aliasList: string[] = [];
-
-for (const book of BIBLE_BOOKS) {
-  const canonical = book.name.toLowerCase();
-  const aliases = new Set<string>([canonical, book.abbrev.toLowerCase(), ...book.aliases.map((a) => a.toLowerCase())]);
-  for (const alias of aliases) {
-    aliasToBookName.set(alias, book.name);
-  }
-}
-
-aliasList.push(...aliasToBookName.keys());
-aliasList.sort((a, b) => b.length - a.length);
-
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
  * Normalize text for Bible reference parsing: lowercase, ordinals, and
  * STT homophones (e.g. "won" → 1 so "daniel won" parses as Daniel 1).
@@ -79,138 +62,6 @@ function normalizeReferenceText(input: string) {
     .replace(/[^a-z0-9:\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-export function findBibleReference(input: string): BibleReference | null {
-  const normalized = normalizeReferenceText(input);
-  if (!normalized) return null;
-
-  for (const alias of aliasList) {
-    const pattern = new RegExp(`\\b${escapeRegex(alias)}\\b`);
-    const match = normalized.match(pattern);
-    if (!match || match.index === undefined) continue;
-
-    const after = normalized.slice(match.index + match[0].length).trim();
-
-    let chapter: number | null = null;
-    let verse: number | null = null;
-    let endVerse: number | null = null;
-
-    const patterns = [
-      // chapter 2 verse 1 / chapter 2: verse 1 / ch 2 v 1
-      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*[:-]?\s*(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      // chapter 2:1
-      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      // 2:1
-      /^(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      // 2 verse 1 / 2 verses 1-3
-      /^(\d{1,3})\s+(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      // chapter 2 1
-      /^(?:chapter|chap|ch)\s+(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      // 2 1
-      /^(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-    ];
-
-    for (const pattern of patterns) {
-      const refMatch = after.match(pattern);
-      if (!refMatch) continue;
-      chapter = Number(refMatch[1]);
-      verse = Number(refMatch[2]);
-      endVerse = refMatch[3] ? Number(refMatch[3]) : null;
-      break;
-    }
-
-    // Chapter-only: "Luke 1", "Luke chapter 1", "Romans 5" → verse 1
-    if (!chapter || !verse) {
-      const chapterOnly1 = /^(?:chapter|chap|ch)\s+(\d{1,3})\s*$/.exec(after);
-      const chapterOnly2 = /^(\d{1,3})\s*$/.exec(after);
-      if (chapterOnly1) {
-        chapter = Number(chapterOnly1[1]);
-        verse = 1;
-      } else if (chapterOnly2) {
-        chapter = Number(chapterOnly2[1]);
-        verse = 1;
-      }
-    }
-
-    // Book-only: "Daniel", "Psalm" → chapter 1, verse 1
-    if ((!chapter || !verse) && after.trim() === '') {
-      chapter = 1;
-      verse = 1;
-    }
-
-    if (!chapter || !verse) continue;
-    if (endVerse !== null && endVerse < verse) {
-      endVerse = null;
-    }
-
-    const bookName = aliasToBookName.get(alias);
-    if (!bookName) continue;
-
-    return { book: bookName, chapter, verse, endVerse };
-  }
-
-  // Fuzzy book match: no alias matched (e.g. STT said "roman" for Romans)
-  const tokens = normalized.split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return null;
-  const bookToken =
-    tokens.length >= 2 && /^\d+$/.test(tokens[0]) ? `${tokens[0]} ${tokens[1]}` : tokens[0];
-  const afterFuzzy = normalized.slice(normalized.indexOf(bookToken) + bookToken.length).trim();
-
-  let bestBook: (typeof BIBLE_BOOKS)[number] | null = null;
-  let bestScore = 0;
-  const bookTokenLower = bookToken.toLowerCase();
-  for (const book of BIBLE_BOOKS) {
-    const candidates = [
-      book.name.toLowerCase(),
-      book.abbrev.toLowerCase(),
-      ...book.aliases.map((a) => a.toLowerCase()),
-    ];
-    const score = Math.max(...candidates.map((c) => compareTwoStrings(bookTokenLower, c)));
-    if (score > bestScore) {
-      bestScore = score;
-      bestBook = book;
-    }
-  }
-  const FUZZY_BOOK_THRESHOLD = 0.82;
-  if (bestBook && bestScore >= FUZZY_BOOK_THRESHOLD) {
-    let chapter: number | null = null;
-    let verse: number | null = null;
-    let endVerse: number | null = null;
-    const patterns = [
-      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*[:-]?\s*(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      /^(?:chapter|chap|ch)\s+(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      /^(\d{1,3})\s*:\s*(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      /^(\d{1,3})\s+(?:verse|verses|v)\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      /^(?:chapter|chap|ch)\s+(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-      /^(\d{1,3})\s+(\d{1,3})(?:\s*(?:-|to|through)\s*(\d{1,3}))?/,
-    ];
-    for (const pattern of patterns) {
-      const refMatch = afterFuzzy.match(pattern);
-      if (!refMatch) continue;
-      chapter = Number(refMatch[1]);
-      verse = Number(refMatch[2]);
-      endVerse = refMatch[3] ? Number(refMatch[3]) : null;
-      break;
-    }
-    if (!chapter || !verse) {
-      const ch1 = /^(?:chapter|chap|ch)\s+(\d{1,3})\s*$/.exec(afterFuzzy);
-      const ch2 = /^(\d{1,3})\s*$/.exec(afterFuzzy);
-      if (ch1) {
-        chapter = Number(ch1[1]);
-        verse = 1;
-      } else if (ch2) {
-        chapter = Number(ch2[1]);
-        verse = 1;
-      }
-    }
-    if (chapter && verse) {
-      if (endVerse !== null && endVerse < verse) endVerse = null;
-      return { book: bestBook.name, chapter, verse, endVerse };
-    }
-  }
-
-  return null;
 }
 
 export function detectBibleVersionCommand(input: string): 'ESV' | 'KJV' | null {
