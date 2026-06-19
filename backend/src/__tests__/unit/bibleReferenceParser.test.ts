@@ -90,7 +90,14 @@ describe('shouldTrigger — recall-first (liberal)', () => {
   it.each(triggers)('opens window for "%s"', (input) => {
     expect(shouldTrigger(input)).toBe(true);
   });
-  const noTriggers = ['we turn to the Lord', 'the book of life', 'John was a good man', 'mark', 'hello everyone'];
+  const noTriggers = [
+    'we turn to the Lord',
+    'the book of life',
+    'John was a good man',
+    'mark',
+    'hello everyone',
+    'so if you have your bible tonight', // fuzzy book match, no number -> must not open a window
+  ];
   it.each(noTriggers)('stays idle for "%s"', (input) => {
     expect(shouldTrigger(input)).toBe(false);
   });
