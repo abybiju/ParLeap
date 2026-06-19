@@ -451,7 +451,6 @@ export function analyzeReference(input: string): ReferenceAnalysis {
 }
 
 const DROPIN_BOOK_MIN = 0.84;
-const TRIGGER_BOOK_MIN = 0.72;
 const TRIGGER_WITH_NUMBER_MIN = 0.65;
 const PROJECT_BOOK_MIN = 0.9;
 const PROJECT_NO_DM_MIN = 0.93; // fallback bar when the phonetic encoder isn't loaded
@@ -472,10 +471,10 @@ export function shouldTrigger(input: string): boolean {
   const a = analyzeReference(input);
   if (!a.book) return false;
   if (a.isShort && !a.hasNumber) return false; // "mark"/"john" alone must not trigger
-  if (a.exact) return true;
-  if (a.score >= TRIGGER_BOOK_MIN) return true;
+  if (a.exact) return true; // an exact book name (with or without a number) is a strong cue
+  if (!a.hasNumber) return false; // a FUZZY book match with no number is noise (e.g. "...bible tonight" -> Isaiah)
+  if (a.score >= TRIGGER_WITH_NUMBER_MIN) return true;
   if (a.dmAgree && a.jw >= 0.8) return true;
-  if (a.score >= TRIGGER_WITH_NUMBER_MIN && a.hasNumber) return true;
   return false;
 }
 
