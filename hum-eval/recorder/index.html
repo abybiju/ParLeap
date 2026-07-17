@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ParLeap Hum Test-Set Recorder</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.3rem; }
+  fieldset { border: 1px solid #8884; border-radius: 8px; margin-bottom: 1rem; }
+  label { display: block; margin: 0.5rem 0 0.15rem; font-size: 0.85rem; opacity: 0.8; }
+  input, select { width: 100%; padding: 0.4rem; font-size: 1rem; box-sizing: border-box; }
+  .row { display: flex; gap: 0.75rem; } .row > div { flex: 1; }
+  button { font-size: 1.05rem; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; }
+  #record { background: #c0392b; color: white; border: none; }
+  #record.recording { background: #27ae60; }
+  #meter { width: 100%; height: 40px; background: #0002; border-radius: 6px; margin: 0.75rem 0; }
+  #status { font-variant-numeric: tabular-nums; min-height: 1.5em; }
+  #warning { color: #c0392b; font-weight: 600; white-space: pre-line; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  td, th { text-align: left; padding: 0.25rem 0.4rem; border-bottom: 1px solid #8883; }
+  .actions { display: flex; gap: 0.75rem; margin-top: 0.75rem; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<h1>🎤 ParLeap Hum Test-Set Recorder</h1>
+<p>Records raw PCM (no codec, voice processing disabled), saves 16&nbsp;kHz mono WAVs
+named for the eval manifest. Hum or sing 10–30&nbsp;s. Serve over
+<code>localhost</code> or HTTPS for mic access.</p>
+
+<fieldset>
+  <legend>Query metadata</legend>
+  <div class="row">
+    <div><label for="type">Type</label>
+      <select id="type">
+        <option value="genuine">genuine (song IS in library)</option>
+        <option value="imposter">imposter (song NOT in library)</option>
+        <option value="probe">probe (noise / monotone)</option>
+      </select></div>
+    <div><label for="probeKind">Probe kind (probes only)</label>
+      <select id="probeKind" disabled>
+        <option value="noise">noise</option>
+        <option value="monotone">monotone</option>
+      </select></div>
+  </div>
+  <div class="row">
+    <div><label for="songId">Song ID (genuine: library slug; imposter: any label)</label>
+      <input id="songId" placeholder="e.g. oceans" /></div>
+    <div><label for="songTitle">Song title (genuine only)</label>
+      <input id="songTitle" placeholder="e.g. Oceans (Where Feet May Fail)" /></div>
+  </div>
+  <div class="row">
+    <div><label for="section">Section</label>
+      <select id="section"><option>chorus</option><option>verse</option><option>bridge</option><option>other</option></select></div>
+    <div><label for="hummer">Hummer</label><input id="hummer" placeholder="your name" /></div>
+    <div><label for="take">Take</label><input id="take" type="number" value="1" min="1" /></div>
+  </div>
+</fieldset>
+
+<button id="record">● Start recording</button>
+<canvas id="meter"></canvas>
+<div id="status">idle</div>
+<div id="warning"></div>
+
+<h2 style="font-size:1.05rem">Recorded queries (<span id="count">0</span>)</h2>
+<div class="actions">
+  <button id="export">⬇ Export manifest.json</button>
+  <button id="clear">Clear list</button>
+</div>
+<table id="list"><thead><tr><th>file</th><th>type</th><th>song</th><th>hummer</th></tr></thead><tbody></tbody></table>
+
+<script>
+const MIN_SECONDS = 8;
+const MAX_SECONDS = 30;
+const TARGET_RATE = 16000;
+const LS_KEY = 'parleap-hum-testset-manifest-v1';
+
+const el = (id) => document.getElementById(id);
+let recording = false;
+let audioContext = null;
+let mediaStream = null;
+let chunks = [];
+let startedAt = 0;
+let timerId = 0;
+let captureSettings = {};
+
+el('type').addEventListener('change', () => {
+  el('probeKind').disabled = el('type').value !== 'probe';
+});
+
+function entries() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveEntries(list) {
+  localStorage.setItem(LS_KEY, JSON.stringify(list));
+  renderList();
+}
+function renderList() {
+  const list = entries();
+  el('count').textContent = String(list.length);
+  el('list').querySelector('tbody').innerHTML = list
+    .map((e) => `<tr><td>${e.file}</td><td>${e.type}</td><td>${e.songId ?? e.probeKind ?? ''}</td><td>${e.hummer ?? ''}</td></tr>`)
+    .join('');
+}
+
+function sanitize(s) {
+  return (s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown';
+}
+
+function filename(meta) {
+  const parts = meta.type === 'probe'
+    ? ['probe', meta.probeKind, sanitize(meta.hummer), `take${meta.take}`]
+    : [meta.type, sanitize(meta.songId), meta.section, sanitize(meta.hummer), `take${meta.take}`];
+  return `queries/${parts.join('__')}.wav`;
+}
+
+function resampleLinear(samples, fromRate, toRate) {
+  if (fromRate === toRate) return samples;
+  const outLength = Math.floor((samples.length * toRate) / fromRate);
+  const out = new Float32Array(outLength);
+  const ratio = fromRate / toRate;
+  for (let i = 0; i < outLength; i++) {
+    const pos = i * ratio;
+    const lo = Math.floor(pos);
+    const hi = Math.min(lo + 1, samples.length - 1);
+    out[i] = samples[lo] + (samples[hi] - samples[lo]) * (pos - lo);
+  }
+  return out;
+}
+
+function encodeWav16Mono(samples, sampleRate) {
+  const dataLength = samples.length * 2;
+  const buf = new ArrayBuffer(44 + dataLength);
+  const view = new DataView(buf);
+  const tag = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  tag(0, 'RIFF'); view.setUint32(4, 36 + dataLength, true); tag(8, 'WAVE');
+  tag(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  tag(36, 'data'); view.setUint32(40, dataLength, true);
+  for (let i = 0; i < samples.length; i++) {
+    const c = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, Math.round(c * 32767), true);
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+function drawMeter(rms) {
+  const canvas = el('meter');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.clientWidth;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const w = Math.min(1, rms * 8) * canvas.width;
+  ctx.fillStyle = rms > 0.01 ? '#27ae60' : '#e67e22';
+  ctx.fillRect(0, 0, w, canvas.height);
+}
+
+async function start() {
+  const constraints = {
+    audio: {
+      channelCount: 1,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+  };
+  mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+  const track = mediaStream.getAudioTracks()[0];
+  captureSettings = track.getSettings ? track.getSettings() : {};
+
+  // Chrome/Safari sometimes ignore these constraints — surface it loudly,
+  // because voice processing quietly mangles hummed pitch.
+  const bad = ['echoCancellation', 'noiseSuppression', 'autoGainControl']
+    .filter((k) => captureSettings[k] === true);
+  el('warning').textContent = bad.length
+    ? `⚠ Browser kept voice processing ON: ${bad.join(', ')}.\nRecordings are still usable but note it — try Chrome desktop for clean takes.`
+    : '';
+
+  audioContext = new AudioContext();
+  await audioContext.audioWorklet.addModule('capture-worklet.js');
+  const source = audioContext.createMediaStreamSource(mediaStream);
+  const capture = new AudioWorkletNode(audioContext, 'capture');
+  const silent = audioContext.createGain();
+  silent.gain.value = 0;
+  source.connect(capture).connect(silent).connect(audioContext.destination);
+
+  chunks = [];
+  capture.port.onmessage = (e) => {
+    if (!recording) return;
+    const frame = e.data;
+    chunks.push(frame);
+    let sum = 0;
+    for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
+    drawMeter(Math.sqrt(sum / frame.length));
+    if ((audioContext.currentTime - startedAt) >= MAX_SECONDS) stop();
+  };
+
+  recording = true;
+  startedAt = audioContext.currentTime;
+  el('record').textContent = '■ Stop';
+  el('record').classList.add('recording');
+  timerId = setInterval(() => {
+    const t = audioContext ? audioContext.currentTime - startedAt : 0;
+    el('status').textContent = `recording… ${t.toFixed(1)}s (min ${MIN_SECONDS}s, auto-stop ${MAX_SECONDS}s) @ ${audioContext.sampleRate}Hz`;
+  }, 100);
+}
+
+function stop() {
+  recording = false;
+  clearInterval(timerId);
+  const contextRate = audioContext.sampleRate;
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const all = new Float32Array(total);
+  let off = 0;
+  for (const c of chunks) { all.set(c, off); off += c.length; }
+
+  mediaStream.getTracks().forEach((t) => t.stop());
+  audioContext.close();
+  audioContext = null;
+
+  el('record').textContent = '● Start recording';
+  el('record').classList.remove('recording');
+
+  const seconds = total / contextRate;
+  if (seconds < MIN_SECONDS) {
+    el('status').textContent = `discarded: only ${seconds.toFixed(1)}s (< ${MIN_SECONDS}s minimum)`;
+    return;
+  }
+
+  const meta = {
+    type: el('type').value,
+    songId: el('type').value === 'genuine' ? sanitize(el('songId').value) : (el('songId').value || undefined),
+    songTitle: el('songTitle').value || undefined,
+    probeKind: el('type').value === 'probe' ? el('probeKind').value : undefined,
+    section: el('section').value,
+    hummer: el('hummer').value || 'unknown',
+    take: parseInt(el('take').value, 10) || 1,
+  };
+  if (meta.type === 'genuine' && (!el('songId').value || !el('songTitle').value)) {
+    el('status').textContent = 'discarded: genuine queries need Song ID and Song title';
+    return;
+  }
+
+  const resampled = resampleLinear(all, contextRate, TARGET_RATE);
+  const wav = encodeWav16Mono(resampled, TARGET_RATE);
+  const file = filename(meta);
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(wav);
+  a.download = file.replace('queries/', '');
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  const entry = {
+    file,
+    type: meta.type,
+    songId: meta.type === 'genuine' ? meta.songId : undefined,
+    songTitle: meta.songTitle,
+    probeKind: meta.probeKind,
+    section: meta.section,
+    hummer: meta.hummer,
+    take: meta.take,
+    durationSeconds: Math.round(seconds * 10) / 10,
+    captureSettings,
+  };
+  saveEntries([...entries(), entry]);
+  el('status').textContent = `saved ${file} (${seconds.toFixed(1)}s → 16kHz mono WAV)`;
+  el('take').value = String(meta.take + 1);
+}
+
+el('record').addEventListener('click', () => {
+  if (recording) stop();
+  else start().catch((err) => { el('status').textContent = `mic error: ${err.message}`; });
+});
+
+el('export').addEventListener('click', () => {
+  const list = entries();
+  const songs = [];
+  const seen = new Set();
+  for (const e of list) {
+    if (e.type === 'genuine' && e.songId && !seen.has(e.songId)) {
+      seen.add(e.songId);
+      songs.push({ id: e.songId, title: e.songTitle || e.songId });
+    }
+  }
+  const manifest = {
+    version: 1,
+    songs,
+    queries: list.map(({ songTitle, durationSeconds, ...q }) => q),
+  };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }));
+  a.download = 'manifest.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+el('clear').addEventListener('click', () => {
+  if (confirm('Clear the recorded-queries list? (Downloaded WAVs are not deleted.)')) saveEntries([]);
+});
+
+renderList();
+</script>
+</body>
+</html>
