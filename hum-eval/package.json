@@ -1,0 +1,15 @@
+{
+  "name": "@parleap/hum-eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Frozen evaluation harness for hum-to-search. Every matcher (v2 baseline, v3 candidates) is measured against the same frozen test set and gates.",
+  "scripts": {
+    "test": "node --test",
+    "type-check": "node ../node_modules/typescript/bin/tsc --noEmit",
+    "selftest": "node cli/selftest.ts",
+    "eval": "node cli/evaluate.ts",
+    "export:v2-fingerprints": "node cli/export-v2-fingerprints.ts",
+    "recorder": "npx serve recorder"
+  }
+}

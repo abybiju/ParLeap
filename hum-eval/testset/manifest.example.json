@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "songs": [
+    { "id": "oceans", "title": "Oceans (Where Feet May Fail)" },
+    { "id": "what-a-beautiful-name", "title": "What A Beautiful Name" }
+  ],
+  "queries": [
+    {
+      "file": "queries/genuine__oceans__chorus__aby__take1.wav",
+      "type": "genuine",
+      "songId": "oceans",
+      "section": "chorus",
+      "hummer": "aby",
+      "take": 1,
+      "captureSettings": { "echoCancellation": false, "noiseSuppression": false, "autoGainControl": false, "sampleRate": 48000 }
+    },
+    {
+      "file": "queries/imposter__happy-birthday__chorus__aby__take1.wav",
+      "type": "imposter",
+      "section": "chorus",
+      "hummer": "aby",
+      "take": 1
+    },
+    {
+      "file": "queries/probe__noise__aby__take1.wav",
+      "type": "probe",
+      "probeKind": "noise"
+    },
+    {
+      "file": "queries/probe__transposed__oceans.wav",
+      "type": "probe",
+      "probeKind": "transposed",
+      "sourceSongId": "oceans"
+    }
+  ]
+}
