@@ -50,3 +50,8 @@ backend/.env
 # Supabase
 .supabase/
 
+# ML models (downloaded on first boot to a Railway volume; never committed)
+backend/models/
+*.onnx
+*.tar.bz2
+
