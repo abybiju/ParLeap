@@ -29,6 +29,8 @@ export interface UseAudioCaptureReturn {
   requestPermission: () => Promise<boolean>;
   /** Smart Bible Listen: open STT window and send ring-buffer catch-up. No-op when not in PCM or smartListenEnabled. */
   requestSttWindow?: () => void;
+  /** Manual backstop: ask the backend to open a Smart Listen window now (works regardless of browser buffering). */
+  captureVerseNow?: () => void;
 }
 
 export interface AudioCaptureOptions {
@@ -616,6 +618,23 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   }, [usePcm, smartListenEnabled, wsClient, concatBase64Chunks]);
 
   /**
+   * Manual backstop for the backend wake-word detector: open a Smart Listen window now.
+   * Unlike requestSttWindow this is NOT gated on browser buffering — PCM already streams
+   * continuously to the backend, so we just ask it to open the ElevenLabs window immediately.
+   */
+  const captureVerseNow = useCallback(() => {
+    if (!usePcm || !sessionActiveRef.current || !wsClient.isConnected()) {
+      return;
+    }
+    const catchUp = concatBase64Chunks(ringBufferRef.current); // usually empty in backend-KWS mode
+    const msg: SttWindowRequestMessage = {
+      type: 'STT_WINDOW_REQUEST',
+      payload: catchUp ? { catchUpAudio: catchUp } : {},
+    };
+    wsClient.send(msg);
+  }, [usePcm, wsClient, concatBase64Chunks]);
+
+  /**
    * Stop recording
    */
   const stop = useCallback(() => {
@@ -693,5 +712,6 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     resume,
     requestPermission,
     ...(smartListenEnabled && usePcm ? { requestSttWindow } : {}),
+    ...(usePcm ? { captureVerseNow } : {}),
   };
 }
