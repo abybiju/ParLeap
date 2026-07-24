@@ -2,17 +2,19 @@ name: Keep Supabase Active
 
 on:
   schedule:
-    # Daily keep-alive so the project stays above Supabase inactivity thresholds
+    # Daily. A bare REST ping returns 200 without touching Postgres, so it does
+    # NOT reset Supabase's inactivity timer — we perform a real table write/read
+    # instead. Daily cadence gives ~7x margin under the free-tier ~7-day pause.
     - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
-    name: Send Supabase keep-alive ping
+    name: Write Supabase keep-alive heartbeat
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ping Supabase REST API
+      - name: Write + read heartbeat row (real DB activity)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -22,16 +24,37 @@ jobs:
             exit 1
           fi
 
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-            "$SUPABASE_URL/rest/v1/")
+          AUTH=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          TABLE="$SUPABASE_URL/rest/v1/heartbeat_pings"
 
-          echo "Supabase ping response code: $HTTP_CODE"
-
-          if [ "$HTTP_CODE" -eq 200 ]; then
-            echo "Successfully pinged Supabase project. Project kept active."
-          else
-            echo "::error::Supabase ping failed with HTTP $HTTP_CODE"
+          # 1. INSERT a row — a genuine Postgres write that resets the inactivity timer.
+          INSERT_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$TABLE" \
+            "${AUTH[@]}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d '{"source":"github-actions-keepalive"}')
+          echo "Insert response code: $INSERT_CODE"
+          if [ "$INSERT_CODE" != "201" ]; then
+            echo "::error::Heartbeat INSERT failed with HTTP $INSERT_CODE (expected 201)."
             exit 1
           fi
+          echo "Heartbeat row written — project kept active."
+
+          # 2. READ it back — a real query, and confirms the write landed.
+          READ_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${AUTH[@]}" \
+            "$TABLE?select=created_at,source&order=created_at.desc&limit=1")
+          echo "Read-back response code: $READ_CODE"
+          if [ "$READ_CODE" != "200" ]; then
+            echo "::error::Heartbeat read-back failed with HTTP $READ_CODE (expected 200)."
+            exit 1
+          fi
+
+          # 3. Prune rows older than 30 days so the table can't grow unbounded.
+          #    Non-fatal: keep-alive already succeeded above.
+          CUTOFF=$(date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          PRUNE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            "$TABLE?created_at=lt.$CUTOFF" \
+            "${AUTH[@]}" \
+            -H "Prefer: return=minimal") || true
+          echo "Prune (rows < $CUTOFF) response code: $PRUNE_CODE"
