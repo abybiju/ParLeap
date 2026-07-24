@@ -46,6 +46,7 @@ import {
   findVerseByContent,
 } from '../services/bibleEmbeddingService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured, isGoogleCloudConfigured } from '../services/sttService';
+import { createBibleTriggerDetector, type BibleTriggerDetector } from '../services/bibleTriggerService';
 import {
   findBestMatch,
   findBestMatchAcrossAllSongs,
@@ -180,6 +181,10 @@ const SONG_LOCK_LOW_THRESHOLD = parseNumberEnv(process.env.SONG_LOCK_LOW_THRESHO
 const BIBLE_SMART_LISTEN_KILL_SWITCH = process.env.BIBLE_SMART_LISTEN_ENABLED === 'false';
 /** STT window duration (ms) after wake word. Default 30s. */
 const BIBLE_SMART_LISTEN_WINDOW_MS = parseNumberEnv(process.env.BIBLE_SMART_LISTEN_WINDOW_MS, 30000);
+/** Backend wake-word detector (KWS + optional Whisper net). Set 'false' to keep windows purely client-driven. */
+const BIBLE_DETECTOR_ENABLED = process.env.BIBLE_DETECTOR_ENABLED !== 'false';
+/** Cooldown between detector-opened windows (ms). */
+const BIBLE_DETECTOR_COOLDOWN_MS = parseNumberEnv(process.env.BIBLE_DETECTOR_COOLDOWN_MS, 30000);
 
 function preprocessBufferText(text: string, maxWords?: number): string {
   const limit = Math.max(1, maxWords ?? parseNumberEnv(process.env.MATCHER_PREPROCESS_MAX_WORDS, 22));
@@ -382,6 +387,10 @@ interface SessionState {
   sttWindowActiveUntil?: number;
   /** Client opted in to Smart Listen; gate only applies when true. Default false so we never drop audio unless client enables it. */
   smartListenEnabled?: boolean;
+  /** Backend wake-word detector (KWS + optional Whisper net); lazy-inited while the Bible smart-listen gate is in standby. */
+  bibleTriggerDetector?: BibleTriggerDetector;
+  /** Timestamp of the last detector-opened window (per-trigger cooldown). */
+  lastDetectorTriggerAt?: number;
 }
 
 
@@ -945,6 +954,14 @@ function handleUpdateEventSettings(
       session.bibleFollowRef = null;
       session.bibleFollowHit = undefined;
     }
+  }
+
+  // If the Bible smart-listen gate is no longer active (Bible mode off or smart listen off),
+  // tear down the wake-word detector so it stops consuming CPU.
+  if (session.bibleTriggerDetector && !shouldUseSmartListenGate(session)) {
+    session.bibleTriggerDetector.stop();
+    session.bibleTriggerDetector = undefined;
+    console.log('[bibleTrigger] detector stopped (smart-listen gate inactive)');
   }
 
   const settingsMessage: EventSettingsUpdatedMessage = {
@@ -2149,7 +2166,10 @@ async function handleAudioData(
           session.sttWindowActiveUntil = undefined;
           console.log('[STT] Smart Listen: STT window expired');
         }
-        return; // Drop audio until client sends STT_WINDOW_REQUEST and window is active
+        // Standby: instead of dropping the audio, fork it to the backend wake-word detector.
+        // A spotted scripture cue (or the Whisper net) opens the window via onTrigger.
+        feedBibleDetector(ws, session, data);
+        return;
       }
     }
 
@@ -2330,6 +2350,63 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
       }
     } catch (err) {
       console.warn('[STT] Smart Listen: failed to write catch-up audio:', err);
+    }
+  }
+}
+
+/**
+ * Feed one base64 PCM chunk to the per-session backend wake-word detector, lazy-initing it.
+ * Runs only while the Bible smart-listen gate is in standby (window closed). A spotted scripture
+ * cue — or the optional Whisper net — calls openSmartListenWindowFromDetector via onTrigger.
+ */
+function feedBibleDetector(ws: WebSocket, session: SessionState, base64Pcm: string): void {
+  if (!BIBLE_DETECTOR_ENABLED) return;
+  if (!session.bibleTriggerDetector) {
+    try {
+      session.bibleTriggerDetector = createBibleTriggerDetector({
+        sessionId: session.sessionId,
+        eventId: session.eventId,
+        onTrigger: (catchUpBase64) => openSmartListenWindowFromDetector(ws, session, catchUpBase64),
+      });
+      console.log(`[bibleTrigger] detector started for event ${session.eventId.slice(0, 8)}`);
+    } catch (err) {
+      console.error('[bibleTrigger] failed to start detector:', err);
+      return;
+    }
+  }
+  session.bibleTriggerDetector.feed(base64Pcm);
+}
+
+/**
+ * Open the ElevenLabs Smart Listen window from a backend detector trigger (server-side wake).
+ * Mirrors handleSttWindowRequest minus the client-request guards; seeds the burst with catch-up PCM.
+ */
+function openSmartListenWindowFromDetector(ws: WebSocket, session: SessionState, catchUpBase64: string): void {
+  if (BIBLE_SMART_LISTEN_KILL_SWITCH) return;
+  if (!session.isActive) return;
+  if (!shouldUseSmartListenGate(session)) return;
+  if (!isElevenLabsConfigured) return;
+
+  const now = Date.now();
+  // Don't reopen while a window is already active.
+  if (session.sttWindowActiveUntil && now <= session.sttWindowActiveUntil) return;
+  // Per-trigger cooldown (the detector enforces its own short gap too).
+  if (session.lastDetectorTriggerAt && now - session.lastDetectorTriggerAt < BIBLE_DETECTOR_COOLDOWN_MS) return;
+  session.lastDetectorTriggerAt = now;
+
+  if (!session.sttStream) {
+    initElevenLabsStream(session, ws);
+  }
+  session.sttWindowActiveUntil = now + BIBLE_SMART_LISTEN_WINDOW_MS;
+  console.log('[STT] Smart Listen: window opened by backend wake-word detector');
+
+  if (catchUpBase64 && session.sttStream) {
+    try {
+      session.sttStream.write(catchUpBase64);
+      const bytes = Math.floor((catchUpBase64.length * 3) / 4);
+      console.log(`[STT] Smart Listen: detector catch-up ~${bytes} bytes`);
+    } catch (err) {
+      console.warn('[STT] Smart Listen: detector catch-up write failed:', err);
     }
   }
 }
@@ -2976,6 +3053,10 @@ export function handleClose(ws: WebSocket): void {
   const session = sessions.get(ws);
   if (session) {
     console.log(`[WS] Connection closed, cleaning up session: ${session.sessionId}`);
+    if (session.bibleTriggerDetector) {
+      session.bibleTriggerDetector.stop();
+      session.bibleTriggerDetector = undefined;
+    }
     if (session.sttStream) {
       session.sttStream.end();
     }
