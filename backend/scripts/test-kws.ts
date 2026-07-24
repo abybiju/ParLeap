@@ -82,17 +82,22 @@ for (const wav of wavs) {
   // Feed in realistic ~100ms chunks, decoding as frames become ready (streaming behaviour).
   const CHUNK = 1600;
   const hits: string[] = [];
+  let pos = 0;
   const drain = () => {
     while (spotter.isReady(stream)) {
       spotter.decode(stream);
       const r = spotter.getResult(stream);
       if (r && r.keyword && r.keyword !== '') {
-        hits.push(r.keyword);
+        const t = pos / 16000;
+        const mm = Math.floor(t / 60);
+        const ss = Math.floor(t % 60);
+        hits.push(`${r.keyword}@${mm}:${String(ss).padStart(2, '0')}`);
         spotter.reset(stream);
       }
     }
   };
   for (let i = 0; i < samples.length; i += CHUNK) {
+    pos = Math.min(i + CHUNK, samples.length);
     stream.acceptWaveform({ sampleRate: 16000, samples: samples.subarray(i, i + CHUNK) });
     drain();
   }
