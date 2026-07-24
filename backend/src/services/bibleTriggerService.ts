@@ -50,7 +50,9 @@ const DEFAULT_MODEL = process.env.BIBLE_DETECTOR_MODEL || 'base.en';
 const DEFAULT_MODELS_DIR = process.env.BIBLE_DETECTOR_MODELS_DIR || path.resolve(process.cwd(), 'models');
 /** Option A default: keep the un-cued Whisper net on unless explicitly disabled. */
 const WHISPER_NET = process.env.BIBLE_DETECTOR_WHISPER_NET !== 'false';
-const DEFAULT_KWS_MODELS_DIR = process.env.BIBLE_KWS_MODELS_DIR || DEFAULT_MODELS_DIR;
+// KWS lives in its own subdir: the worker finds its encoder by /encoder.*int8.onnx/, which
+// would also match the Whisper encoder if they shared a directory.
+const DEFAULT_KWS_MODELS_DIR = process.env.BIBLE_KWS_MODELS_DIR || path.join(DEFAULT_MODELS_DIR, 'kws');
 const DEFAULT_KWS_KEYWORDS_FILE =
   process.env.BIBLE_KWS_KEYWORDS_FILE || path.join(DEFAULT_KWS_MODELS_DIR, 'keywords.txt');
 const KWS_THRESHOLD = process.env.BIBLE_KWS_THRESHOLD ? Number(process.env.BIBLE_KWS_THRESHOLD) : undefined;

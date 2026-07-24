@@ -1,0 +1,32 @@
+# Smart Bible wake phrases — natural scripture-introduction cues the preacher already says.
+# Tokenize into keywords.txt with:
+#   python3 backend/scripts/kws_text2token.py <bpe.model> backend/config/bible-wake-phrases.txt > backend/config/bible-keywords.txt
+#
+# Format per line:  PHRASE  <tab> boost(optional)  <tab> threshold(optional)
+#   - boost     : per-phrase score bump (higher = easier to fire). Blank = model default.
+#   - threshold : per-phrase min score (higher = fewer false wakes). Blank = global default.
+# False wakes are cheap by design (they open an invisible window; parseForProject still gates
+# the screen), so bias toward recall. TUNE thresholds against a real recorded service (Phase #7).
+#
+# Lines starting with '#' and blank lines are ignored.
+
+# --- Distinctive multi-word cues (specific → low threshold / default) ---
+OPEN YOUR BIBLE TO
+OPEN YOUR BIBLES TO
+OPEN YOUR BIBLES
+TURN WITH ME TO
+TURN IN YOUR BIBLE TO
+TURN IN YOUR BIBLES TO
+LET US TURN TO
+LET'S TURN TO
+THE BOOK OF
+THE GOSPEL OF
+IT IS WRITTEN
+OUR SCRIPTURE READING
+THE SCRIPTURE READS
+HEAR THE WORD OF THE LORD
+
+# --- Shorter / more common cues (raise threshold to curb false wakes) ---
+TURN TO		0.35
+READING FROM		0.35
+FOUND IN		0.40

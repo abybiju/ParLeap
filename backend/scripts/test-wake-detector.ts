@@ -32,7 +32,7 @@ let fired = false;
 const detector = createBibleTriggerDetector({
   sessionId: 'test-session',
   eventId: 'test-event-0001',
-  whisperNet: false, // prove the KWS wake path alone
+  whisperNet: process.env.WHISPER_NET === 'true', // set WHISPER_NET=true to also boot the Whisper net
   kwsModelsDir: kwsModelDir,
   kwsKeywordsFile: keywordsFile,
   onTrigger: (catchUpBase64) => {

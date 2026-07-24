@@ -122,3 +122,32 @@ The backend rate-limits WebSocket messages to prevent abuse. **Audio** is limite
 | `WS_RATE_LIMIT_AUDIO` | 400 | Max AUDIO_DATA messages per window. PCM at ~15 chunks/sec needs ~150 in 10s; 400 allows headroom and bursts. |
 
 If you see "Rate limited" in the Operator app during normal singing, ensure the backend is using the default 400 for `WS_RATE_LIMIT_AUDIO` (or set it explicitly, e.g. 500). Do not set it below ~180 for continuous STT.
+
+### 7. Smart Bible Wake Word (backend)
+
+In **Bible mode** the backend runs an always-on keyword-spotter (sherpa `KeywordSpotter`) over the
+mic. A spotted scripture cue ("turn to…", "open your bibles to…") opens a short accurate ElevenLabs
+window, then `parseForProject()` decides the screen. Song/lyric mode is unaffected (continuous STT).
+Models are **not** in the image — run `backend/scripts/download-models.sh` on first boot to fetch them
+to a persistent volume (Railway Volume), then start the backend.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `BIBLE_SMART_LISTEN_ENABLED` | (unset = on) | Master kill switch. Set `false` to force continuous STT and disable the detector everywhere. |
+| `BIBLE_SMART_LISTEN_WINDOW_MS` | 30000 | Accurate-capture window length (ms) after a wake. |
+| `BIBLE_DETECTOR_ENABLED` | (unset = on) | Backend wake-word detector on/off. `false` = windows only open from the client (manual button). |
+| `BIBLE_DETECTOR_WHISPER_NET` | `true` | **Option A.** Keep the VAD+Whisper un-cued safety net on (catches references with no lead-in). `false` = wake-word only (lighter CPU, misses un-cued refs). |
+| `BIBLE_DETECTOR_MODEL` | `base.en` | Whisper model for the net (`tiny.en`/`base.en`/`small.en`). |
+| `BIBLE_DETECTOR_MODELS_DIR` | `/data/models` | Volume dir for Whisper + `silero_vad.onnx`. |
+| `BIBLE_KWS_MODELS_DIR` | `<MODELS_DIR>/kws` | Keyword-spotter model dir (own subdir — encoder filename collides with Whisper otherwise). |
+| `BIBLE_KWS_KEYWORDS_FILE` | `<KWS_DIR>/keywords.txt` | Tokenized wake vocabulary. Generated from `backend/config/bible-wake-phrases.txt` via `backend/scripts/kws_text2token.py`; the download script installs it. |
+| `BIBLE_KWS_THRESHOLD` | model default | Global wake sensitivity (higher = fewer false wakes). Per-phrase `#threshold` in the keywords file overrides. |
+| `BIBLE_KWS_SCORE` | model default | Global wake boost (higher = easier to fire). |
+| `BIBLE_DETECTOR_COOLDOWN_MS` | 30000 | Min gap between detector-opened windows. |
+
+**First-boot (Railway):** run the model download once, then start:
+```bash
+bash backend/scripts/download-models.sh && npm --workspace=backend start
+```
+False wakes are cheap by design (an invisible window; `parseForProject` still gates the screen), so
+bias `keywords.txt` toward recall and tune thresholds against a **real recorded service**.
