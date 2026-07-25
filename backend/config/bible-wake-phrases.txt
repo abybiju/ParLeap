@@ -19,16 +19,16 @@ TURN IN YOUR BIBLE TO
 TURN IN YOUR BIBLES TO
 LET US TURN TO
 LET'S TURN TO
-THE BOOK OF
 IT IS WRITTEN
 OUR SCRIPTURE READING
 THE SCRIPTURE READS
 HEAR THE WORD OF THE LORD
 
 # --- Shorter / more common cues (raise threshold to curb false wakes) ---
-# Real-audio bench (2 sermons, 2026-07-24): TURN TO caught "turn to Acts chapter 9" (true);
-# FOUND IN fired on "he found a man" (false) → threshold raised. THE GOSPEL OF was REMOVED —
-# it fired twice on the theological "the gospel" ("the gospel was for the Jews"), never on a book.
+# Real-audio bench (2026-07-24): TURN TO caught "turn to Acts chapter 9" (true); FOUND IN fired on
+# "he found a man" (false) → threshold raised. THE GOSPEL OF removed — fired on theological "the
+# gospel" ("the gospel was for the Jews"). THE BOOK OF removed — on the Acts 13 sermon it fired 6×,
+# all on mentions ("the book of Acts/Mark/Galatians"), never on an intro; the Whisper net covers intros.
 TURN TO		0.35
 READING FROM		0.35
 FOUND IN		0.55

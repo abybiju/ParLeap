@@ -210,7 +210,11 @@ function coreOf(value: string): string {
 const BOOK_INDEX: BookEntry[] = BIBLE_BOOKS.map((book) => {
   const surfaces = Array.from(
     new Set([book.name.toLowerCase(), book.abbrev.toLowerCase(), ...book.aliases.map((a) => a.toLowerCase())])
-  );
+    // Drop <=2-char surfaces. This is a SPOKEN-reference parser: nobody says "is"/"am"/"he" for
+    // Isaiah/Amos/Hebrews, yet those aliases exact-match common English words and a stray following
+    // number fabricates a reference (e.g. "Barnabas is first" -> Isaiah 1:1). 2-char forms are for
+    // typed input, add zero speech value, and no test depends on them.
+  ).filter((s) => s.length >= 3);
   for (const s of surfaces) ALIAS_MAP.set(s, book.name);
   const ordinalMatch = /^([123])\s+/.exec(book.name);
   return {
@@ -368,7 +372,7 @@ function matchBook(tokens: string[]): { match: BookMatch; endIndex: number } | n
       const slice = tokens.slice(i, i + w);
       if (slice.every((t) => /^\d+$/.test(t))) continue; // numbers aren't book names
       const phrase = slice.join(' ');
-      if (phrase.length < 2) continue;
+      if (phrase.length < 3) continue; // a 2-char spoken word ("is"/"am"/"he") fuzzy-matching a book (Isa/Amos/Heb) is noise
       const ord = phraseOrdinalAt(i);
       for (const entry of BOOK_INDEX) {
         if (entry.ordinal !== 0 && ord !== 0 && entry.ordinal !== ord) continue; // hard ordinal reject
