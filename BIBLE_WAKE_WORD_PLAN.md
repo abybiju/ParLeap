@@ -1,9 +1,35 @@
 # Smart Bible Wake-Word — Implementation Plan
 
-**Status:** 📐 Planned (ready to implement)
+**Status:** ✅ Built & verified offline — on PR #3 (branch `feat/bible-wake-word`); live E2E + Railway deploy pending.
 **Date:** 2026-07-24
 **Depends on:** Phase B (merged — `bibleReferenceParser.ts`), Phase C core (merged — `bibleTriggerWorker.ts` / `bibleTriggerService.ts`, built but unwired).
 **Builds on:** `SMART_BIBLE_LISTEN_V2_PLAN.md`, `PHASE_C_DETECTOR_DESIGN.md`.
+
+---
+
+## ✅ Implementation status & findings (2026-07-24)
+
+**Shipped on branch `feat/bible-wake-word` (PR #3) — all phases built & verified offline; live E2E + deploy pending.**
+
+### What was built
+- **Worker** (`bibleTriggerWorker.ts`): sherpa `KeywordSpotter` always-on + optional VAD+Whisper net (`BIBLE_DETECTOR_WHISPER_NET`, Option A default on).
+- **Service** (`bibleTriggerService.ts`): a keyword hit and the Whisper `shouldTrigger` net converge on one `fireTrigger()` (cooldown + 30s catch-up).
+- **Handler** (`handler.ts`): Bible standby forks PCM to a per-session detector (`feedBibleDetector`) instead of dropping it; `openSmartListenWindowFromDetector()` opens the ElevenLabs burst server-side; teardown on gate-off/close.
+- **Frontend** (`OperatorHUD.tsx`, `useAudioCapture.ts`): backend Smart Listen on **only in Bible mode** (song mode stays continuous); PCM streams continuously; the fragile Web Speech wake retired; **"Capture verse"** manual backstop added.
+- **Models/ops**: `download-models.sh` (idempotent first-boot fetch to a Railway volume), `bible-keywords.txt` (generated from `bible-wake-phrases.txt` via `kws_text2token.py`), env docs in `ENV_SETUP_STT.md`.
+- **Bench tools**: `test-kws.ts`, `test-wake-detector.ts`, `transcribe-full.ts`, `transcribe-clip.ts`, `bench-parser.ts`, `probe-parser.ts`.
+
+### Real-audio bench findings (3 sermons incl. the user's Acts 13, yt `A_SIzrYof9w`)
+- **The wake words are NOT the engine — the Whisper net is.** Real preachers *state* references without a "turn to" cue, so KWS catches almost nothing. **Option A validated; Option B (wake-word only) would fail on real preaching.**
+- **Tuning**: removed `THE GOSPEL OF` (fired on the theological "the gospel") and `THE BOOK OF` (fired only on mentions — "the book of Acts/Mark/Galatians"). KWS false-fires on the Acts 13 sermon dropped **7 → 1**.
+- **Precision bug fixed**: stopword aliases `is`→Isaiah / `am`→Amos / `he`→Hebrews exact/fuzzy-matched, and a stray following number fabricated a reference (`"Barnabas is first"` → Isaiah 1:1). Fix: this is a *spoken* parser, so drop ≤2-char book surfaces + skip <3-char fuzzy source phrases (`bibleReferenceParser.ts`). Result on the Acts 13 sermon: the **only** thing that projects is Acts 13 (the real study) — phantom gone.
+
+### Verified (offline)
+Backend + frontend type-check + eslint clean; **51/51 parser jest tests pass**; KWS spots custom cues; the full Option-A worker boots on the downloaded model layout and wakes; the wired backend server boots cleanly. **NOT yet done: live E2E (needs the ElevenLabs key + a live event + a mic/projector) and Railway deploy.**
+
+### Live-test runbook
+- **Local (fastest):** set `ELEVENLABS_API_KEY` + `STT_PROVIDER=elevenlabs` in `backend/.env`; `BIBLE_DETECTOR_MODELS_DIR=backend/models bash backend/scripts/download-models.sh`; start backend with `BIBLE_SMART_LISTEN_ENABLED=true BIBLE_DETECTOR_MODELS_DIR=backend/models`; start frontend with `NEXT_PUBLIC_STT_PROVIDER=elevenlabs`; open operator → **Bible Mode ON**; say *"Galatians 2:20 says…"* (should project) and *"Barnabas is first"* (should project nothing).
+- **Railway:** mount a Volume at `/data`; env `BIBLE_SMART_LISTEN_ENABLED=true`, `BIBLE_DETECTOR_MODELS_DIR=/data/models`, `BIBLE_DETECTOR_WHISPER_NET=true`; start command `bash backend/scripts/download-models.sh && node dist/index.js`; deploy PR #3.
 
 ---
 
