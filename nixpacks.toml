@@ -2,7 +2,7 @@
 # Ensures devDependencies (TypeScript, @types/*) are installed so backend build succeeds.
 # ffmpeg needed for audio processing (hum-to-search).
 [phases.setup]
-aptPkgs = ["ffmpeg"]
+aptPkgs = ["ffmpeg", "bzip2"]
 
 [phases.install]
 cmds = ["npm ci --include=dev"]
