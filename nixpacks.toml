@@ -11,4 +11,6 @@ cmds = ["npm ci --include=dev"]
 cmds = ["npm run build --workspace=@parleap/backend"]
 
 [start]
-cmd = "cd /app/backend && npm start"
+# Model download is idempotent (skips files already on the /data volume) and non-fatal:
+# if it fails, the backend still boots — bible wake degrades, song mode is unaffected.
+cmd = "cd /app/backend && (bash scripts/download-models.sh || echo '[models] download failed; bible wake degraded') && npm start"
