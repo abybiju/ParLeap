@@ -30,6 +30,13 @@ export interface BibleTriggerOptions {
   onTrigger: (catchUpAudioBase64: string) => void;
   model?: string;
   modelsDir?: string;
+  /** Keep the VAD+Whisper un-cued safety net on (Option A). Default true. */
+  whisperNet?: boolean;
+  /** Keyword-spotter model dir + tokenized keywords file (defaults from env). */
+  kwsModelsDir?: string;
+  kwsKeywordsFile?: string;
+  kwsThreshold?: number;
+  kwsScore?: number;
 }
 
 /** 30s of 16k mono s16le. */
@@ -41,6 +48,15 @@ const ROLLING_WORDS = 20;
 
 const DEFAULT_MODEL = process.env.BIBLE_DETECTOR_MODEL || 'base.en';
 const DEFAULT_MODELS_DIR = process.env.BIBLE_DETECTOR_MODELS_DIR || path.resolve(process.cwd(), 'models');
+/** Option A default: keep the un-cued Whisper net on unless explicitly disabled. */
+const WHISPER_NET = process.env.BIBLE_DETECTOR_WHISPER_NET !== 'false';
+// KWS lives in its own subdir: the worker finds its encoder by /encoder.*int8.onnx/, which
+// would also match the Whisper encoder if they shared a directory.
+const DEFAULT_KWS_MODELS_DIR = process.env.BIBLE_KWS_MODELS_DIR || path.join(DEFAULT_MODELS_DIR, 'kws');
+const DEFAULT_KWS_KEYWORDS_FILE =
+  process.env.BIBLE_KWS_KEYWORDS_FILE || path.join(DEFAULT_KWS_MODELS_DIR, 'keywords.txt');
+const KWS_THRESHOLD = process.env.BIBLE_KWS_THRESHOLD ? Number(process.env.BIBLE_KWS_THRESHOLD) : undefined;
+const KWS_SCORE = process.env.BIBLE_KWS_SCORE ? Number(process.env.BIBLE_KWS_SCORE) : undefined;
 
 export function createBibleTriggerDetector(opts: BibleTriggerOptions): BibleTriggerDetector {
   const ring: Buffer[] = [];
@@ -56,15 +72,33 @@ export function createBibleTriggerDetector(opts: BibleTriggerOptions): BibleTrig
       model: opts.model || DEFAULT_MODEL,
       modelsDir: opts.modelsDir || DEFAULT_MODELS_DIR,
       vadThreshold: process.env.BIBLE_DETECTOR_VAD_THRESHOLD ? Number(process.env.BIBLE_DETECTOR_VAD_THRESHOLD) : undefined,
+      whisperNet: opts.whisperNet ?? WHISPER_NET,
+      kwsModelsDir: opts.kwsModelsDir || DEFAULT_KWS_MODELS_DIR,
+      kwsKeywordsFile: opts.kwsKeywordsFile || DEFAULT_KWS_KEYWORDS_FILE,
+      kwsThreshold: opts.kwsThreshold ?? KWS_THRESHOLD,
+      kwsScore: opts.kwsScore ?? KWS_SCORE,
     },
     // Under tsx (dev) the worker is a .ts file loaded in CJS mode; in prod it is compiled .js.
     ...(isTs ? { execArgv: ['--require', 'tsx/cjs'] } : {}),
   });
 
-  worker.on('message', (msg: { type: string; text?: string; message?: string; model?: string }) => {
+  const fireTrigger = (reason: string): void => {
+    const now = Date.now();
+    if (now - lastTriggerAt < MIN_TRIGGER_GAP_MS) return;
+    lastTriggerAt = now;
+    rolling = []; // reset so the same phrase does not immediately re-fire
+    const catchUp = Buffer.concat(ring).toString('base64');
+    console.log(`[bibleTrigger] ${opts.eventId.slice(0, 8)} triggered (${reason}); catch-up ${ringBytes} bytes`);
+    opts.onTrigger(catchUp);
+  };
+
+  worker.on('message', (msg: { type: string; text?: string; keyword?: string; message?: string; model?: string }) => {
     if (stopped) return;
-    if (msg.type === 'segment' && msg.text) {
-      // Lightweight decision runs on the main thread; the worker only does heavy native ASR/VAD.
+    if (msg.type === 'keyword' && msg.keyword) {
+      // Primary wake: a scripture cue phrase was spotted (cheap, near-zero CPU).
+      fireTrigger(`kws:${msg.keyword}`);
+    } else if (msg.type === 'segment' && msg.text) {
+      // Un-cued safety net: transcribe + fuzzy shouldTrigger over a rolling word window.
       const words = msg.text.split(/\s+/).filter(Boolean);
       if (words.length === 0) return;
       rolling.push(...words);
@@ -72,13 +106,7 @@ export function createBibleTriggerDetector(opts: BibleTriggerOptions): BibleTrig
       if (rolling.length < 2) return; // ignore lone words (cuts music false-opens)
       const windowText = rolling.join(' ');
       if (!shouldTrigger(windowText)) return;
-      const now = Date.now();
-      if (now - lastTriggerAt < MIN_TRIGGER_GAP_MS) return;
-      lastTriggerAt = now;
-      rolling = []; // reset so the same phrase does not immediately re-fire
-      const catchUp = Buffer.concat(ring).toString('base64');
-      console.log(`[bibleTrigger] ${opts.eventId.slice(0, 8)} triggered on: "${windowText}" (catch-up ${ringBytes} bytes)`);
-      opts.onTrigger(catchUp);
+      fireTrigger(`whisper:"${windowText}"`);
     } else if (msg.type === 'ready') {
       console.log(`[bibleTrigger] detector ready (model=${msg.model}) for event ${opts.eventId.slice(0, 8)}`);
     } else if (msg.type === 'error') {

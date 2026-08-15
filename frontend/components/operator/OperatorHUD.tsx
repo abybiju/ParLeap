@@ -93,10 +93,12 @@ export function OperatorHUD({
   const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
   const lastSentSmartListenRef = useRef<boolean | null>(null);
 
-  // Smart Listen standby: when true, frontend buffers audio until wake word or "Listen now".
-  // We use continuous STT for both songs (Bible OFF) and Bible mode (Bible ON) so lyric/verse matching always works.
-  // Set to false so STT is never in standby; the master toggle is kept for future "pause STT" or optional standby.
+  // The browser always streams PCM continuously (effectiveSmartListen=false → no browser-side
+  // buffering). Wake gating now lives on the BACKEND: we tell it Smart Listen is on ONLY in
+  // Bible mode, so its KeywordSpotter detector opens the ElevenLabs window on a scripture cue.
+  // Song/lyric mode keeps continuous STT (backendSmartListen=false).
   const effectiveSmartListen = false;
+  const backendSmartListen = smartListenMasterEnabled && bibleMode;
 
   const audioCapture = useAudioCapture({
     usePcm: sttProvider === 'elevenlabs' || sttProvider === 'google',
@@ -116,19 +118,20 @@ export function OperatorHUD({
     console.log(`[OperatorHUD] Item activated: index=${index} kind=${kind} → effectiveSmartListen=${effectiveSmartListen}`);
   };
 
-  // Keep backend smartListenEnabled synced with the effective runtime gate state.
+  // Backend gate: activate Smart Listen (the KeywordSpotter wake detector) ONLY in Bible mode.
+  // Song mode stays continuous. The browser streams PCM continuously either way.
   useEffect(() => {
     if (sessionStatus !== 'active') {
       lastSentSmartListenRef.current = null;
       return;
     }
-    if (lastSentSmartListenRef.current === effectiveSmartListen) {
+    if (lastSentSmartListenRef.current === backendSmartListen) {
       return;
     }
-    updateEventSettings({ smartListenEnabled: effectiveSmartListen });
-    lastSentSmartListenRef.current = effectiveSmartListen;
-    console.log(`[OperatorHUD] Smart Listen sync: effective=${effectiveSmartListen}, master=${smartListenMasterEnabled}, bibleMode=${bibleMode}`);
-  }, [sessionStatus, effectiveSmartListen, smartListenMasterEnabled, bibleMode, updateEventSettings]);
+    updateEventSettings({ smartListenEnabled: backendSmartListen });
+    lastSentSmartListenRef.current = backendSmartListen;
+    console.log(`[OperatorHUD] Smart Listen (backend) sync: enabled=${backendSmartListen}, master=${smartListenMasterEnabled}, bibleMode=${bibleMode}`);
+  }, [sessionStatus, backendSmartListen, smartListenMasterEnabled, bibleMode, updateEventSettings]);
 
   // Environment variable validation and debug logging
   useEffect(() => {
@@ -635,7 +638,17 @@ export function OperatorHUD({
               </button>
             </div>
           )}
-          {/* Smart Listen: when On, STT is standby until wake word (only when Bible Mode is off; Bible Mode on = always listening for verses) */}
+          {/* Manual backstop: open a capture window now if the wake-word detector misses a reference. */}
+          {bibleMode && sessionStatus === 'active' && (
+            <button
+              onClick={() => audioCapture.captureVerseNow?.()}
+              title="Manually open a Smart Listen capture window now (backstop for the wake-word detector)"
+              className="hidden lg:flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200 hover:bg-emerald-500/20 transition-colors"
+            >
+              Capture verse
+            </button>
+          )}
+          {/* Smart Listen master toggle. Bible Mode on = backend wake-word detector gates STT; off = continuous. */}
           <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
             <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Smart Listen</span>
             <button
