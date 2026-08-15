@@ -28,6 +28,8 @@ export interface BibleTriggerOptions {
   eventId: string;
   /** Called when a probable reference is heard; arg is base64 catch-up PCM to seed the burst. */
   onTrigger: (catchUpAudioBase64: string) => void;
+  /** Called when a CLOSE_* mode command keyword ("close bible") is spotted. */
+  onCloseCommand?: () => void;
   model?: string;
   modelsDir?: string;
   /** Keep the VAD+Whisper un-cued safety net on (Option A). Default true. */
@@ -95,6 +97,15 @@ export function createBibleTriggerDetector(opts: BibleTriggerOptions): BibleTrig
   worker.on('message', (msg: { type: string; text?: string; keyword?: string; message?: string; model?: string }) => {
     if (stopped) return;
     if (msg.type === 'keyword' && msg.keyword) {
+      // CLOSE_* keywords are mode commands ("close bible" → back to songs), not wake cues.
+      if (msg.keyword.startsWith('CLOSE_')) {
+        const now = Date.now();
+        if (now - lastTriggerAt < MIN_TRIGGER_GAP_MS) return;
+        lastTriggerAt = now;
+        console.log(`[bibleTrigger] ${opts.eventId.slice(0, 8)} close command (kws:${msg.keyword})`);
+        opts.onCloseCommand?.();
+        return;
+      }
       // Primary wake: a scripture cue phrase was spotted (cheap, near-zero CPU).
       fireTrigger(`kws:${msg.keyword}`);
     } else if (msg.type === 'segment' && msg.text) {
