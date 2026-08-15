@@ -1,5 +1,15 @@
 # Deploying Smart Bible Wake Word (PR #3) to Railway
 
+> **STATUS 2026-08-15: DEPLOYED AND LIVE.** Volume + env in place, models on the
+> volume, `[models] ready` in boot logs, live "open Bible" fire confirmed. Two
+> runbook corrections learned during the deploy: (1) the Railway dashboard
+> **Custom Start Command overrides** nixpacks.toml/railway.toml — the download is
+> wired there as `bash backend/scripts/download-models.sh; npm run start
+> --workspace=@parleap/backend` (parser rejects `(…)` subshells; `;` keeps it
+> non-fatal); (2) the runtime image needed **bzip2** in `nixpacks.toml` aptPkgs
+> for the .tar.bz2 model archives. Voice mode switching (open/close bible)
+> shipped after in PR #4. See SESSION_2026-08-15_LIVE_E2E_AND_BIBLE_WAKE_DEPLOY.md.
+
 Turns Bible mode from "continuous paid ElevenLabs STT" into "free local wake detection,
 paid STT only in short windows after a scripture cue." Song/lyric mode is untouched
 (continuous STT is the lyric-following engine).
