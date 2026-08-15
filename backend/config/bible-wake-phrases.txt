@@ -18,6 +18,10 @@ OPEN YOUR BIBLES
 # Boosted so a clearly spoken "open Bible" reliably fires.
 OPEN BIBLE	2.0
 OPEN THE BIBLE	2.0
+# Mode commands: CLOSE_* labels switch the session back to song mode (bibleTriggerService
+# routes them to onCloseCommand instead of opening an STT window).
+CLOSE BIBLE	2.0
+CLOSE THE BIBLE	2.0
 TURN WITH ME TO
 TURN IN YOUR BIBLE TO
 TURN IN YOUR BIBLES TO

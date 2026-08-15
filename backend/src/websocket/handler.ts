@@ -47,6 +47,7 @@ import {
 } from '../services/bibleEmbeddingService';
 import { transcribeAudioChunk, createStreamingRecognition, sttProvider, isElevenLabsConfigured, isGoogleCloudConfigured } from '../services/sttService';
 import { createBibleTriggerDetector, type BibleTriggerDetector } from '../services/bibleTriggerService';
+import { detectBibleVoiceCommand } from '../services/bibleVoiceCommands';
 import {
   findBestMatch,
   findBestMatchAcrossAllSongs,
@@ -391,6 +392,8 @@ interface SessionState {
   bibleTriggerDetector?: BibleTriggerDetector;
   /** Timestamp of the last detector-opened window (per-trigger cooldown). */
   lastDetectorTriggerAt?: number;
+  /** Timestamp of the last voice-driven bible/song mode switch (anti-flap cooldown). */
+  lastVoiceModeSwitchAt?: number;
 }
 
 
@@ -982,37 +985,7 @@ function handleUpdateEventSettings(
 
   if (previousBibleMode && !session.bibleMode) {
     session.allowBackwardUntil = Date.now() + 20000;
-    const currentSong = session.songs[session.currentSongIndex];
-    if (currentSong) {
-      let slideLines: string[] = [];
-      let slideText = '';
-      if (currentSong.slides && session.currentSlideIndex < currentSong.slides.length) {
-        const slide = currentSong.slides[session.currentSlideIndex];
-        slideLines = slide.lines;
-        slideText = slide.slideText;
-      } else if (currentSong.lines[session.currentSlideIndex]) {
-        slideLines = [currentSong.lines[session.currentSlideIndex]];
-        slideText = slideLines[0];
-      }
-
-      if (slideLines.length > 0) {
-        const displayMsg: DisplayUpdateMessage = {
-          type: 'DISPLAY_UPDATE',
-          payload: {
-            lineText: slideLines[0],
-            slideText,
-            slideLines,
-            slideIndex: session.currentSlideIndex,
-            songId: currentSong.id,
-            songTitle: currentSong.title,
-            isAutoAdvance: false,
-            currentItemIndex: session.currentItemIndex,
-          },
-          timing: createTiming(receivedAt, processingStart),
-        };
-        broadcastToEvent(session.eventId, displayMsg);
-      }
-    }
+    broadcastCurrentSongSlide(session, receivedAt, processingStart);
   }
 }
 
@@ -1033,6 +1006,83 @@ function broadcastEventSettingsUpdated(session: SessionState): void {
     timing: createTiming(now, now),
   };
   broadcastToEvent(session.eventId, msg);
+}
+
+/** Re-broadcast the current song slide (used when leaving Bible mode so displays return to lyrics). */
+function broadcastCurrentSongSlide(session: SessionState, receivedAt: number, processingStart: number): void {
+  const currentSong = session.songs[session.currentSongIndex];
+  if (!currentSong) return;
+  let slideLines: string[] = [];
+  let slideText = '';
+  if (currentSong.slides && session.currentSlideIndex < currentSong.slides.length) {
+    const slide = currentSong.slides[session.currentSlideIndex];
+    slideLines = slide.lines;
+    slideText = slide.slideText;
+  } else if (currentSong.lines[session.currentSlideIndex]) {
+    slideLines = [currentSong.lines[session.currentSlideIndex]];
+    slideText = slideLines[0];
+  }
+  if (slideLines.length === 0) return;
+  const displayMsg: DisplayUpdateMessage = {
+    type: 'DISPLAY_UPDATE',
+    payload: {
+      lineText: slideLines[0],
+      slideText,
+      slideLines,
+      slideIndex: session.currentSlideIndex,
+      songId: currentSong.id,
+      songTitle: currentSong.title,
+      isAutoAdvance: false,
+      currentItemIndex: session.currentItemIndex,
+    },
+    timing: createTiming(receivedAt, processingStart),
+  };
+  broadcastToEvent(session.eventId, displayMsg);
+}
+
+/** Voice-driven mode switches must not flap on cumulative STT text repeating a command. */
+const VOICE_MODE_SWITCH_COOLDOWN_MS = 5000;
+
+/** Flip the session out of Bible mode (voice command or song-item activation) and stop the detector. */
+function exitBibleMode(session: SessionState, reason: string): void {
+  if (!session.bibleMode) return;
+  session.bibleMode = false;
+  session.bibleFollow = false;
+  session.bibleFollowRef = null;
+  session.bibleFollowHit = undefined;
+  session.sttWindowActiveUntil = undefined;
+  session.lastVoiceModeSwitchAt = Date.now();
+  if (session.bibleTriggerDetector) {
+    session.bibleTriggerDetector.stop();
+    session.bibleTriggerDetector = undefined;
+    console.log('[bibleTrigger] detector stopped (bible mode exited)');
+  }
+  broadcastEventSettingsUpdated(session);
+  console.log(`[WS] 📖→🎵 Bible mode OFF (${reason}) — continuous lyric STT resumes`);
+}
+
+/** Flip the session into Bible mode (voice command or Bible-item activation). */
+function enterBibleMode(session: SessionState, reason: string, holdWindow: boolean): void {
+  if (session.bibleMode) return;
+  const now = Date.now();
+  session.bibleMode = true;
+  session.smartListenEnabled = true;
+  session.lastVoiceModeSwitchAt = now;
+  if (holdWindow) {
+    // The continuous stream is already open; keep it as the capture window so a reference
+    // spoken right after the command is transcribed. The gate then closes it into standby.
+    session.sttWindowActiveUntil = now + BIBLE_SMART_LISTEN_WINDOW_MS;
+  }
+  broadcastEventSettingsUpdated(session);
+  console.log(`[WS] 🎵→📖 Bible mode ON (${reason})`);
+}
+
+/** True while the anti-flap cooldown blocks another voice-driven switch. */
+function voiceModeSwitchOnCooldown(session: SessionState): boolean {
+  return (
+    session.lastVoiceModeSwitchAt !== undefined &&
+    Date.now() - session.lastVoiceModeSwitchAt < VOICE_MODE_SWITCH_COOLDOWN_MS
+  );
 }
 
 /** Runs Bible path in background so song matching is never blocked. */
@@ -1547,6 +1597,17 @@ async function handleTranscriptionResult(
         `[WS] 🔄 Matcher recovery: no strong match for ${transcriptNow - lastStrongMatchAt}ms, ` +
           `allowing backward search for ${MATCH_RECOVERY_WINDOW_MS}ms`
       );
+    }
+
+    // Spoken mode commands: "open bible" ↔ "close bible". Cumulative STT text can contain
+    // both, so the later occurrence wins; a short cooldown stops repeat text from flapping.
+    const voiceCommand = detectBibleVoiceCommand(trimmedText);
+    if (voiceCommand === 'OPEN' && !session.bibleMode && !voiceModeSwitchOnCooldown(session)) {
+      enterBibleMode(session, `voice: "${trimmedText.slice(-60)}"`, true);
+    } else if (voiceCommand === 'CLOSE' && session.bibleMode && !voiceModeSwitchOnCooldown(session)) {
+      exitBibleMode(session, 'voice: "close bible"');
+      session.allowBackwardUntil = Date.now() + 20000;
+      broadcastCurrentSongSlide(session, receivedAt, processingStart);
     }
 
     // Route by Bible Mode only (setlist order does not control live matching).
@@ -2367,6 +2428,13 @@ function feedBibleDetector(ws: WebSocket, session: SessionState, base64Pcm: stri
         sessionId: session.sessionId,
         eventId: session.eventId,
         onTrigger: (catchUpBase64) => openSmartListenWindowFromDetector(ws, session, catchUpBase64),
+        onCloseCommand: () => {
+          if (voiceModeSwitchOnCooldown(session)) return;
+          const now = Date.now();
+          exitBibleMode(session, 'kws: "close bible"');
+          session.allowBackwardUntil = now + 20000;
+          broadcastCurrentSongSlide(session, now, now);
+        },
       });
       console.log(`[bibleTrigger] detector started for event ${session.eventId.slice(0, 8)}`);
     } catch (err) {
@@ -2478,6 +2546,7 @@ async function handleManualOverride(
     broadcastEventSettingsUpdated(session);
 
     if (targetItem.type === 'BIBLE' && targetItem.bibleRef) {
+      enterBibleMode(session, 'bible item activated', false);
       const placeholderId = `bible:${targetItem.bibleRef.replace(/\s+/g, ':')}`;
       const displayUpdate: DisplayUpdateMessage = {
         type: 'DISPLAY_UPDATE',
@@ -2501,6 +2570,7 @@ async function handleManualOverride(
     if (targetItem.type === 'SONG' && targetItem.songId) {
       const targetSongIndex = session.songs.findIndex((s) => s.id === targetItem.songId);
       if (targetSongIndex >= 0) {
+        exitBibleMode(session, 'song item activated');
         const targetSong = session.songs[targetSongIndex];
         session.currentSongIndex = targetSongIndex;
         session.currentSlideIndex = 0;
@@ -2595,6 +2665,13 @@ async function handleManualOverride(
       };
       broadcastToEvent(session.eventId, displayUpdate);
       console.log(`[WS] Manual override: GO_TO_ITEM -> Announcement (item ${itemIndex}, slide 0)`);
+      return;
+    }
+    if (targetItem.type === 'BIBLE') {
+      // Generic Bible segment (no pre-specified ref): arm Bible mode; the wake detector
+      // and spoken references decide what projects.
+      enterBibleMode(session, 'bible item activated', false);
+      console.log(`[WS] Manual override: GO_TO_ITEM -> Bible segment (item ${itemIndex})`);
       return;
     }
     return;
@@ -2754,7 +2831,16 @@ async function handleManualOverride(
   // Handle advancing to BIBLE or MEDIA item (NEXT_SLIDE/PREV_SLIDE when target is non-SONG)
   if (itemChanged && setlistItems.length > 0) {
     const targetItem = setlistItems[newItemIndex];
+    if (targetItem.type === 'BIBLE' && !targetItem.bibleRef) {
+      session.currentItemIndex = newItemIndex;
+      session.isAutoFollowing = false;
+      session.suggestedSongSwitch = undefined;
+      enterBibleMode(session, 'bible item activated', false);
+      console.log(`[WS] Manual override: ${action} -> Bible segment (item ${newItemIndex})`);
+      return;
+    }
     if (targetItem.type === 'BIBLE' && targetItem.bibleRef) {
+      enterBibleMode(session, 'bible item activated', false);
       session.currentItemIndex = newItemIndex;
       session.isAutoFollowing = false;
       session.suggestedSongSwitch = undefined;
@@ -2857,6 +2943,11 @@ async function handleManualOverride(
   session.currentSongIndex = newSongIndex;
   session.currentSlideIndex = newSlideIndex;
   session.currentLineIndex = newLineIndex;
+
+  // Navigating onto a SONG item ends any Bible interlude — lyric following resumes.
+  if (itemChanged) {
+    exitBibleMode(session, 'song item activated');
+  }
 
   // Update song context for matching
   if (songChanged) {
