@@ -14,6 +14,10 @@
 OPEN YOUR BIBLE TO
 OPEN YOUR BIBLES TO
 OPEN YOUR BIBLES
+# Deliberate operator/preacher command phrases (spoken as an explicit trigger, Siri-style).
+# Boosted so a clearly spoken "open Bible" reliably fires.
+OPEN BIBLE	2.0
+OPEN THE BIBLE	2.0
 TURN WITH ME TO
 TURN IN YOUR BIBLE TO
 TURN IN YOUR BIBLES TO
