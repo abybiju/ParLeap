@@ -71,6 +71,24 @@ export interface SttWindowRequestMessage {
   };
 }
 
+/** Minimal verse address used by Bible operator controls. */
+export interface BibleRefPayload {
+  book: string;
+  chapter: number;
+  verse: number;
+  endVerse?: number;
+}
+
+/** Operator controls for Bible mode; detection keeps running underneath. */
+export interface BibleControlMessage {
+  type: 'BIBLE_CONTROL';
+  payload: {
+    action: 'NEXT_VERSE' | 'PREV_VERSE' | 'HOLD' | 'UNDO' | 'PROJECT_REF';
+    hold?: boolean;
+    ref?: BibleRefPayload;
+  };
+}
+
 export type ClientMessage =
   | StartSessionMessage
   | UpdateEventSettingsMessage
@@ -78,7 +96,8 @@ export type ClientMessage =
   | ManualOverrideMessage
   | StopSessionMessage
   | PingMessage
-  | SttWindowRequestMessage;
+  | SttWindowRequestMessage
+  | BibleControlMessage;
 
 // ============================================
 // Server-to-Client Message Types
@@ -254,6 +273,32 @@ export interface PongMessage {
   timing?: TimingMetadata;
 }
 
+export type BibleProjectionSource = 'spoken' | 'content' | 'follow' | 'manual' | 'undo' | 'setlist';
+
+export interface BibleCandidate extends BibleRefPayload {
+  label: string;
+  score: number;
+  text?: string;
+}
+
+/** Operator-facing Bible engine state: what's on screen, why, how confident, alternatives, hold/undo. */
+export interface BibleStatusMessage {
+  type: 'BIBLE_STATUS';
+  payload: {
+    currentRef: BibleRefPayload | null;
+    currentLabel: string | null;
+    source: BibleProjectionSource | null;
+    confidence: number | null;
+    candidates: BibleCandidate[];
+    hold: boolean;
+    canUndo: boolean;
+    historyDepth: number;
+    heldDetection: BibleCandidate | null;
+    updatedAt: number;
+  };
+  timing?: TimingMetadata;
+}
+
 export type ServerMessage =
   | SessionStartedMessage
   | EventSettingsUpdatedMessage
@@ -263,7 +308,8 @@ export type ServerMessage =
   | SongSuggestionMessage
   | SessionEndedMessage
   | ErrorMessage
-  | PongMessage;
+  | PongMessage
+  | BibleStatusMessage;
 
 // ============================================
 // Type Guards
@@ -312,4 +358,8 @@ export function isErrorMessage(msg: ServerMessage): msg is ErrorMessage {
 
 export function isPongMessage(msg: ServerMessage): msg is PongMessage {
   return msg.type === 'PONG';
+}
+
+export function isBibleStatusMessage(msg: ServerMessage): msg is BibleStatusMessage {
+  return msg.type === 'BIBLE_STATUS';
 }

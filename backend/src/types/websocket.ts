@@ -100,6 +100,29 @@ export interface SttWindowRequestMessage {
   };
 }
 
+/** Minimal verse address used by Bible operator controls. */
+export interface BibleRefPayload {
+  book: string;
+  chapter: number;
+  verse: number;
+  endVerse?: number;
+}
+
+/**
+ * BIBLE_CONTROL - Operator controls for Bible mode (manual override that keeps detection running).
+ * NEXT_VERSE / PREV_VERSE step the projected verse; HOLD pins the current verse (detections are
+ * queued as candidates, not projected); UNDO re-projects the previous verse; PROJECT_REF projects
+ * a specific reference (e.g. a candidate chip).
+ */
+export interface BibleControlMessage {
+  type: 'BIBLE_CONTROL';
+  payload: {
+    action: 'NEXT_VERSE' | 'PREV_VERSE' | 'HOLD' | 'UNDO' | 'PROJECT_REF';
+    hold?: boolean;
+    ref?: BibleRefPayload;
+  };
+}
+
 /**
  * All client-to-server message types
  */
@@ -110,7 +133,8 @@ export type ClientMessage =
   | ManualOverrideMessage
   | StopSessionMessage
   | PingMessage
-  | SttWindowRequestMessage;
+  | SttWindowRequestMessage
+  | BibleControlMessage;
 
 // ============================================
 // Server-to-Client Message Types
@@ -318,6 +342,39 @@ export interface PongMessage {
   timing?: TimingMetadata;
 }
 
+export type BibleProjectionSource = 'spoken' | 'content' | 'follow' | 'manual' | 'undo' | 'setlist';
+
+export interface BibleCandidate extends BibleRefPayload {
+  /** Display label, e.g. "John 3:16" */
+  label: string;
+  /** 0..1 detector/matcher score */
+  score: number;
+  /** Short preview of the verse text (may be empty when not fetched) */
+  text?: string;
+}
+
+/**
+ * BIBLE_STATUS - Operator-facing Bible engine state: what is on screen, why, how confident,
+ * what else it considered, and whether the operator has pinned (held) the verse.
+ */
+export interface BibleStatusMessage {
+  type: 'BIBLE_STATUS';
+  payload: {
+    currentRef: BibleRefPayload | null;
+    currentLabel: string | null;
+    source: BibleProjectionSource | null;
+    confidence: number | null;
+    candidates: BibleCandidate[];
+    hold: boolean;
+    canUndo: boolean;
+    historyDepth: number;
+    /** Set while HOLD is on and a detection was queued instead of projected. */
+    heldDetection: BibleCandidate | null;
+    updatedAt: number;
+  };
+  timing?: TimingMetadata;
+}
+
 /**
  * All server-to-client message types
  */
@@ -330,7 +387,8 @@ export type ServerMessage =
   | SongSuggestionMessage
   | SessionEndedMessage
   | ErrorMessage
-  | PongMessage;
+  | PongMessage
+  | BibleStatusMessage;
 
 // ============================================
 // Message Type Guards
@@ -371,4 +429,8 @@ export function isPingMessage(msg: ClientMessage): msg is PingMessage {
 
 export function isSttWindowRequestMessage(msg: ClientMessage): msg is SttWindowRequestMessage {
   return msg.type === 'STT_WINDOW_REQUEST';
+}
+
+export function isBibleControlMessage(msg: ClientMessage): msg is BibleControlMessage {
+  return msg.type === 'BIBLE_CONTROL';
 }

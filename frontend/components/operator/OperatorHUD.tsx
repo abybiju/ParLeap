@@ -9,7 +9,16 @@ import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
 import { useBibleWakeWord } from '@/lib/hooks/useBibleWakeWord';
 import { createClient } from '@/lib/supabase/client';
 import { getProjectorFontClass, getProjectorFontIdOrDefault, projectorFonts } from '@/lib/projectorFonts';
-import { isSessionStartedMessage, isSessionEndedMessage, isSongSuggestionMessage, isErrorMessage, isEventSettingsUpdatedMessage } from '@/lib/websocket/types';
+import {
+  isSessionStartedMessage,
+  isSessionEndedMessage,
+  isSongSuggestionMessage,
+  isErrorMessage,
+  isEventSettingsUpdatedMessage,
+  isBibleStatusMessage,
+  type BibleCandidate,
+} from '@/lib/websocket/types';
+import { BibleControls, type BibleStatus } from './BibleControls';
 import { GhostText } from './GhostText';
 import { MatchStatus } from './MatchStatus';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -76,6 +85,7 @@ export function OperatorHUD({
     goToSlide,
     lastMessage,
     connect,
+    sendMessage,
   } = useWebSocket(false); // Don't auto-connect - manual start only
 
   const sttProvider = (process.env.NEXT_PUBLIC_STT_PROVIDER || 'mock').toLowerCase();
@@ -89,6 +99,7 @@ export function OperatorHUD({
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(initialBackgroundImageUrl);
   const [backgroundMediaType, setBackgroundMediaType] = useState<string | null>(initialBackgroundMediaType);
   const [bibleFollow, setBibleFollow] = useState<boolean>(false);
+  const [bibleStatus, setBibleStatus] = useState<BibleStatus | null>(null);
   const [bibleVersions, setBibleVersions] = useState<BibleVersionOption[]>([]);
   const [smartListenMasterEnabled, setSmartListenMasterEnabled] = useState<boolean>(true);
   const lastSentSmartListenRef = useRef<boolean | null>(null);
@@ -499,6 +510,54 @@ export function OperatorHUD({
     toast.info('Passage follow paused');
   };
 
+  // Bible operator controls (detection keeps running underneath).
+  const bibleControlsEnabled = bibleMode && sessionStatus === 'active';
+  const bibleNextVerse = useCallback(() => sendMessage({ type: 'BIBLE_CONTROL', payload: { action: 'NEXT_VERSE' } }), [sendMessage]);
+  const biblePrevVerse = useCallback(() => sendMessage({ type: 'BIBLE_CONTROL', payload: { action: 'PREV_VERSE' } }), [sendMessage]);
+  const bibleUndo = useCallback(() => sendMessage({ type: 'BIBLE_CONTROL', payload: { action: 'UNDO' } }), [sendMessage]);
+  const bibleToggleHold = useCallback(() => {
+    const next = !(bibleStatus?.hold ?? false);
+    sendMessage({ type: 'BIBLE_CONTROL', payload: { action: 'HOLD', hold: next } });
+    toast.info(next ? 'Holding verse — detection keeps listening' : 'Hold released');
+  }, [bibleStatus?.hold, sendMessage]);
+  const bibleProject = useCallback(
+    (c: BibleCandidate) =>
+      sendMessage({ type: 'BIBLE_CONTROL', payload: { action: 'PROJECT_REF', ref: { book: c.book, chapter: c.chapter, verse: c.verse, endVerse: c.endVerse } } }),
+    [sendMessage]
+  );
+
+  useEffect(() => {
+    if (lastMessage && isBibleStatusMessage(lastMessage)) {
+      setBibleStatus(lastMessage.payload);
+    }
+  }, [lastMessage]);
+
+  // Keyboard: ←/→ prev/next (verse in Bible mode, slide otherwise); H hold; U undo (Bible mode only).
+  useEffect(() => {
+    if (sessionStatus !== 'active') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevSlide();
+      } else if (bibleMode && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault();
+        bibleToggleHold();
+      } else if (bibleMode && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+        bibleUndo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sessionStatus, bibleMode, nextSlide, prevSlide, bibleToggleHold, bibleUndo]);
+
   const projectorFontClass = getProjectorFontClass(projectorFontId);
 
   const sessionLabel =
@@ -797,7 +856,18 @@ export function OperatorHUD({
           <div className="flex-1 p-4 overflow-y-auto">
             <CurrentSlideDisplay fontClassName={projectorFontClass} />
           </div>
-          <div className="px-4 pb-4">
+          <div className="px-4 pb-4 space-y-3">
+            {bibleMode && (
+              <BibleControls
+                status={bibleStatus}
+                disabled={!bibleControlsEnabled}
+                onPrev={biblePrevVerse}
+                onNext={bibleNextVerse}
+                onToggleHold={bibleToggleHold}
+                onUndo={bibleUndo}
+                onProject={bibleProject}
+              />
+            )}
             <NextSlidePreview />
           </div>
 

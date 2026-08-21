@@ -481,3 +481,22 @@ describe('WebSocket Handler', () => {
     });
   });
 });
+
+describe('BIBLE_CONTROL schema', () => {
+  it('accepts each action', () => {
+    for (const action of ['NEXT_VERSE', 'PREV_VERSE', 'HOLD', 'UNDO']) {
+      expect(validateClientMessage({ type: 'BIBLE_CONTROL', payload: { action } }).success).toBe(true);
+    }
+    expect(validateClientMessage({ type: 'BIBLE_CONTROL', payload: { action: 'HOLD', hold: true } }).success).toBe(true);
+    expect(
+      validateClientMessage({ type: 'BIBLE_CONTROL', payload: { action: 'PROJECT_REF', ref: { book: 'John', chapter: 3, verse: 16 } } }).success
+    ).toBe(true);
+  });
+
+  it('rejects unknown actions and malformed refs', () => {
+    expect(validateClientMessage({ type: 'BIBLE_CONTROL', payload: { action: 'FLY' } }).success).toBe(false);
+    expect(
+      validateClientMessage({ type: 'BIBLE_CONTROL', payload: { action: 'PROJECT_REF', ref: { book: '', chapter: 0, verse: 1 } } }).success
+    ).toBe(false);
+  });
+});

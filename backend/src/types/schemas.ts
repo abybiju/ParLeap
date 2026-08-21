@@ -68,6 +68,22 @@ export const SttWindowRequestSchema = z.object({
   }),
 });
 
+export const BibleControlSchema = z.object({
+  type: z.literal('BIBLE_CONTROL'),
+  payload: z.object({
+    action: z.enum(['NEXT_VERSE', 'PREV_VERSE', 'HOLD', 'UNDO', 'PROJECT_REF']),
+    hold: z.boolean().optional(),
+    ref: z
+      .object({
+        book: z.string().min(1).max(40),
+        chapter: z.number().int().min(1).max(150),
+        verse: z.number().int().min(1).max(176),
+        endVerse: z.number().int().min(1).max(176).optional(),
+      })
+      .optional(),
+  }),
+});
+
 /**
  * Combined schema for all client messages
  */
@@ -79,6 +95,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   StopSessionSchema,
   PingSchema,
   SttWindowRequestSchema,
+  BibleControlSchema,
 ]);
 
 // ============================================

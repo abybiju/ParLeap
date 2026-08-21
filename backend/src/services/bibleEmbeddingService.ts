@@ -136,6 +136,8 @@ export interface BibleRefForLookup {
 export interface VerseByContentMatch {
   ref: BibleRefForLookup;
   score: number;
+  /** Best few candidates (including the winner), highest score first — for operator display. */
+  topMatches: Array<{ ref: BibleRefForLookup; score: number }>;
 }
 
 /**
@@ -156,17 +158,9 @@ export async function findVerseByContent(
   if (!embeddings || embeddings.length !== texts.length) return null;
 
   const bufVec = embeddings[0];
-  let bestScore = minScore;
-  let bestIndex = -1;
-
-  for (let i = 0; i < candidates.length; i++) {
-    const score = cosineSimilarity(bufVec, embeddings[i + 1]);
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = i;
-    }
-  }
-
-  if (bestIndex < 0) return null;
-  return { ref: candidates[bestIndex].ref, score: bestScore };
+  const scored = candidates.map((c, i) => ({ ref: c.ref, score: cosineSimilarity(bufVec, embeddings[i + 1]) }));
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0];
+  if (!best || best.score <= minScore) return null;
+  return { ref: best.ref, score: best.score, topMatches: scored.slice(0, 3) };
 }
