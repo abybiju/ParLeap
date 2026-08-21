@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { EventEditSidebar } from './EventEditSidebar';
 import { SetlistView } from './SetlistView';
 import { SetlistLibrary } from './SetlistLibrary';
+import { BibleLogView } from './BibleLogView';
 import {
   addSongToEvent,
   addBibleToEvent,
@@ -35,7 +36,7 @@ interface EventEditWorkspaceProps {
   initialSetlist: SetlistItem[];
 }
 
-type WorkspaceView = 'setlist' | 'library';
+type WorkspaceView = 'setlist' | 'library' | 'bible-log';
 
 export function EventEditWorkspace({ event, initialSetlist }: EventEditWorkspaceProps) {
   const [activeView, setActiveView] = useState<WorkspaceView>('setlist');
@@ -235,6 +236,18 @@ export function EventEditWorkspace({ event, initialSetlist }: EventEditWorkspace
                   onAddAnnouncement={handleAddAnnouncement}
                 />
               </div>
+            </motion.div>
+          )}
+          {activeView === 'bible-log' && (
+            <motion.div
+              key="bible-log"
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.2 }}
+              className="min-w-0"
+            >
+              <BibleLogView eventId={eventId} />
             </motion.div>
           )}
         </AnimatePresence>

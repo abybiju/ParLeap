@@ -19,6 +19,7 @@ import {
   type BibleCandidate,
 } from '@/lib/websocket/types';
 import { BibleControls, type BibleStatus } from './BibleControls';
+import { BibleHistoryPanel } from './BibleHistoryPanel';
 import { GhostText } from './GhostText';
 import { MatchStatus } from './MatchStatus';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -831,6 +832,17 @@ export function OperatorHUD({
               <GhostText />
               <MatchStatus />
             </div>
+
+            {bibleMode && (
+              <div className="pt-2 border-t border-white/10">
+                <BibleHistoryPanel
+                  entries={bibleStatus?.recent ?? []}
+                  currentLabel={bibleStatus?.currentLabel ?? null}
+                  disabled={!bibleControlsEnabled}
+                  onProject={(e) => bibleProject({ book: e.book, chapter: e.chapter, verse: e.verse, endVerse: e.endVerse, label: e.label, score: e.confidence ?? 0 })}
+                />
+              </div>
+            )}
 
             <div className="pt-2 border-t border-white/10 space-y-3">
               <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">

@@ -66,3 +66,18 @@ range error / MANUAL_OVERRIDE routing / hold + undo) and schema cases in `websoc
 - Candidates for spoken references are a single entry (the parser returns one validated ref);
   richer alternatives arrive with plan item 4 (paraphrase as first-class trigger).
 - `BIBLE_STATUS` is in-memory only; plan item 2 (verse history / session log) persists it.
+
+## Session log / verse history (item 2, shipped 2026-08-21)
+
+- **Table** `public.bible_projection_log` — `supabase/migrations/026_bible_projection_log.sql`.
+  One row per projection *and* per held detection (`projected=false`): ref, version, `source`,
+  `confidence`, `transcript_snippet` (last ≤240 chars heard), `session_id`. Inserted by the backend
+  (service role) fire-and-forget in `appendBibleLog()`; a missing table logs one warning and the
+  live path is unaffected. RLS: users read/delete their own rows.
+- **Live panel** — `BibleHistoryPanel` in the HUD left column (Bible mode only): newest first,
+  time · ref · how (heard/words/auto/you/undo/held) · confidence; click to re-project. Fed by
+  `BIBLE_STATUS.recent` (last 25, in-memory — works even before the migration is applied).
+- **Post-service review** — event page → sidebar **Verse Log** (`BibleLogView`): totals
+  (shown / auto-detected % / operator / held), most-quoted books, per-session table with
+  transcript snippet, CSV export. This table is also the detection eval dataset:
+  `source`+`confidence`+`transcript_snippet` vs. what the operator corrected.

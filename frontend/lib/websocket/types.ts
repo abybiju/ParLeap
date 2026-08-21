@@ -281,6 +281,17 @@ export interface BibleCandidate extends BibleRefPayload {
   text?: string;
 }
 
+/** One session-log entry: a verse that was projected (or detected while held). */
+export interface BibleLogEntry extends BibleRefPayload {
+  id: string;
+  label: string;
+  versionAbbrev: string | null;
+  source: BibleProjectionSource;
+  confidence: number | null;
+  projected: boolean;
+  at: number;
+}
+
 /** Operator-facing Bible engine state: what's on screen, why, how confident, alternatives, hold/undo. */
 export interface BibleStatusMessage {
   type: 'BIBLE_STATUS';
@@ -294,6 +305,8 @@ export interface BibleStatusMessage {
     canUndo: boolean;
     historyDepth: number;
     heldDetection: BibleCandidate | null;
+    /** Most recent session-log entries, newest first. */
+    recent: BibleLogEntry[];
     updatedAt: number;
   };
   timing?: TimingMetadata;

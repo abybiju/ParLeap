@@ -20,7 +20,7 @@
 
 ## Plan to beat them (value/effort order)
 1. ✅ SHIPPED 2026-08-21 — Bible-mode operator controls: confidence + candidates, arrow prev/next, hold pin, undo. See `BIBLE_OPERATOR_CONTROLS.md`.
-2. Verse history / session log table + panel (doubles as eval dataset).
+2. ✅ SHIPPED 2026-08-21 — Verse history / session log: `bible_projection_log` (migration 026), HUD history panel with re-project, event "Verse Log" review view + CSV. See `BIBLE_OPERATOR_CONTROLS.md`.
 3. Sermon-notes → BIBLE setlist queue via bible-passage-reference-parser; follow logic prefers queued refs (fixes cross-chapter jumps).
 4. Paraphrase as first-class trigger with local embedding model (Qwen3-0.6B ONNX or similar); auto-project at high threshold, suggest below.
 5. Self-correction phrase handling in parser.

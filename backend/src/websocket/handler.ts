@@ -24,6 +24,7 @@ import {
   type BibleProjectionSource,
   type BibleRefPayload,
   type BibleControlMessage,
+  type BibleLogEntry,
   isStartSessionMessage,
   isUpdateEventSettingsMessage,
   isAudioDataMessage,
@@ -358,6 +359,8 @@ interface SessionState {
     candidates: BibleCandidate[];
     heldDetection: BibleCandidate | null;
   };
+  /** Session log of projected / held verses, newest first (also persisted to bible_projection_log). */
+  bibleLog?: BibleLogEntry[];
   songs: SongData[];
   setlistItems?: SetlistItemData[]; // Polymorphic setlist items
   currentSongIndex: number;
@@ -1111,6 +1114,65 @@ function voiceModeSwitchOnCooldown(session: SessionState): boolean {
 // ============================================
 
 const BIBLE_HISTORY_MAX = 50;
+const BIBLE_LOG_MAX = 200;
+const BIBLE_STATUS_RECENT = 25;
+let bibleLogPersistWarned = false;
+
+/**
+ * Append a session-log entry (in memory, newest first) and persist it fire-and-forget.
+ * Persistence failures (e.g. migration 026 not applied yet) never affect the live path.
+ */
+function appendBibleLog(
+  session: SessionState,
+  ref: { book: string; chapter: number; verse: number; endVerse?: number | null },
+  opts: { source: BibleProjectionSource; confidence: number | null; projected: boolean; versionAbbrev: string | null }
+): BibleLogEntry {
+  const entry: BibleLogEntry = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    book: ref.book,
+    chapter: ref.chapter,
+    verse: ref.verse,
+    endVerse: ref.endVerse ?? undefined,
+    label: bibleRefLabel(ref),
+    versionAbbrev: opts.versionAbbrev,
+    source: opts.source,
+    confidence: opts.confidence,
+    projected: opts.projected,
+    at: Date.now(),
+  };
+  const log = session.bibleLog ?? [];
+  log.unshift(entry);
+  if (log.length > BIBLE_LOG_MAX) log.length = BIBLE_LOG_MAX;
+  session.bibleLog = log;
+
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    const snippet = session.lastTranscriptText ? session.lastTranscriptText.slice(-240) : null;
+    void supabase
+      .from('bible_projection_log')
+      .insert({
+        user_id: session.userId,
+        event_id: session.eventId,
+        session_id: session.sessionId,
+        book: entry.book,
+        chapter: entry.chapter,
+        verse: entry.verse,
+        end_verse: entry.endVerse ?? null,
+        version_abbrev: entry.versionAbbrev,
+        source: entry.source,
+        confidence: entry.confidence,
+        projected: entry.projected,
+        transcript_snippet: snippet,
+      })
+      .then(({ error }) => {
+        if (error && !bibleLogPersistWarned) {
+          bibleLogPersistWarned = true;
+          console.warn(`[WS] bible_projection_log insert failed (is migration 026 applied?): ${error.message}`);
+        }
+      });
+  }
+  return entry;
+}
 
 function bibleRefLabel(ref: { book: string; chapter: number; verse: number; endVerse?: number | null }): string {
   return `${ref.book} ${ref.chapter}:${ref.verse}${ref.endVerse && ref.endVerse > ref.verse ? `-${ref.endVerse}` : ''}`;
@@ -1135,6 +1197,7 @@ function buildBibleStatusMessage(session: SessionState, receivedAt: number, proc
       canUndo: history.length > 0,
       historyDepth: history.length,
       heldDetection: session.bibleStatus?.heldDetection ?? null,
+      recent: (session.bibleLog ?? []).slice(0, BIBLE_STATUS_RECENT),
       updatedAt: Date.now(),
     },
     timing: createTiming(receivedAt, processingStart),
@@ -1194,6 +1257,12 @@ async function projectBibleVerse(session: SessionState, ref: BibleReference, opt
     candidates: opts.candidates ?? [],
     heldDetection: null,
   };
+  appendBibleLog(session, session.bibleFollowRef, {
+    source: opts.source,
+    confidence: opts.confidence ?? null,
+    projected: true,
+    versionAbbrev: verse.versionAbbrev ?? null,
+  });
 
   const verseLines = wrapBibleText(verse.text);
   const verseTitle = `${verse.book} ${verse.chapter}:${verse.verse} • ${verse.versionAbbrev}`;
@@ -1235,7 +1304,7 @@ async function projectBibleVerse(session: SessionState, ref: BibleReference, opt
 }
 
 /** Record a detection that HOLD prevented from projecting, so the operator can see/act on it. */
-function recordHeldDetection(session: SessionState, ref: BibleReference, score: number, text?: string): void {
+function recordHeldDetection(session: SessionState, ref: BibleReference, score: number, text?: string, source: BibleProjectionSource = 'spoken'): void {
   const held: BibleCandidate = { ...toBibleRefPayload(ref), label: bibleRefLabel(ref), score, text };
   session.bibleStatus = {
     source: session.bibleStatus?.source ?? null,
@@ -1243,6 +1312,7 @@ function recordHeldDetection(session: SessionState, ref: BibleReference, score: 
     candidates: session.bibleStatus?.candidates ?? [],
     heldDetection: held,
   };
+  appendBibleLog(session, ref, { source, confidence: score, projected: false, versionAbbrev: null });
   broadcastBibleStatus(session);
   console.log(`[WS] Bible: HOLD active — queued "${held.label}" (score ${(score * 100).toFixed(0)}%) instead of projecting`);
 }
@@ -1369,7 +1439,7 @@ async function runBiblePathAsync(
     const now = Date.now();
     if (session.lastBibleRefKey === refKey && session.lastBibleRefAt && now - session.lastBibleRefAt < 2500) return;
     if (session.bibleHold) {
-      recordHeldDetection(session, reference, detectionConfidence ?? 0, verse.text.slice(0, 120));
+      recordHeldDetection(session, reference, detectionConfidence ?? 0, verse.text.slice(0, 120), detectionSource);
       logTiming('bible path (held)', `bibleMs=${Date.now() - biblePathStart}`);
       return;
     }

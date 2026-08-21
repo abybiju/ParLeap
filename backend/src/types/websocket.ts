@@ -353,6 +353,18 @@ export interface BibleCandidate extends BibleRefPayload {
   text?: string;
 }
 
+/** One session-log entry: a verse that was projected (or detected while held). */
+export interface BibleLogEntry extends BibleRefPayload {
+  id: string;
+  label: string;
+  versionAbbrev: string | null;
+  source: BibleProjectionSource;
+  confidence: number | null;
+  /** false = HOLD was on; detection was queued, not shown */
+  projected: boolean;
+  at: number;
+}
+
 /**
  * BIBLE_STATUS - Operator-facing Bible engine state: what is on screen, why, how confident,
  * what else it considered, and whether the operator has pinned (held) the verse.
@@ -370,6 +382,8 @@ export interface BibleStatusMessage {
     historyDepth: number;
     /** Set while HOLD is on and a detection was queued instead of projected. */
     heldDetection: BibleCandidate | null;
+    /** Most recent session-log entries, newest first (capped). */
+    recent: BibleLogEntry[];
     updatedAt: number;
   };
   timing?: TimingMetadata;

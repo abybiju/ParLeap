@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LayoutList, Library, ImagePlus, X, Upload, Video } from 'lucide-react';
+import { ArrowLeft, LayoutList, Library, ImagePlus, X, Upload, Video, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EventFormCompact } from './EventFormCompact';
@@ -13,7 +13,7 @@ import { validateEventBackgroundFile, uploadEventBackgroundAsset } from '@/lib/u
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
-type EventEditView = 'setlist' | 'library';
+type EventEditView = 'setlist' | 'library' | 'bible-log';
 
 interface EventEditSidebarProps {
   event: {
@@ -211,6 +211,19 @@ export function EventEditSidebar({
         >
           <Library className="h-4 w-4 shrink-0" />
           Content Library
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange('bible-log')}
+          className={cn(
+            'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+            activeView === 'bible-log'
+              ? 'bg-orange-500/20 text-amber-200 border border-orange-500/50'
+              : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+          )}
+        >
+          <BookOpen className="h-4 w-4 shrink-0" />
+          Verse Log
         </button>
       </nav>
 

@@ -164,6 +164,11 @@ describe('BIBLE_CONTROL', () => {
     expect(lastOfType(sent, 'DISPLAY_UPDATE')?.payload.songId).toBe('bible:John:3:16');
     expect(lastOfType(sent, 'BIBLE_STATUS')?.payload).toMatchObject({ currentLabel: 'John 3:16', source: 'undo', canUndo: false, historyDepth: 0 });
 
+    // Session log: newest first, every projection recorded with its source.
+    const recent = lastOfType(sent, 'BIBLE_STATUS')?.payload.recent as Array<{ label: string; source: string; projected: boolean }>;
+    expect(recent.map((e) => `${e.label}/${e.source}`)).toEqual(['John 3:16/undo', 'John 3:17/manual', 'John 3:16/manual']);
+    expect(recent.every((e) => e.projected)).toBe(true);
+
     sent.length = 0;
     await send(socket, { type: 'BIBLE_CONTROL', payload: { action: 'UNDO' } });
     expect(lastOfType(sent, 'ERROR')?.payload.code).toBe('BIBLE_NO_HISTORY');
