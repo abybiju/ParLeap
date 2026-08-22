@@ -215,6 +215,7 @@ export function createStreamingRecognition(): {
     } = {};
     const pendingChunks: (Buffer | string)[] = [];
     let lastChunkSentAt = 0;
+    let quietEnd = false;
     const modelId = process.env.ELEVENLABS_MODEL_ID || 'scribe_v2_realtime';
     const languageCode = process.env.ELEVENLABS_LANGUAGE_CODE || 'en';
     const commitStrategy = process.env.ELEVENLABS_COMMIT_STRATEGY || 'vad';
@@ -286,12 +287,13 @@ export function createStreamingRecognition(): {
       'rate_limited',
       'queue_overflow',
       'resource_exhausted',
-      'session_time_limit_exceeded',
       'input_error',
       'chunk_size_exceeded',
-      'insufficient_audio_activity',
       'transcriber_error',
     ] as const;
+    // ElevenLabs ends the stream itself for these; they're routine (a Smart Listen window with no
+    // speech, a paused mic, a long session) — surface as a normal 'end', never as an operator error.
+    const ELEVENLABS_QUIET_END_TYPES = ['insufficient_audio_activity', 'session_time_limit_exceeded'] as const;
 
     socket.on('message', (data) => {
       try {
@@ -329,6 +331,13 @@ export function createStreamingRecognition(): {
           return;
         }
 
+        if (payload.message_type && ELEVENLABS_QUIET_END_TYPES.includes(payload.message_type as (typeof ELEVENLABS_QUIET_END_TYPES)[number])) {
+          console.log(`[STT] ElevenLabs ${payload.message_type} — stream ending quietly (no speech / time limit)`);
+          quietEnd = true;
+          if (socket.readyState === WebSocket.OPEN) socket.close();
+          return;
+        }
+
         if (payload.message_type && ELEVENLABS_ERROR_TYPES.includes(payload.message_type as (typeof ELEVENLABS_ERROR_TYPES)[number])) {
           const errMsg = payload.error ?? payload.message_type;
           console.error(`[STT] ❌ ElevenLabs ${payload.message_type}:`, errMsg);
@@ -351,7 +360,7 @@ export function createStreamingRecognition(): {
     });
 
     socket.on('close', (code, reason) => {
-      console.log(`[STT] ElevenLabs WebSocket closed: code=${code}, reason=${reason?.toString() || 'none'}`);
+      console.log(`[STT] ElevenLabs WebSocket closed: code=${code}, reason=${reason?.toString() || 'none'}${quietEnd ? ' (quiet end)' : ''}`);
       callbacks.end?.forEach((cb) => cb());
     });
 

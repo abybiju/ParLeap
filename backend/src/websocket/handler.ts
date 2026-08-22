@@ -4,8 +4,6 @@
  * Processes incoming WebSocket messages and manages session state
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import type { WebSocket } from 'ws';
 import { compareTwoStrings } from 'string-similarity';
 import {
@@ -80,15 +78,6 @@ function createTiming(receivedAt: number, processingStartAt: number): TimingMeta
     serverSentAt: now,
     processingTimeMs: now - processingStartAt,
   };
-}
-
-const DEBUG_LOG_PATH = path.join(__dirname, '..', '..', '..', '..', '.cursor', 'debug.log');
-function debugLog(payload: Record<string, unknown>): void {
-  try {
-    fs.appendFileSync(DEBUG_LOG_PATH, JSON.stringify(payload) + '\n');
-  } catch {
-    // ignore
-  }
 }
 
 function parseNumberEnv(value: string | undefined, fallback: number): number {
@@ -646,6 +635,12 @@ function initElevenLabsStream(session: SessionState, ws: WebSocket): void {
   stream.on('end', () => {
     console.log('[STT] ElevenLabs stream ended');
     clearSttStreamForAllWithStream(eventId, stream);
+    // If ElevenLabs ended the stream mid-window (no speech), drop back to standby so the
+    // wake-word detector re-arms instead of re-opening a paid stream into silence.
+    if (shouldUseSmartListenGate(session) && session.sttWindowActiveUntil !== undefined) {
+      session.sttWindowActiveUntil = undefined;
+      console.log('[STT] Smart Listen: window closed early (stream ended) — back to standby');
+    }
   });
   session.sttStream = stream;
   console.log('[STT] ✅ ElevenLabs stream initialized');
@@ -2793,22 +2788,6 @@ async function handleManualOverride(
         : `itemIndex ${itemIndex} out of range (0-${Math.max(0, setlistItems.length - 1)})`);
       return;
     }
-    // #region agent log
-    const h2Payload = {
-      location: 'handler.ts:GO_TO_ITEM',
-      message: 'GO_TO_ITEM target resolved',
-      data: {
-        itemIndex,
-        itemId,
-        targetType: targetItem.type,
-        mediaUrlSnippet: targetItem.type === 'MEDIA' ? String((targetItem as { mediaUrl?: string }).mediaUrl ?? '').slice(0, 80) : undefined,
-      },
-      timestamp: Date.now(),
-      hypothesisId: 'H2',
-    };
-    debugLog(h2Payload);
-    fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(h2Payload) }).catch(() => {});
-    // #endregion
     session.currentItemIndex = itemIndex; // Use client index so operator highlight is correct when setlists differ
     session.isAutoFollowing = false;
     session.suggestedSongSwitch = undefined;
@@ -2884,23 +2863,6 @@ async function handleManualOverride(
       const isImage = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(urlLower);
       const slideImageUrl = isImage ? mediaUrl : undefined;
       const slideVideoUrl = isVideo ? mediaUrl : undefined;
-      // #region agent log
-      const h3Payload = {
-        location: 'handler.ts:MEDIA payload',
-        message: 'MEDIA DISPLAY_UPDATE built',
-        data: {
-          mediaUrlSnippet: mediaUrl.slice(0, 80),
-          isImage,
-          isVideo,
-          hasSlideImageUrl: Boolean(slideImageUrl),
-          hasSlideVideoUrl: Boolean(slideVideoUrl),
-        },
-        timestamp: Date.now(),
-        hypothesisId: 'H3',
-      };
-      debugLog(h3Payload);
-      fetch('http://127.0.0.1:7243/ingest/6095c691-a3e3-4d5f-8474-ddde2a07b74e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(h3Payload) }).catch(() => {});
-      // #endregion
       const displayUpdate: DisplayUpdateMessage = {
         type: 'DISPLAY_UPDATE',
         payload: {
