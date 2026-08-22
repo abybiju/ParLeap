@@ -43,7 +43,15 @@ export class LatencyTracker {
     if (micCaptureTime !== undefined) {
       this.sendTimestamps.set(`${messageId}_mic`, micCaptureTime);
     }
+    // AUDIO_DATA is sent ~15×/s for the whole service; never let this map grow unbounded.
+    while (this.sendTimestamps.size > LatencyTracker.MAX_PENDING_SENDS) {
+      const oldest = this.sendTimestamps.keys().next().value;
+      if (oldest === undefined) break;
+      this.sendTimestamps.delete(oldest);
+    }
   }
+
+  private static readonly MAX_PENDING_SENDS = 256;
 
   /**
    * Record when a response is received from the server
@@ -53,22 +61,27 @@ export class LatencyTracker {
     messageType: string,
     timing?: TimingMetadata
   ): LatencyMetrics | null {
+    const receiveTime = Date.now();
     const sendTime = this.sendTimestamps.get(messageId);
-    if (!sendTime) {
-      console.warn(`[LatencyTracker] No send timestamp found for message: ${messageId}`);
+    const micCaptureTime = this.sendTimestamps.get(`${messageId}_mic`);
+
+    // Most server messages (DISPLAY_UPDATE, SESSION_STARTED, BIBLE_STATUS, …) are pushed in
+    // response to audio, not to a correlated request, so there is usually no send timestamp.
+    // Measure what we can from the server's timing metadata instead of bailing out.
+    if (!sendTime && !timing) {
       return null;
     }
 
-    const receiveTime = Date.now();
-    const micCaptureTime = this.sendTimestamps.get(`${messageId}_mic`);
-
-    // Calculate metrics
     const metrics: LatencyMetrics = {
-      micToNetwork: micCaptureTime !== undefined ? sendTime - micCaptureTime : 0,
-      networkToServer: timing ? timing.serverReceivedAt - sendTime : 0,
+      micToNetwork: sendTime !== undefined && micCaptureTime !== undefined ? sendTime - micCaptureTime : 0,
+      networkToServer: timing && sendTime !== undefined ? timing.serverReceivedAt - sendTime : 0,
       aiProcessing: timing ? timing.processingTimeMs : 0,
-      serverToClient: timing ? receiveTime - timing.serverSentAt : receiveTime - sendTime,
-      total: receiveTime - (micCaptureTime ?? sendTime),
+      serverToClient: timing ? Math.max(0, receiveTime - timing.serverSentAt) : sendTime !== undefined ? receiveTime - sendTime : 0,
+      total: sendTime !== undefined
+        ? receiveTime - (micCaptureTime ?? sendTime)
+        : timing
+        ? Math.max(0, receiveTime - timing.serverReceivedAt)
+        : 0,
     };
 
     // Store measurement
