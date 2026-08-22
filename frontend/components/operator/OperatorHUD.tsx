@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Zap, ZapOff, Mic } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWebSocket } from '@/lib/hooks/useWebSocket';
+import { getWebSocketClient } from '@/lib/websocket/client';
 import { useAudioCapture } from '@/lib/hooks/useAudioCapture';
 import { useBibleWakeWord } from '@/lib/hooks/useBibleWakeWord';
 import { createClient } from '@/lib/supabase/client';
@@ -297,30 +298,28 @@ export function OperatorHUD({
       }
       return;
     }
-    if (isEventSettingsUpdatedMessage(lastMessage)) {
-      if (lastMessage.payload.isAutoFollowing !== undefined) {
-        setIsAutoFollowing(lastMessage.payload.isAutoFollowing);
-      }
-      if (lastMessage.payload.projectorFont !== undefined) {
-        setProjectorFontId(getProjectorFontIdOrDefault(lastMessage.payload.projectorFont));
-      }
-      if (lastMessage.payload.bibleMode !== undefined) {
-        setBibleMode(lastMessage.payload.bibleMode);
-      }
-      if (lastMessage.payload.bibleVersionId !== undefined) {
-        setBibleVersionId(lastMessage.payload.bibleVersionId);
-      }
-      if (lastMessage.payload.bibleFollow !== undefined) {
-        setBibleFollow(lastMessage.payload.bibleFollow);
-      }
-      if (lastMessage.payload.backgroundImageUrl !== undefined) {
-        setBackgroundImageUrl(lastMessage.payload.backgroundImageUrl);
-      }
-      if (lastMessage.payload.backgroundMediaType !== undefined) {
-        setBackgroundMediaType(lastMessage.payload.backgroundMediaType);
-      }
-    }
   }, [lastMessage]);
+
+  // Settings + Bible status are applied from EVERY frame, in order, via a direct subscription.
+  // `lastMessage` is React state and coalesces bursts (e.g. bibleMode:true then bibleMode:false a few
+  // ms apart when a setlist item is activated), which left the HUD showing a stale Bible state.
+  useEffect(() => {
+    const client = getWebSocketClient();
+    return client.onMessage((message) => {
+      if (isEventSettingsUpdatedMessage(message)) {
+        const p = message.payload;
+        if (p.isAutoFollowing !== undefined) setIsAutoFollowing(p.isAutoFollowing);
+        if (p.projectorFont !== undefined) setProjectorFontId(getProjectorFontIdOrDefault(p.projectorFont));
+        if (p.bibleMode !== undefined) setBibleMode(p.bibleMode);
+        if (p.bibleVersionId !== undefined) setBibleVersionId(p.bibleVersionId);
+        if (p.bibleFollow !== undefined) setBibleFollow(p.bibleFollow);
+        if (p.backgroundImageUrl !== undefined) setBackgroundImageUrl(p.backgroundImageUrl);
+        if (p.backgroundMediaType !== undefined) setBackgroundMediaType(p.backgroundMediaType);
+      } else if (isBibleStatusMessage(message)) {
+        setBibleStatus(message.payload);
+      }
+    });
+  }, []);
 
   // Handle error messages - suppress NO_SESSION, show others
   useEffect(() => {
@@ -526,12 +525,6 @@ export function OperatorHUD({
       sendMessage({ type: 'BIBLE_CONTROL', payload: { action: 'PROJECT_REF', ref: { book: c.book, chapter: c.chapter, verse: c.verse, endVerse: c.endVerse } } }),
     [sendMessage]
   );
-
-  useEffect(() => {
-    if (lastMessage && isBibleStatusMessage(lastMessage)) {
-      setBibleStatus(lastMessage.payload);
-    }
-  }, [lastMessage]);
 
   // Keyboard: ←/→ prev/next (verse in Bible mode, slide otherwise); H hold; U undo (Bible mode only).
   useEffect(() => {

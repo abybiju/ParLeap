@@ -2785,6 +2785,13 @@ async function handleManualOverride(
     session.currentItemIndex = itemIndex; // Use client index so operator highlight is correct when setlists differ
     session.isAutoFollowing = false;
     session.suggestedSongSwitch = undefined;
+    // Flip Bible mode BEFORE broadcasting settings so the client never sees a stale bibleMode
+    // followed milliseconds later by the real one (the HUD coalesces bursts and kept the stale value).
+    if (targetItem.type === 'SONG' && targetItem.songId && session.songs.some((s) => s.id === targetItem.songId)) {
+      exitBibleMode(session, 'song item activated');
+    } else if (targetItem.type === 'BIBLE') {
+      enterBibleMode(session, 'bible item activated', false);
+    }
     broadcastEventSettingsUpdated(session);
 
     if (targetItem.type === 'BIBLE' && targetItem.bibleRef) {
