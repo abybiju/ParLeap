@@ -60,3 +60,10 @@ Verified on prod via Chrome: AudioWorklet capture active, spoken "Sam's 141" →
 round-trip, Verse History + event Verse Log (DB) populated, console error-free. Then fixed `LatencyTracker`: receive IDs
 never matched send IDs (warned on every server push, measured nothing) — now measures from server timing when there is no
 correlated send; send-timestamp Map capped at 256 (was unbounded, fed by every AUDIO_DATA chunk).
+
+## Addendum 2026-08-22 (4) — Smart Listen toggle errors (`7e53d64`)
+Flipping Smart Listen off/on mid-session produced (a) `STT_WINDOW_UNSUPPORTED` when pressing Capture Verse while off, and
+(b) `ElevenLabs stream error: WebSocket was closed before the connection was established` — our own teardown of a
+still-CONNECTING stream reported by `ws` as an error. Now: Capture Verse is a logged no-op when STT is already continuous;
+`end()` marks `endedByUs` and socket errors after our own close are ignored ('close' still fires 'end'). Re-tested on prod
+via Chrome: 4 rapid toggles + Capture Verse while off → no errors.
