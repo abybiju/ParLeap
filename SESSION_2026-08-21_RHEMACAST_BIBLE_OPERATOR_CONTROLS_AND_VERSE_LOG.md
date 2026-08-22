@@ -67,3 +67,16 @@ Flipping Smart Listen off/on mid-session produced (a) `STT_WINDOW_UNSUPPORTED` w
 still-CONNECTING stream reported by `ws` as an error. Now: Capture Verse is a logged no-op when STT is already continuous;
 `end()` marks `endedByUs` and socket errors after our own close are ignored ('close' still fires 'end'). Re-tested on prod
 via Chrome: 4 rapid toggles + Capture Verse while off → no errors.
+
+## Addendum 2026-08-22 (5) — Bible → song switch (`29e1edd`)
+Aby: "switching back to songs doesn't work". Probe (patched `window.WebSocket` on prod) showed the backend DOES send
+`bibleMode:false` on a song click, but it is preceded ~ms earlier by a stale `{bibleMode:true, isAutoFollowing:false}`
+from GO_TO_ITEM's generic broadcast; the HUD applied settings from React `lastMessage` (coalesced) and kept the stale
+one → header "Bible On", Smart Listen "Bible on", Bible strip visible while lyrics were live. Fix: GO_TO_ITEM flips
+mode before broadcasting; HUD applies EVENT_SETTINGS_UPDATED/BIBLE_STATUS from a direct `client.onMessage`
+subscription. Verified on prod: song click → Bible Off, chips reset, lyric follow advanced to slide 2 within ~1–2 s
+(end-of-slide trigger). Observed but NOT changed: any manual setlist jump sets `isAutoFollowing=false` ("Manual Mode")
+— only cross-song auto-switch is gated by it; in-song following still works. Product decision pending.
+Latency note: in-song advance is fast when the last line of the current slide is heard (end-of-slide trigger, 1 hit);
+slower (debounced, 2+ matching transcripts) when joining mid-slide or when slides share opening words ("Holy holy holy"
+opens both slides of that song).
