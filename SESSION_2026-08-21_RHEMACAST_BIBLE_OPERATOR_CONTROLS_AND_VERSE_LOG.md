@@ -54,3 +54,9 @@ that flooded the console with ERR_CONNECTION_REFUSED. Deployed; Railway/Vercel/C
   WS message.
 - Migration 026 applied to prod by Aby (SQL editor). Frontend vitest: 23 pre-existing failures on main
   (`client.test.ts`, `SongEditorModal.test.tsx`), none new.
+
+## Addendum 2026-08-22 (3) — live verification + LatencyTracker (`500a6d4`)
+Verified on prod via Chrome: AudioWorklet capture active, spoken "Sam's 141" → Psalms 141:1 projected, H/→/U controls
+round-trip, Verse History + event Verse Log (DB) populated, console error-free. Then fixed `LatencyTracker`: receive IDs
+never matched send IDs (warned on every server push, measured nothing) — now measures from server timing when there is no
+correlated send; send-timestamp Map capped at 256 (was unbounded, fed by every AUDIO_DATA chunk).
