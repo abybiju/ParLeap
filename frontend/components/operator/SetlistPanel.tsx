@@ -131,8 +131,9 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
               artist: song?.artist ?? null,
               sequenceOrder: item.sequenceOrder,
             });
-          } else if (item.type === 'BIBLE' && item.bibleRef) {
-            result.push({ kind: 'BIBLE', id: item.id, bibleRef: item.bibleRef, sequenceOrder: item.sequenceOrder });
+          } else if (item.type === 'BIBLE') {
+            // Generic Bible segments have no pre-set reference; label them "Bible" (wake word / spoken refs decide).
+            result.push({ kind: 'BIBLE', id: item.id, bibleRef: item.bibleRef || 'Bible', sequenceOrder: item.sequenceOrder });
           } else if (item.type === 'MEDIA' && item.mediaUrl) {
             result.push({
               kind: 'MEDIA',
@@ -161,7 +162,6 @@ export function SetlistPanel({ initialSetlist = [], onItemActivated }: SetlistPa
           }
         }
         if (missingItems.length > 0) {
-          console.log(`[SetlistPanel] Merging ${missingItems.length} missing items from initialSetlist (Bible/Media/Announcement or backend type mismatch)`);
           result.push(...missingItems);
           result.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
         }

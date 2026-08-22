@@ -121,7 +121,7 @@ const ShaderMaterialMesh = ({ source, uniforms, maxFps = 60 }: ShaderProps) => {
   }, [material])
 
   useFrame(({ clock }) => {
-    if (!meshRef.current) return
+    if (!meshRef.current || size.width === 0 || size.height === 0) return
     const elapsed = clock.getElapsedTime()
     const minFrameTime = 1 / maxFps
     if (elapsed - lastTimeRef.current < minFrameTime) return
@@ -140,9 +140,23 @@ const ShaderMaterialMesh = ({ source, uniforms, maxFps = 60 }: ShaderProps) => {
   )
 }
 
+/**
+ * Stops the render loop whenever the canvas has no area (e.g. while the auth page is being
+ * torn down on navigation). Drawing into a 0×0 framebuffer floods the console with
+ * GL_INVALID_FRAMEBUFFER_OPERATION warnings.
+ */
+const FrameloopGuard = () => {
+  const { size, setFrameloop } = useThree()
+  useEffect(() => {
+    setFrameloop(size.width > 0 && size.height > 0 ? 'always' : 'never')
+  }, [size.width, size.height, setFrameloop])
+  return null
+}
+
 const Shader = ({ source, uniforms, maxFps = 60 }: ShaderProps) => {
   return (
     <Canvas className="absolute inset-0 h-full w-full">
+      <FrameloopGuard />
       <ShaderMaterialMesh source={source} uniforms={uniforms} maxFps={maxFps} />
     </Canvas>
   )

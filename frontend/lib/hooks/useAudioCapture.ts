@@ -66,7 +66,8 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const pcmProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmProcessorRef = useRef<AudioNode | null>(null);
+  const pcmWorkletRef = useRef<AudioWorkletNode | null>(null);
   const pcmGainRef = useRef<GainNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const chunkQueueRef = useRef<
@@ -273,6 +274,11 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
       animationFrameRef.current = null;
     }
 
+    if (pcmWorkletRef.current) {
+      pcmWorkletRef.current.port.onmessage = null;
+      pcmWorkletRef.current.port.postMessage({ enabled: false });
+      pcmWorkletRef.current = null;
+    }
     if (pcmProcessorRef.current) {
       pcmProcessorRef.current.disconnect();
       pcmProcessorRef.current = null;
@@ -375,15 +381,55 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
     [encodePcmToBase64, wsClient, smartListenEnabled, ringBufferMaxChunks]
   );
 
-  const startPcmProcessing = useCallback((stream: MediaStream) => {
+  /**
+   * PCM capture. Preferred path: AudioWorklet (`/audio/pcm-capture-processor.js`) — runs on the
+   * audio thread, no deprecation warning, same 1024-sample / 64 ms chunks. Falls back to the
+   * deprecated ScriptProcessorNode only when the worklet can't be loaded.
+   */
+  const startPcmProcessing = useCallback(async (stream: MediaStream) => {
     const audioContext = ensureAudioContext(16000);
     const source = audioContext.createMediaStreamSource(stream);
+    const gain = audioContext.createGain();
+    gain.gain.value = 0; // keep the graph pulled by destination without audible output
+
+    if (audioContext.audioWorklet) {
+      try {
+        await audioContext.audioWorklet.addModule('/audio/pcm-capture-processor.js');
+        const worklet = new AudioWorkletNode(audioContext, 'pcm-capture-processor', {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          channelCount: 1,
+          processorOptions: { chunkSize: 1024 },
+        });
+        let processCount = 0;
+        worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+          if (!recordingRef.current || pausedRef.current) return;
+          if (processCount < 3) {
+            processCount += 1;
+            console.log(`[AudioCapture] 🎤 Worklet chunk #${processCount}, sessionActive=${sessionActiveRef.current}, isConnected=${wsClient.isConnected()}`);
+          }
+          sendPcmChunk(new Int16Array(event.data), Date.now());
+        };
+        source.connect(worklet);
+        worklet.connect(gain);
+        gain.connect(audioContext.destination);
+        pcmWorkletRef.current = worklet;
+        pcmProcessorRef.current = worklet;
+        pcmGainRef.current = gain;
+        await audioContext.resume().catch((error) => {
+          console.warn('AudioContext resume failed:', error);
+        });
+        console.log('[AudioCapture] ✅ PCM capture via AudioWorklet');
+        return;
+      } catch (error) {
+        console.warn('[AudioCapture] AudioWorklet unavailable, falling back to ScriptProcessorNode:', error);
+      }
+    }
+
     // Buffer size: 1024 samples for lower latency
     // 1024 samples / 16000 Hz = 64ms latency (~15 chunks/sec)
     // Note: Browser requires buffer size to be a power of two between 256 and 16384
     const processor = audioContext.createScriptProcessor(1024, 1, 1);
-    const gain = audioContext.createGain();
-    gain.gain.value = 0;
 
     processor.onaudioprocess = (event) => {
       if (!recordingRef.current || pausedRef.current) {
@@ -525,7 +571,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}): UseAudioCapt
       startAudioLevelMonitoring(stream);
 
       if (usePcm) {
-        startPcmProcessing(stream);
+        await startPcmProcessing(stream);
       } else {
         // Create MediaRecorder with optimal settings for STT
         const options: MediaRecorderOptions = {
