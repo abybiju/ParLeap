@@ -37,3 +37,10 @@
 6. `/overlay/[id]` transparent OBS/vMix browser-source route (Bible + lyrics).
 7. Custom vocabulary → ElevenLabs keyterms + alias table.
 Known limits carried: PREV doesn't cross chapter boundaries backwards; spoken refs yield one candidate until item 4.
+
+## Addendum 2026-08-22 — "ElevenLabs stream error" after silence (fixed, `3e067a6`)
+Root cause: ElevenLabs ends a Smart Listen window with `insufficient_audio_activity` when nobody speaks
+(or the mic is paused); we had that message type on the error list → red STT_ERROR toast for a routine event.
+Now: `insufficient_audio_activity` / `session_time_limit_exceeded` → quiet 'end', window drops back to standby so
+the wake detector re-arms. Also removed the dead `127.0.0.1:7243/ingest` debug fetches (frontend ×2, backend ×2)
+that flooded the console with ERR_CONNECTION_REFUSED. Deployed; Railway/Vercel/CI green.
