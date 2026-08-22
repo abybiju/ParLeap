@@ -216,6 +216,7 @@ export function createStreamingRecognition(): {
     const pendingChunks: (Buffer | string)[] = [];
     let lastChunkSentAt = 0;
     let quietEnd = false;
+    let endedByUs = false;
     const modelId = process.env.ELEVENLABS_MODEL_ID || 'scribe_v2_realtime';
     const languageCode = process.env.ELEVENLABS_LANGUAGE_CODE || 'en';
     const commitStrategy = process.env.ELEVENLABS_COMMIT_STRATEGY || 'vad';
@@ -355,6 +356,12 @@ export function createStreamingRecognition(): {
     });
 
     socket.on('error', (error) => {
+      if (endedByUs || quietEnd) {
+        // e.g. "WebSocket was closed before the connection was established" when we tear down a
+        // stream that was still CONNECTING (window expired / mode switch). Not an operator error.
+        console.log(`[STT] ElevenLabs socket error after our close (ignored): ${(error as Error).message}`);
+        return;
+      }
       console.error('[STT] ❌ ElevenLabs WebSocket error:', error);
       callbacks.error?.forEach((cb) => cb(error as Error));
     });
@@ -382,6 +389,7 @@ export function createStreamingRecognition(): {
         }
       },
       end: () => {
+        endedByUs = true;
         if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
           socket.close();
         }

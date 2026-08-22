@@ -2556,16 +2556,10 @@ function handleSttWindowRequest(ws: WebSocket, payload: { catchUpAudio?: string 
     sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'Smart Listen is disabled by server (BIBLE_SMART_LISTEN_ENABLED=false).');
     return;
   }
-  if (!session.smartListenEnabled) {
-    sendError(ws, 'STT_WINDOW_UNSUPPORTED', 'Smart Listen is not enabled for this session.');
-    return;
-  }
-  if (!shouldUseSmartListenGate(session)) {
-    sendError(
-      ws,
-      'STT_WINDOW_UNSUPPORTED',
-      'STT_WINDOW_REQUEST is only valid when Smart Listen gate is active (Bible mode or non-SONG item).'
-    );
+  // Smart Listen off or gate inactive means STT is already continuous — nothing to open.
+  // This is an operator pressing "Capture verse" in a state where it isn't needed, not an error.
+  if (!session.smartListenEnabled || !shouldUseSmartListenGate(session)) {
+    console.log('[STT] STT_WINDOW_REQUEST ignored: STT is continuous (smart listen off or gate inactive)');
     return;
   }
   if (!isElevenLabsConfigured) {
