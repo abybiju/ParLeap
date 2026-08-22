@@ -4,7 +4,7 @@ Quick reference when writing `supabase/migrations/NNN_*.sql`. Read this before a
 
 ## Next migration number
 
-Last written: `026_bible_projection_log.sql` (apply in the SQL editor if not yet applied). Next file: `027_*.sql`.
+Last applied: `026_bible_projection_log.sql` (2026-08-22, SQL editor). Next file: `027_*.sql`.
 
 ## The pattern for any new `public` table
 
