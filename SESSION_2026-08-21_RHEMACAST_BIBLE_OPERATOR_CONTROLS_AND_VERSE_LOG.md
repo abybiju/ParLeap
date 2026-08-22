@@ -44,3 +44,13 @@ Root cause: ElevenLabs ends a Smart Listen window with `insufficient_audio_activ
 Now: `insufficient_audio_activity` / `session_time_limit_exceeded` → quiet 'end', window drops back to standby so
 the wake detector re-arms. Also removed the dead `127.0.0.1:7243/ingest` debug fetches (frontend ×2, backend ×2)
 that flooded the console with ERR_CONNECTION_REFUSED. Deployed; Railway/Vercel/CI green.
+
+## Addendum 2026-08-22 (2) — console cleanup (`13e126d`)
+- Mic PCM capture moved from deprecated ScriptProcessorNode to an **AudioWorklet**
+  (`frontend/public/audio/pcm-capture-processor.js`, same 1024-sample/64 ms Int16 chunks; ScriptProcessor kept as fallback).
+- Login/signup three.js canvas: `FrameloopGuard` stops rendering at 0×0 (killed the WebGL framebuffer warning flood on
+  navigation to /dashboard).
+- SetlistPanel accepts generic Bible segments without a reference (label "Bible") and no longer logs a merge on every
+  WS message.
+- Migration 026 applied to prod by Aby (SQL editor). Frontend vitest: 23 pre-existing failures on main
+  (`client.test.ts`, `SongEditorModal.test.tsx`), none new.
